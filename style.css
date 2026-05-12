@@ -105,6 +105,16 @@ body {
   color: var(--ink-dim);
   text-shadow: var(--shadow);
 }
+.eyebrow-link {
+  color: var(--ink-faint);
+  text-decoration: none;
+  border-bottom: 1px solid transparent;
+  transition: color 0.4s ease, border-color 0.4s ease;
+}
+.eyebrow-link:hover {
+  color: var(--ink);
+  border-bottom-color: var(--ink-dim);
+}
 
 .title {
   font-family: "Cormorant Infant", serif;
