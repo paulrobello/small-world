@@ -178,8 +178,10 @@ export function makeCreature(biome, opts = {}) {
           emissive: new THREE.Color(biome.accent).multiplyScalar(0.35),
         })
       );
-      tip.position.set(sign * 0.13, 0.52, 0.13);
-      group.add(tip);
+      // Parented to the stalk so the tip rigidly tracks the stalk top
+      // through any rotation. Local +Y on the cylinder is the stalk's top.
+      tip.position.set(0, 0.16, 0);
+      stalk.add(tip);
     }
   }
 
@@ -983,8 +985,8 @@ export function makeCaterpillar(biome, opts = {}) {
         emissive: new THREE.Color(biome.accent).multiplyScalar(0.4),
       })
     );
-    tip.position.set(sign * 0.13, 0.38, 0.08);
-    head.add(tip);
+    tip.position.set(0, 0.11, 0);
+    stalk.add(tip);
   }
 
   // ── body segments — all the same radius as the head ──────────────────
