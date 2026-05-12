@@ -122,6 +122,14 @@ function animate() {
     state.starfield.position.copy(camera.position).multiplyScalar(invWorldScale);
   }
 
+  // Subtle parallax: mountains drift opposite to camera azimuth so they read
+  // as farther from the camera than the islands.
+  if (state.mountains && state.mountainBasePos) {
+    const az = Math.atan2(camera.position.x, camera.position.z);
+    state.mountains.position.x = state.mountainBasePos.x - Math.sin(az) * 0.6;
+    state.mountains.position.z = state.mountainBasePos.z - Math.cos(az) * 0.6;
+  }
+
   if (isStrolling()) {
     stepStroll(dt);
   } else {

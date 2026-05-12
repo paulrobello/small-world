@@ -247,6 +247,7 @@ export function generateWorld(seed) {
   const mountains = makeMountainBackdrop(biome);
   state.world.add(mountains);
   state.mountains = mountains;
+  state.mountainBasePos = mountains.position.clone();
 
   state.clouds = makeCloudLayer(biome);
   if (state.clouds) state.world.add(state.clouds);
