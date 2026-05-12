@@ -45,6 +45,7 @@ import {
   stepClouds,
   updateSkyColors,
 } from "./sky.js";
+import { makeWaterReflection } from "./reflection.js";
 import { LOWFX, LOWFX_DENSITY } from "./lowfx.js";
 
 let _scene = null;
@@ -290,6 +291,18 @@ export function generateWorld(seed) {
   if (biome.water) {
     state.waterMesh = makeWaterPlane(biome);
     state.world.add(state.waterMesh);
+    // Build the reflection only after the sky dome / starfield / aurora are
+    // in place. Sky elements were added a few lines above this block, so they
+    // exist already.
+    state.waterReflection = makeWaterReflection(biome);
+    // Hand the RT to the water material.
+    const u = state.waterMesh.material.userData.reflectionUniforms;
+    if (u) {
+      u.uReflTex.value = state.waterReflection.rt.texture;
+      u.uReflMix.value = 0.3; // 30% blend
+    }
+  } else {
+    state.waterReflection = null;
   }
 
   // measure max elevation for HUD — sample on actual ground

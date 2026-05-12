@@ -646,6 +646,49 @@ export function makeWaterPlane(biome) {
     roughness: 0.32,
     metalness: 0.18,
   });
+
+  // Reflection patch — only kicks in if state.waterReflection is set later
+  // by world.js. Until then, uReflTex stays null and uReflMix is 0 so the
+  // mix branch is skipped entirely.
+  const reflUniforms = {
+    uReflTex: { value: null },
+    uInvViewport: {
+      value: new THREE.Vector2(
+        1 / window.innerWidth,
+        1 / window.innerHeight
+      ),
+    },
+    uReflMix: { value: 0.0 },
+  };
+  mat.userData.reflectionUniforms = reflUniforms;
+  const prev = mat.onBeforeCompile;
+  mat.onBeforeCompile = (shader) => {
+    if (prev) prev(shader);
+    shader.uniforms.uReflTex = reflUniforms.uReflTex;
+    shader.uniforms.uInvViewport = reflUniforms.uInvViewport;
+    shader.uniforms.uReflMix = reflUniforms.uReflMix;
+    shader.fragmentShader = shader.fragmentShader
+      .replace(
+        "#include <common>",
+        `#include <common>
+         uniform sampler2D uReflTex;
+         uniform vec2 uInvViewport;
+         uniform float uReflMix;`
+      )
+      .replace(
+        "#include <opaque_fragment>",
+        `#include <opaque_fragment>
+         if (uReflMix > 0.001) {
+           vec2 ruv = gl_FragCoord.xy * uInvViewport;
+           vec3 refl = texture2D(uReflTex, ruv).rgb;
+           // Fresnel-ish: stronger at glancing angles. We keep the math
+           // fixed (don't sample vViewPosition) for cross-version stability.
+           float f = pow(1.0 - clamp(dot(normalize(vNormal), vec3(0.0, 1.0, 0.0)), 0.0, 1.0), 2.0);
+           gl_FragColor.rgb = mix(gl_FragColor.rgb, refl, uReflMix * (0.4 + 0.6 * f));
+         }`
+      );
+  };
+
   const mesh = new THREE.Mesh(geo, mat);
   // sit a touch below sea level so the underside cone meets the water
   mesh.position.y = -0.12;

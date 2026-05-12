@@ -16,6 +16,7 @@ import { stepClouds } from "./src/sky.js";
 import { LOWFX } from "./src/lowfx.js";
 import { sharedFurUniforms } from "./src/fur.js";
 import { initPostFX } from "./src/postfx.js";
+import { updateWaterReflection } from "./src/reflection.js";
 import {
   initUi,
   getFollowTarget,
@@ -87,6 +88,12 @@ window.addEventListener("resize", () => {
   camera.updateProjectionMatrix();
   renderer.setSize(w, h);
   postfx.onResize(w, h);
+  if (state.waterMesh && state.waterMesh.material.userData.reflectionUniforms) {
+    state.waterMesh.material.userData.reflectionUniforms.uInvViewport.value.set(
+      1 / w,
+      1 / h
+    );
+  }
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -171,6 +178,13 @@ function animate() {
     }
     controls.update();
   }
+  // Refresh sky-only reflection RT for water biomes. One extra render pass
+  // per frame at 256×256 — cheap, and shared uniforms mean day/night updates
+  // flow through without extra wiring.
+  if (state.waterReflection) {
+    updateWaterReflection(state.waterReflection, renderer, camera, controls);
+  }
+
   // Update tilt-shift focus band: project the island origin to screen-Y so
   // the sharp band tracks the island as the camera orbits.
   if (postfx.isActive && postfx.isActive()) {
