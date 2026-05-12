@@ -1013,8 +1013,8 @@ export function makeCaterpillar(biome, opts = {}) {
   // last body segment, in a contrasting color so it reads as a shell.
   if (isSnail) {
     const shellCol = baseCol.clone().offsetHSL(0.08, -0.05, -0.18);
-    const shellGeo = jitterGeo(new THREE.IcosahedronGeometry(segRadius * 1.55, 1), 0.04);
-    shellGeo.scale(1.0, 0.95, 0.85);
+    const shellGeo = jitterGeo(new THREE.IcosahedronGeometry(segRadius * 1.7, 1), 0.04);
+    shellGeo.scale(1.0, 0.95, 0.9);
     const shell = new THREE.Mesh(
       shellGeo,
       new THREE.MeshStandardMaterial({
