@@ -202,9 +202,28 @@ function spawnSpecimen(scene) {
   if (variant.kind === "caterpillar") {
     state.caterpillars.push(c);
     // Lift so the head's bottom sphere clears the disc.
-    // head bottom (body-local) = baseOffset - radius*scale = radius*scale*(0.7-1) = -radius*scale*0.3
+    // head bottom (body-local) = baseOffset - radius*scale = -radius*scale*0.3
     const lift = c.segRadius * c.scale * 0.3 + 0.02;
     c.group.position.set(0, lift, 0);
+    // Pose still — no crawling — so body segments rest in a known place.
+    c.speed = 0;
+    // Face toward the camera (default at +x+z corner) so eyes are visible.
+    c.heading = Math.PI / 4;
+    // Pin head to origin in body-local; stepCaterpillar sets y each frame.
+    const head = c.segments[0];
+    head.position.x = 0;
+    head.position.z = 0;
+    head.rotation.y = -c.heading + Math.PI / 2;
+    // Re-seed the trail to a clean line behind the head (away from camera).
+    c.trail.length = 0;
+    const seedStep = 0.04;
+    for (let i = 0; i < 250; i++) {
+      c.trail.push({
+        x: -Math.cos(c.heading) * i * seedStep,
+        y: 0,
+        z: -Math.sin(c.heading) * i * seedStep,
+      });
+    }
   } else {
     state.creatures.push(c);
     c.group.position.set(0, c.flies ? 1.2 : 0.45, 0);
@@ -331,20 +350,6 @@ export function stepInspect(dt, t) {
   }
   if (_specimenKind === "caterpillar") {
     stepCaterpillar(_specimen, useDt, useT, _flatHeight);
-    // Caterpillars/snails move their segments in world coords (not via the
-    // group transform), so they wander off the turntable. Clamp the head's
-    // XZ to a small ring near origin — the body trail follows behind, which
-    // produces a tidy "crawling in a small loop" pose for capture.
-    const head = _specimen.segments?.[0];
-    if (head) {
-      const r = Math.sqrt(head.position.x ** 2 + head.position.z ** 2);
-      const maxR = 0.7;
-      if (r > maxR) {
-        const s = maxR / r;
-        head.position.x *= s;
-        head.position.z *= s;
-      }
-    }
   } else {
     stepCreature(_specimen, useDt, useT, _flatHeight);
     // Keep the specimen pinned to the turntable center — internal animations
