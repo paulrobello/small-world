@@ -201,10 +201,21 @@ function spawnSpecimen(scene) {
   _specimenKind = variant.kind;
   if (variant.kind === "caterpillar") {
     state.caterpillars.push(c);
-    c.group.position.set(0, 0.02, 0);
+    // Lift so the head's bottom sphere clears the disc.
+    // head bottom (body-local) = baseOffset - radius*scale = radius*scale*(0.7-1) = -radius*scale*0.3
+    const lift = c.segRadius * c.scale * 0.3 + 0.02;
+    c.group.position.set(0, lift, 0);
   } else {
     state.creatures.push(c);
     c.group.position.set(0, c.flies ? 1.2 : 0.45, 0);
+    // Burrowers cycle through a hide-underground state machine, which makes
+    // them disappear for 3-7s at a time. Pin them to the surface for inspect
+    // so the small-and-cute burrower silhouette stays visible.
+    if (c.isBurrower) {
+      c.isBurrower = false;
+      c.burrowState = "surface";
+      c.burrowDepth = 0;
+    }
   }
   scene.add(c.group);
   updateHud();
