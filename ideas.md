@@ -33,10 +33,7 @@ Remove completed items from this list, commit and push so its live on github pag
 
 ## World Generation
 
-- **Variable island size / shape** (M) — let the seed pick between small / medium / large `ISLAND_RADIUS` and between round / oblong / kidney shapes via an additional low-frequency noise mask in `makeHeightFn`.
-- **Water plane** (M) — optional translucent disk slightly below sea-level for biomes that warrant it (marsh, coral). Animate via a subtle vertex displacement for ripples.
 - **Caves / arches** (L) — carve negative-space holes through the island using a third noise field with a CSG-style threshold. Probably needs a marching-cubes pass instead of `PlaneGeometry` — large change, save for later.
-- **Multiple tiny islands** (M) — at high seeds, return a small archipelago instead of one island; share a single skybox/fog.
 
 ## Camera & Interaction
 

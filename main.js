@@ -123,6 +123,7 @@ const BIOMES = [
     fogDensity: 0.021,
     accent: "#ffba08",
     sun: "#d4b3ff",
+    water: "#1b1230",
     flora: ["reed", "reed", "reed", "mushroom", "mushroom", "rock", "lantern", "lantern", "archstone"],
     floraCount: 100,
     particle: "firefly",
@@ -211,20 +212,66 @@ controls.touches = {
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Terrain height function — circular floating island with smoothstep falloff
+// Terrain height function — one or more shaped islands with smoothstep falloff
 // ─────────────────────────────────────────────────────────────────────────────
-const ISLAND_SIZE = 38;
-const ISLAND_RADIUS = ISLAND_SIZE * 0.42;
+// `ISLAND_SIZE_BASE`/`ISLAND_RADIUS_BASE` are the legacy single-island defaults.
+// Each generated world picks a `layout` (size, shape, count) and updates the
+// module-scope `ISLAND_SIZE`/`ISLAND_RADIUS` so the rest of the code can keep
+// reading those names without per-call threading.
+const ISLAND_SIZE_BASE = 38;
+const ISLAND_RADIUS_BASE = ISLAND_SIZE_BASE * 0.42;
+let ISLAND_SIZE = ISLAND_SIZE_BASE;
+let ISLAND_RADIUS = ISLAND_RADIUS_BASE;
+let currentLayout = {
+  centers: [{ cx: 0, cz: 0, radius: ISLAND_RADIUS_BASE, shape: { kind: "round" } }],
+  planeSize: ISLAND_SIZE_BASE,
+  boundRadius: ISLAND_RADIUS_BASE,
+  kind: "single",
+};
 
 function smoothstep(e0, e1, x) {
   const t = Math.max(0, Math.min(1, (x - e0) / (e1 - e0)));
   return t * t * (3 - 2 * t);
 }
 
-function makeHeightFn(noise2D, amp = 3.0) {
+// Per-center falloff: 1 at the centre of an island, 0 in the void around it.
+// `shape.kind` is "round", "oblong" (stretched along an axis), or "kidney"
+// (a circular bite carved from one side).
+function islandFalloff(center, x, z) {
+  const sh = center.shape || { kind: "round" };
+  const dx = x - center.cx;
+  const dz = z - center.cz;
+  const r = center.radius;
+  if (sh.kind === "oblong") {
+    const co = Math.cos(sh.orient), si = Math.sin(sh.orient);
+    const lx = co * dx + si * dz;
+    const lz = -si * dx + co * dz;
+    const d = Math.sqrt((lx / sh.stretch) ** 2 + lz * lz);
+    return smoothstep(r, r * 0.45, d);
+  }
+  if (sh.kind === "kidney") {
+    const co = Math.cos(sh.orient), si = Math.sin(sh.orient);
+    const lx = co * dx + si * dz;
+    const lz = -si * dx + co * dz;
+    const d = Math.sqrt(lx * lx + lz * lz);
+    const f = smoothstep(r, r * 0.45, d);
+    const biteCx = r * 0.6;
+    const biteR = r * 0.42;
+    const biteD = Math.sqrt((lx - biteCx) ** 2 + lz * lz);
+    const bite = smoothstep(biteR, biteR * 0.2, biteD);
+    return f * (1 - bite * sh.strength);
+  }
+  const d = Math.sqrt(dx * dx + dz * dz);
+  return smoothstep(r, r * 0.45, d);
+}
+
+function makeHeightFn(noise2D, layout, amp = 3.0) {
   return (x, z) => {
-    const dist = Math.sqrt(x * x + z * z);
-    const falloff = smoothstep(ISLAND_RADIUS, ISLAND_RADIUS * 0.45, dist);
+    let falloff = 0;
+    for (const c of layout.centers) {
+      const f = islandFalloff(c, x, z);
+      if (f > falloff) falloff = f;
+    }
     let h = 0;
     h += noise2D(x * 0.06, z * 0.06) * amp;
     h += noise2D(x * 0.14, z * 0.14) * (amp * 0.45);
@@ -236,11 +283,94 @@ function makeHeightFn(noise2D, amp = 3.0) {
   };
 }
 
+// Sample a random point on the layout, weighted by island area. Used for
+// flora/creature/instance placement so multi-island worlds get coverage of
+// every island and the void in between is skipped automatically.
+function pickGroundPoint(maxRadiusFrac = 0.88) {
+  const centers = currentLayout.centers;
+  let sum = 0;
+  for (const c of centers) sum += c.radius * c.radius;
+  let r = Math.random() * sum;
+  let chosen = centers[0];
+  for (const c of centers) {
+    r -= c.radius * c.radius;
+    if (r <= 0) { chosen = c; break; }
+  }
+  const ang = Math.random() * Math.PI * 2;
+  const rad = Math.sqrt(Math.random()) * chosen.radius * maxRadiusFrac;
+  return {
+    x: chosen.cx + Math.cos(ang) * rad,
+    z: chosen.cz + Math.sin(ang) * rad,
+  };
+}
+
+// Pick a layout for a freshly seeded world. Called inside `generateWorld`
+// while `Math.random` is the seeded PRNG so the choice is deterministic.
+function pickLayout() {
+  // ~18% of worlds are tiny archipelagos of 2–3 small islands.
+  if (Math.random() < 0.18) {
+    const n = 2 + Math.floor(Math.random() * 2);
+    const centers = [];
+    const spread = n === 2 ? 8.5 : 10;
+    const startAngle = Math.random() * Math.PI * 2;
+    for (let i = 0; i < n; i++) {
+      const ang = startAngle + (i / n) * Math.PI * 2 + (Math.random() - 0.5) * 0.3;
+      const dist = spread + (Math.random() - 0.5) * 1.6;
+      const radius = 4.4 + Math.random() * 2.0;
+      centers.push({
+        cx: Math.cos(ang) * dist,
+        cz: Math.sin(ang) * dist,
+        radius,
+        shape: { kind: "round" },
+      });
+    }
+    const bound = centers.reduce((m, c) => {
+      const d = Math.sqrt(c.cx * c.cx + c.cz * c.cz);
+      return Math.max(m, d + c.radius);
+    }, 0);
+    return {
+      centers,
+      planeSize: Math.max(ISLAND_SIZE_BASE, bound * 2.4),
+      boundRadius: bound,
+      kind: "archipelago",
+    };
+  }
+
+  // Single island — size + shape variations.
+  const sizeRoll = Math.random();
+  const sizeMult = sizeRoll < 0.27 ? 0.78 : sizeRoll < 0.78 ? 1.0 : 1.15;
+  const radius = ISLAND_RADIUS_BASE * sizeMult;
+  const shapeRoll = Math.random();
+  let shape;
+  if (shapeRoll < 0.5) {
+    shape = { kind: "round" };
+  } else if (shapeRoll < 0.82) {
+    shape = {
+      kind: "oblong",
+      orient: Math.random() * Math.PI,
+      stretch: 1.22 + Math.random() * 0.28,
+    };
+  } else {
+    shape = {
+      kind: "kidney",
+      orient: Math.random() * Math.PI * 2,
+      strength: 0.55 + Math.random() * 0.2,
+    };
+  }
+  return {
+    centers: [{ cx: 0, cz: 0, radius, shape }],
+    planeSize: Math.max(ISLAND_SIZE_BASE, radius * 2.4),
+    boundRadius: radius,
+    kind: "single",
+  };
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Terrain mesh
 // ─────────────────────────────────────────────────────────────────────────────
 function makeTerrain(biome, heightFn) {
-  const segs = 140;
+  // segment density scales with size so larger worlds keep similar fidelity
+  const segs = Math.round(140 * (ISLAND_SIZE / ISLAND_SIZE_BASE));
   const geo = new THREE.PlaneGeometry(
     ISLAND_SIZE,
     ISLAND_SIZE,
@@ -304,8 +434,13 @@ function makeTerrain(biome, heightFn) {
   return mesh;
 }
 
-function makeIslandUnderside(biome) {
-  const geo = new THREE.ConeGeometry(ISLAND_RADIUS * 1.06, 9, 24, 1, true);
+function makeIslandUnderside(biome, center) {
+  const r = (center && center.radius) || ISLAND_RADIUS;
+  // smaller islands get shorter, less craggy cones
+  const sizeFrac = r / ISLAND_RADIUS_BASE;
+  const coneH = 9 * Math.max(0.55, Math.min(1.2, sizeFrac));
+  const jitter = 0.8 * Math.max(0.6, sizeFrac);
+  const geo = new THREE.ConeGeometry(r * 1.06, coneH, 24, 1, true);
   const mat = new THREE.MeshStandardMaterial({
     color: new THREE.Color(biome.underside),
     flatShading: true,
@@ -316,14 +451,15 @@ function makeIslandUnderside(biome) {
   const pos = geo.attributes.position;
   for (let i = 0; i < pos.count; i++) {
     const y = pos.getY(i);
-    if (y < 4.4) {
-      pos.setX(i, pos.getX(i) + (Math.random() - 0.5) * 0.8);
-      pos.setZ(i, pos.getZ(i) + (Math.random() - 0.5) * 0.8);
+    if (y < coneH * 0.49) {
+      pos.setX(i, pos.getX(i) + (Math.random() - 0.5) * jitter);
+      pos.setZ(i, pos.getZ(i) + (Math.random() - 0.5) * jitter);
     }
   }
   geo.computeVertexNormals();
   const mesh = new THREE.Mesh(geo, mat);
-  mesh.position.y = -4;
+  // place at the centre and dip the cone so its rim aligns with sea level
+  mesh.position.set(center ? center.cx : 0, -coneH * 0.44, center ? center.cz : 0);
   mesh.rotation.y = Math.random() * Math.PI;
   return mesh;
 }
@@ -1220,13 +1356,15 @@ function stepCreature(c, dt, t, heightFn) {
     const step = c.speed * dt;
     const nx = pos.x + Math.cos(c.heading) * step;
     const nz = pos.z + Math.sin(c.heading) * step;
-    const r = Math.sqrt(nx * nx + nz * nz);
-    const bound =
+    // Edge avoidance: flying creatures can range a bit beyond ground; walkers
+    // turn back the moment their next step is over a void or steep cliff.
+    const overVoid = heightFn(nx, nz) < -0.35;
+    const wouldStray =
       c.flies && c.landState === "flying"
-        ? ISLAND_RADIUS * 1.08
-        : ISLAND_RADIUS * 0.92;
+        ? Math.sqrt(nx * nx + nz * nz) > ISLAND_RADIUS * 1.18
+        : overVoid;
 
-    if (r > bound) {
+    if (wouldStray) {
       c.heading = Math.atan2(-nz, -nx) + (Math.random() - 0.5) * 0.5;
     } else {
       pos.x = nx;
@@ -1419,11 +1557,10 @@ function makeCaterpillar(biome) {
   const scale = 0.7 + Math.random() * 0.4;
   for (const s of segments) s.scale.setScalar(scale);
 
-  // initial placement
-  const a = Math.random() * Math.PI * 2;
-  const spawnR = Math.random() * ISLAND_RADIUS * 0.55;
-  const startX = Math.cos(a) * spawnR;
-  const startZ = Math.sin(a) * spawnR;
+  // initial placement — anywhere on solid ground
+  const sp = pickGroundPoint(0.55);
+  const startX = sp.x;
+  const startZ = sp.z;
   const startHeading = Math.random() * Math.PI * 2;
   // tighter than 2r — icospheres at exactly 2r touch only at corners, so
   // their flat faces leave a visible gap. Overlap a bit so segments visibly
@@ -1470,9 +1607,8 @@ function stepCaterpillar(c, dt, t, heightFn) {
   let nx = head.position.x + Math.cos(c.heading) * step;
   let nz = head.position.z + Math.sin(c.heading) * step;
 
-  // edge avoidance — turn back toward centre when close to the rim
-  const r2 = nx * nx + nz * nz;
-  if (r2 > (ISLAND_RADIUS * 0.86) ** 2) {
+  // edge avoidance — if the next step is over a void or steep cliff, turn back
+  if (heightFn(nx, nz) < -0.25) {
     c.heading = Math.atan2(-nz, -nx) + (Math.random() - 0.5) * 0.4;
     nx = head.position.x + Math.cos(c.heading) * step;
     nz = head.position.z + Math.sin(c.heading) * step;
@@ -1858,10 +1994,9 @@ function placeInstanced(geo, mat, count, heightFn, opts = {}) {
   let attempts = 0;
   while (placed < count && attempts < count * 5) {
     attempts++;
-    const a = Math.random() * Math.PI * 2;
-    const r = Math.sqrt(Math.random()) * ISLAND_RADIUS * maxRadiusFrac;
-    const x = Math.cos(a) * r;
-    const z = Math.sin(a) * r;
+    const p = pickGroundPoint(maxRadiusFrac);
+    const x = p.x;
+    const z = p.z;
     const y = heightFn(x, z);
     if (y < minHeight) continue;
 
@@ -1966,6 +2101,49 @@ function makePebbleField(biome, heightFn) {
     maxScale: 1.1,
     tilt: 0.5,
   });
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Water plane — translucent disk for water-adjacent biomes (marsh, ...).
+// Animated in `animate()` via a small per-vertex sin displacement.
+// ─────────────────────────────────────────────────────────────────────────────
+function makeWaterPlane(biome) {
+  const segs = 48;
+  const size = ISLAND_SIZE * 1.05;
+  const geo = new THREE.PlaneGeometry(size, size, segs, segs);
+  geo.rotateX(-Math.PI / 2);
+  const base = new THREE.Color(biome.water || biome.fog);
+  const mat = new THREE.MeshStandardMaterial({
+    color: base,
+    transparent: true,
+    opacity: 0.55,
+    roughness: 0.32,
+    metalness: 0.18,
+  });
+  const mesh = new THREE.Mesh(geo, mat);
+  // sit a touch below sea level so the underside cone meets the water
+  mesh.position.y = -0.12;
+  mesh.receiveShadow = true;
+  // cache the base XZ so we can offset Y each frame from a clean reference
+  const arr = geo.attributes.position.array;
+  mesh.userData.basePositions = new Float32Array(arr);
+  return mesh;
+}
+
+function stepWater(water, dt, t) {
+  if (!water) return;
+  const pos = water.geometry.attributes.position;
+  const base = water.userData.basePositions;
+  const a = pos.array;
+  for (let i = 0; i < pos.count; i++) {
+    const ix = i * 3;
+    const x = base[ix];
+    const z = base[ix + 2];
+    a[ix + 1] =
+      Math.sin(t * 0.9 + x * 0.5 + z * 0.4) * 0.05 +
+      Math.sin(t * 1.4 + x * 0.3 - z * 0.6) * 0.03;
+  }
+  pos.needsUpdate = true;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -2233,6 +2411,7 @@ let sunLight = null;
 let hemiLight = null;
 let parallaxRingMesh = null;
 let dayNight = null;
+let waterMesh = null;
 
 function disposeGroup(g) {
   g.traverse((o) => {
@@ -2321,6 +2500,13 @@ function generateWorld(seed) {
   // Pick biome from the seed itself, so one number reproduces everything.
   const biome = BIOMES[Math.floor(Math.random() * BIOMES.length)];
 
+  // Layout (size + shape + island count) — must be picked right after the
+  // biome so it stays inside the deterministic Math.random window.
+  const layout = pickLayout();
+  currentLayout = layout;
+  ISLAND_SIZE = layout.planeSize;
+  ISLAND_RADIUS = layout.boundRadius;
+
   // clear
   disposeGroup(world);
   scene.remove(world);
@@ -2332,6 +2518,7 @@ function generateWorld(seed) {
   butterflies = [];
   flowerSpots = [];
   particles = null;
+  waterMesh = null;
   // release any followed creature — the entity it pointed to no longer exists
   if (typeof setFollowTarget === "function") setFollowTarget(null);
 
@@ -2394,17 +2581,24 @@ function generateWorld(seed) {
 
   // terrain
   const noise2D = createNoise2D();
-  heightFn = makeHeightFn(noise2D, 3.2);
+  heightFn = makeHeightFn(noise2D, layout, 3.2);
   const terrain = makeTerrain(biome, heightFn);
   world.add(terrain);
-  world.add(makeIslandUnderside(biome));
+  for (const c of layout.centers) {
+    world.add(makeIslandUnderside(biome, c));
+  }
 
-  // measure max elevation for HUD
+  // water plane (biomes that opt in)
+  if (biome.water) {
+    waterMesh = makeWaterPlane(biome);
+    world.add(waterMesh);
+  }
+
+  // measure max elevation for HUD — sample on actual ground
   maxElev = 0;
   for (let i = 0; i < 200; i++) {
-    const a = Math.random() * Math.PI * 2;
-    const r = Math.random() * ISLAND_RADIUS * 0.8;
-    const h = heightFn(Math.cos(a) * r, Math.sin(a) * r);
+    const p = pickGroundPoint(0.8);
+    const h = heightFn(p.x, p.z);
     if (h > maxElev) maxElev = h;
   }
 
@@ -2413,16 +2607,13 @@ function generateWorld(seed) {
   let attempts = 0;
   while (placed < biome.floraCount && attempts < biome.floraCount * 6) {
     attempts++;
-    const a = Math.random() * Math.PI * 2;
-    const r = Math.sqrt(Math.random()) * ISLAND_RADIUS * 0.88;
-    const x = Math.cos(a) * r;
-    const z = Math.sin(a) * r;
-    const y = heightFn(x, z);
+    const p = pickGroundPoint(0.88);
+    const y = heightFn(p.x, p.z);
     if (y < -0.3) continue; // skip steep cliffs / void
     const kind =
       biome.flora[Math.floor(Math.random() * biome.flora.length)];
     const f = FLORA_BUILDERS[kind](biome);
-    f.position.set(x, y, z);
+    f.position.set(p.x, y, p.z);
     f.rotation.y = Math.random() * Math.PI * 2;
     const s = 0.7 + Math.random() * 0.7;
     f.scale.setScalar(s);
@@ -2442,17 +2633,13 @@ function generateWorld(seed) {
   const ncreatures = randInt(...biome.creatureCount);
   for (let i = 0; i < ncreatures; i++) {
     const c = makeCreature(biome);
-    let x = 0,
-      z = 0,
-      y = -10;
+    let p = { x: 0, z: 0 };
+    let y = -10;
     for (let tries = 0; tries < 20 && y < 0; tries++) {
-      const a = Math.random() * Math.PI * 2;
-      const r = Math.random() * ISLAND_RADIUS * 0.65;
-      x = Math.cos(a) * r;
-      z = Math.sin(a) * r;
-      y = heightFn(x, z);
+      p = pickGroundPoint(0.65);
+      y = heightFn(p.x, p.z);
     }
-    c.group.position.set(x, y + 0.4, z);
+    c.group.position.set(p.x, y + 0.4, p.z);
     world.add(c.group);
     creatures.push(c);
   }
@@ -2482,9 +2669,8 @@ function generateWorld(seed) {
         f.z + (Math.random() - 0.5) * 1.5
       );
     } else {
-      const a = Math.random() * Math.PI * 2;
-      const r = Math.random() * ISLAND_RADIUS * 0.6;
-      bf.group.position.set(Math.cos(a) * r, 2, Math.sin(a) * r);
+      const p = pickGroundPoint(0.6);
+      bf.group.position.set(p.x, 2, p.z);
     }
     world.add(bf.group);
     butterflies.push(bf);
@@ -2547,6 +2733,7 @@ function animate() {
   for (const b of butterflies) stepButterfly(b, dt, t, flowerSpots, heightFn);
   for (const f of flocks) stepFlock(f, dt, t);
   stepParticles(particles, dt, t);
+  stepWater(waterMesh, dt, t);
 
   // Smoothly track a followed creature, if any.
   if (followTarget && followTarget.group && followTarget.group.parent) {
