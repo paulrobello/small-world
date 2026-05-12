@@ -36,13 +36,28 @@ export function writeSeedToUrl(seed) {
   history.replaceState(null, "", url.toString());
 }
 
-export function newRandomSeed(excludeBiomeId) {
-  // Reroll a few times to avoid landing on the same biome on regenerate.
-  for (let i = 0; i < 24; i++) {
+export function newRandomSeed(opts = {}) {
+  // Back-compat: accept a bare biome id string in addition to the options form.
+  const o = typeof opts === "string" ? { excludeBiomeId: opts } : opts;
+  const excludeBiomeId = o.excludeBiomeId;
+  const allowedBiomeIds = o.allowedBiomeIds; // undefined or empty = no filter
+  const filterOn =
+    Array.isArray(allowedBiomeIds) && allowedBiomeIds.length > 0;
+  // Reroll to satisfy both the filter and the no-repeat rule when possible.
+  for (let i = 0; i < 64; i++) {
     const s = Math.floor(Math.random() * 0x10000);
-    if (!excludeBiomeId) return s;
     const peekBiome = BIOMES[Math.floor(mulberry32(s)() * BIOMES.length)];
-    if (peekBiome.id !== excludeBiomeId) return s;
+    if (filterOn && !allowedBiomeIds.includes(peekBiome.id)) continue;
+    if (excludeBiomeId && peekBiome.id === excludeBiomeId) continue;
+    return s;
+  }
+  // Couldn't satisfy both — relax the no-repeat rule but keep the filter.
+  if (filterOn) {
+    for (let i = 0; i < 32; i++) {
+      const s = Math.floor(Math.random() * 0x10000);
+      const peekBiome = BIOMES[Math.floor(mulberry32(s)() * BIOMES.length)];
+      if (allowedBiomeIds.includes(peekBiome.id)) return s;
+    }
   }
   return Math.floor(Math.random() * 0x10000);
 }

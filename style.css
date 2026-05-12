@@ -584,6 +584,155 @@ body {
   margin-top: 2px;
 }
 
+/* ─── Bookmarks ──────────────────────────────────────────────────────── */
+.bookmark-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 168px;
+  overflow-y: auto;
+  margin-top: 4px;
+}
+
+.bookmark-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border: 1px solid rgba(245, 240, 230, 0.16);
+  background: transparent;
+  color: var(--ink);
+  font-family: "DM Mono", monospace;
+  cursor: pointer;
+  transition: border-color 0.3s ease, background 0.3s ease;
+}
+.bookmark-row:hover {
+  border-color: var(--ink);
+  background: rgba(245, 240, 230, 0.06);
+}
+
+.bookmark-swatch {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  border: 1px solid rgba(0, 0, 0, 0.4);
+  box-shadow: inset 0 0 6px rgba(0, 0, 0, 0.35);
+}
+
+.bookmark-text {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  text-align: left;
+  background: transparent;
+  border: none;
+  color: inherit;
+  font: inherit;
+  padding: 0;
+  cursor: pointer;
+}
+.bookmark-biome {
+  font-size: 10px;
+  letter-spacing: 0.18em;
+  text-transform: lowercase;
+  color: var(--ink);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.bookmark-seed {
+  font-size: 9px;
+  color: var(--ink-faint);
+  letter-spacing: 0.18em;
+}
+
+.bookmark-remove {
+  background: transparent;
+  border: none;
+  color: var(--ink-faint);
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0 4px;
+  transition: color 0.3s ease;
+}
+.bookmark-remove:hover { color: var(--ink); }
+
+.bookmark-empty {
+  font-size: 10px;
+  color: var(--ink-faint);
+  letter-spacing: 0.18em;
+  text-transform: lowercase;
+  margin-top: 6px;
+  display: none;
+}
+.bookmark-empty.visible { display: block; }
+
+/* ─── Biome filter ───────────────────────────────────────────────────── */
+.biome-filter {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+.biome-chip {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: 1px solid var(--ink-faint);
+  cursor: pointer;
+  position: relative;
+  padding: 0;
+  background: transparent;
+  transition: border-color 0.25s ease, transform 0.25s ease, opacity 0.25s ease;
+  opacity: 0.35;
+}
+.biome-chip::before {
+  content: "";
+  position: absolute;
+  inset: 3px;
+  border-radius: 50%;
+  background: var(--chip-color, #888);
+  box-shadow: inset 0 0 4px rgba(0, 0, 0, 0.3);
+}
+.biome-chip:hover {
+  border-color: var(--ink);
+  transform: scale(1.08);
+}
+.biome-chip.active {
+  border-color: var(--ink);
+  opacity: 1;
+}
+.biome-chip-tooltip {
+  position: absolute;
+  bottom: calc(100% + 6px);
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(14, 14, 18, 0.95);
+  border: 1px solid var(--ink-dim);
+  color: var(--ink);
+  font-size: 9px;
+  letter-spacing: 0.15em;
+  text-transform: lowercase;
+  padding: 3px 6px;
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+.biome-chip:hover .biome-chip-tooltip { opacity: 1; }
+
+.biome-filter-hint {
+  font-size: 9px;
+  color: var(--ink-faint);
+  letter-spacing: 0.18em;
+  text-transform: lowercase;
+  line-height: 1.4;
+}
+
 .follow-banner {
   position: fixed;
   top: 16px;

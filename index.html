@@ -135,6 +135,33 @@
         <span class="setting-button-label">reset camera</span>
       </button>
     </section>
+
+    <section class="settings-section">
+      <div class="settings-section-label">share</div>
+
+      <button class="setting-button" id="setting-copy-link">
+        <span class="setting-button-label">copy link to this world</span>
+        <span class="setting-button-hint" id="setting-copy-hint">click to copy seed url</span>
+      </button>
+    </section>
+
+    <section class="settings-section">
+      <div class="settings-section-label">bookmarks</div>
+
+      <button class="setting-button" id="setting-bookmark">
+        <span class="setting-button-label" id="setting-bookmark-label">★ save this seed</span>
+        <span class="setting-button-hint" id="setting-bookmark-hint">store in your browser</span>
+      </button>
+
+      <div class="bookmark-list" id="bookmark-list" aria-live="polite"></div>
+      <div class="bookmark-empty" id="bookmark-empty">no saved seeds yet.</div>
+    </section>
+
+    <section class="settings-section">
+      <div class="settings-section-label">biome filter</div>
+      <div class="biome-filter" id="biome-filter"></div>
+      <div class="biome-filter-hint">tap to toggle. regenerate only picks from enabled biomes.</div>
+    </section>
   </aside>
 
   <div class="follow-banner" id="follow-banner" aria-hidden="true">

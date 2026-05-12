@@ -23,13 +23,6 @@ Remove completed items from this list, commit and push so its live on github pag
 - **Ambient bed per biome** (S) — soft loop chosen by biome id (wind, rustle, drips, crackle). One `<audio>` element, crossfade on regenerate. Mute toggle in HUD.
 - **Creature chirps** (S) — occasional very-soft pitched blip when a creature transitions states. Web Audio API, tiny `OscillatorNode` envelope, no samples needed.
 
-## UX / HUD
-
-- **Seed bookmarks** (S) — small drawer where the user can star the current seed; stored in `localStorage` and listed with biome thumbnails (rendered offscreen at low res).
-- **"Surprise me" with biome filter** (S) — a small biome-icon row that toggles which biomes `newRandomSeed` is allowed to land on.
-- **Shareable URL copy button** (S) — already write the seed to the URL; add a one-click "copy link" button.
-- **Reveal animation** (S) — when a new world is generated, fade fog density from high → biome-default over ~1.5s so the world emerges from mist.
-
 ## Performance & Code Health
 
 - **Pool geometries/materials** (S) — flora builders currently create fresh geometries each call; biomes have many duplicates. Cache by `(kind, biomeId)` key.

@@ -1,8 +1,9 @@
 import * as THREE from "three";
 import { state } from "./state.js";
-import { readSeedFromUrl, newRandomSeed } from "./seed.js";
+import { readSeedFromUrl, newRandomSeed, formatSeed } from "./seed.js";
 import { generateWorld, setFollowReleaseCallback } from "./world.js";
 import { wakeCreature } from "./fauna.js";
+import { BIOMES } from "./biomes.js";
 
 let followTarget = null;
 let selectingCreature = false;
@@ -12,6 +13,8 @@ let selectingCreature = false;
 // localStorage are ignored so we can change the schema later without breaking.
 const SETTINGS_KEY = "smallworld:settings:v1";
 const PERSISTED_KEYS = ["fogMultiplier", "autoCycle", "manualDayFactor", "autoRotate", "ambientBoost"];
+const BOOKMARKS_KEY = "smallworld:bookmarks:v1";
+const BIOME_FILTER_KEY = "smallworld:biomefilter:v1";
 
 function loadSettings() {
   try {
@@ -33,6 +36,47 @@ function saveSettings() {
     localStorage.setItem(SETTINGS_KEY, JSON.stringify(out));
   } catch {
     // localStorage may throw in private mode / quota — non-fatal
+  }
+}
+
+function loadBookmarks() {
+  try {
+    const raw = localStorage.getItem(BOOKMARKS_KEY);
+    if (!raw) return [];
+    const arr = JSON.parse(raw);
+    return Array.isArray(arr) ? arr : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveBookmarks(list) {
+  try {
+    localStorage.setItem(BOOKMARKS_KEY, JSON.stringify(list));
+  } catch {
+    // ignore quota / private mode
+  }
+}
+
+function loadBiomeFilter() {
+  // Default: all biomes enabled. Returns a Set for quick membership checks.
+  try {
+    const raw = localStorage.getItem(BIOME_FILTER_KEY);
+    if (!raw) return new Set(BIOMES.map((b) => b.id));
+    const arr = JSON.parse(raw);
+    if (!Array.isArray(arr) || arr.length === 0)
+      return new Set(BIOMES.map((b) => b.id));
+    return new Set(arr.filter((id) => BIOMES.some((b) => b.id === id)));
+  } catch {
+    return new Set(BIOMES.map((b) => b.id));
+  }
+}
+
+function saveBiomeFilter(set) {
+  try {
+    localStorage.setItem(BIOME_FILTER_KEY, JSON.stringify([...set]));
+  } catch {
+    // ignore
   }
 }
 
@@ -165,6 +209,50 @@ export function initUi({ camera, canvas, controls, renderer }) {
 
   syncTimeUi();
 
+  // Biome filter — restore from storage, build the chip row, and use it
+  // to constrain regen below.
+  const biomeFilter = loadBiomeFilter();
+  const biomeFilterEl = document.getElementById("biome-filter");
+  function renderBiomeFilter() {
+    biomeFilterEl.innerHTML = "";
+    for (const b of BIOMES) {
+      const chip = document.createElement("button");
+      chip.type = "button";
+      chip.className = "biome-chip" + (biomeFilter.has(b.id) ? " active" : "");
+      chip.style.setProperty("--chip-color", b.sky);
+      chip.setAttribute("aria-label", b.name);
+      chip.setAttribute("aria-pressed", biomeFilter.has(b.id) ? "true" : "false");
+      const tip = document.createElement("span");
+      tip.className = "biome-chip-tooltip";
+      tip.textContent = b.name;
+      chip.appendChild(tip);
+      chip.addEventListener("click", () => {
+        if (biomeFilter.has(b.id)) {
+          // Don't allow disabling the last enabled biome — otherwise regen has
+          // nothing to land on. Just re-mark this chip and bail.
+          if (biomeFilter.size <= 1) return;
+          biomeFilter.delete(b.id);
+        } else {
+          biomeFilter.add(b.id);
+        }
+        saveBiomeFilter(biomeFilter);
+        renderBiomeFilter();
+      });
+      biomeFilterEl.appendChild(chip);
+    }
+  }
+  renderBiomeFilter();
+
+  function pickRegenSeed() {
+    // If every biome is enabled, the filter is a no-op — keep the old
+    // "avoid same biome twice" behaviour. Otherwise constrain to the set.
+    const all = biomeFilter.size === BIOMES.length;
+    return newRandomSeed({
+      excludeBiomeId: state.currentBiome?.id,
+      allowedBiomeIds: all ? undefined : [...biomeFilter],
+    });
+  }
+
   // Regenerate world button
   document.getElementById("regen").addEventListener("click", () => {
     const overlay = document.createElement("div");
@@ -174,11 +262,144 @@ export function initUi({ camera, canvas, controls, renderer }) {
     document.body.appendChild(overlay);
     requestAnimationFrame(() => (overlay.style.opacity = "0.7"));
     setTimeout(() => {
-      generateWorld(newRandomSeed(state.currentBiome?.id));
+      generateWorld(pickRegenSeed());
       overlay.style.opacity = "0";
       setTimeout(() => overlay.remove(), 400);
     }, 360);
   });
+
+  // Share — copy current URL (which always reflects the current seed)
+  const copyBtn = document.getElementById("setting-copy-link");
+  const copyHint = document.getElementById("setting-copy-hint");
+  const _copyDefault = copyHint.textContent;
+  let _copyResetTimer = 0;
+  copyBtn.addEventListener("click", async () => {
+    const url = window.location.href;
+    let ok = false;
+    try {
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(url);
+        ok = true;
+      } else {
+        // fallback for older browsers / non-secure contexts
+        const ta = document.createElement("textarea");
+        ta.value = url;
+        ta.style.cssText = "position:fixed;opacity:0;pointer-events:none;";
+        document.body.appendChild(ta);
+        ta.select();
+        ok = document.execCommand("copy");
+        ta.remove();
+      }
+    } catch {
+      ok = false;
+    }
+    copyHint.textContent = ok ? "copied to clipboard" : "copy failed";
+    clearTimeout(_copyResetTimer);
+    _copyResetTimer = setTimeout(() => {
+      copyHint.textContent = _copyDefault;
+    }, 1800);
+  });
+
+  // Bookmarks ----------------------------------------------------------------
+  let bookmarks = loadBookmarks();
+  const bookmarkBtn = document.getElementById("setting-bookmark");
+  const bookmarkLabel = document.getElementById("setting-bookmark-label");
+  const bookmarkHint = document.getElementById("setting-bookmark-hint");
+  const bookmarkListEl = document.getElementById("bookmark-list");
+  const bookmarkEmptyEl = document.getElementById("bookmark-empty");
+
+  function biomeById(id) {
+    return BIOMES.find((b) => b.id === id);
+  }
+
+  function isCurrentBookmarked() {
+    return bookmarks.some((bm) => bm.seed === state.currentSeed);
+  }
+
+  function syncBookmarkButton() {
+    const saved = isCurrentBookmarked();
+    bookmarkLabel.textContent = saved ? "★ remove bookmark" : "☆ save this seed";
+    bookmarkHint.textContent = saved
+      ? "stored · click to remove"
+      : "store in your browser";
+    bookmarkBtn.classList.toggle("active", saved);
+  }
+
+  function renderBookmarks() {
+    bookmarkListEl.innerHTML = "";
+    for (const bm of bookmarks) {
+      const row = document.createElement("div");
+      row.className = "bookmark-row";
+      const biome = biomeById(bm.biomeId);
+      const swatch = document.createElement("span");
+      swatch.className = "bookmark-swatch";
+      swatch.style.background = biome ? biome.sky : "#888";
+      const text = document.createElement("button");
+      text.type = "button";
+      text.className = "bookmark-text";
+      const bn = document.createElement("span");
+      bn.className = "bookmark-biome";
+      bn.textContent = bm.biomeName || biome?.name || "—";
+      const seed = document.createElement("span");
+      seed.className = "bookmark-seed";
+      seed.textContent = formatSeed(bm.seed);
+      text.appendChild(bn);
+      text.appendChild(seed);
+      text.addEventListener("click", () => {
+        if (bm.seed === state.currentSeed) return;
+        generateWorld(bm.seed);
+        syncBookmarkButton();
+      });
+      const remove = document.createElement("button");
+      remove.type = "button";
+      remove.className = "bookmark-remove";
+      remove.setAttribute("aria-label", "remove bookmark");
+      remove.textContent = "×";
+      remove.addEventListener("click", (e) => {
+        e.stopPropagation();
+        bookmarks = bookmarks.filter((x) => x.seed !== bm.seed);
+        saveBookmarks(bookmarks);
+        renderBookmarks();
+        syncBookmarkButton();
+      });
+      row.appendChild(swatch);
+      row.appendChild(text);
+      row.appendChild(remove);
+      bookmarkListEl.appendChild(row);
+    }
+    bookmarkEmptyEl.classList.toggle("visible", bookmarks.length === 0);
+  }
+
+  bookmarkBtn.addEventListener("click", () => {
+    if (state.currentSeed == null || !state.currentBiome) return;
+    if (isCurrentBookmarked()) {
+      bookmarks = bookmarks.filter((x) => x.seed !== state.currentSeed);
+    } else {
+      bookmarks.push({
+        seed: state.currentSeed,
+        biomeId: state.currentBiome.id,
+        biomeName: state.currentBiome.name,
+        ts: Date.now(),
+      });
+    }
+    saveBookmarks(bookmarks);
+    renderBookmarks();
+    syncBookmarkButton();
+  });
+
+  // Refresh the button label whenever the world changes (regen via button,
+  // popstate, or bookmark click). The simplest hook is a polling watcher on
+  // state.currentSeed — it changes rarely and the cost is trivial.
+  let _lastSeenSeed = state.currentSeed;
+  setInterval(() => {
+    if (state.currentSeed !== _lastSeenSeed) {
+      _lastSeenSeed = state.currentSeed;
+      syncBookmarkButton();
+    }
+  }, 250);
+
+  renderBookmarks();
+  syncBookmarkButton();
 
   // Also regenerate when seed changes via back/forward navigation.
   window.addEventListener("popstate", () => {

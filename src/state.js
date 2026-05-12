@@ -31,6 +31,7 @@ export const state = {
   hemiLight: null,
   dayNight: null,
   windUniforms: { uTime: { value: 0 } },
+  revealStart: 0,
   userSettings: {
     fogMultiplier: 0.2,
     autoCycle: false,

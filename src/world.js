@@ -72,11 +72,21 @@ export function updateDayNight(t) {
   if (ab > 0) _scene.background.lerp(AMBIENT_LIFT, ab * 0.55);
   _scene.fog.color.copy(state.dayNight.fog).lerp(NIGHT_FOG, nightAmt);
   if (ab > 0) _scene.fog.color.lerp(AMBIENT_LIFT, ab * 0.6);
+  // reveal animation — fog starts thick, eases back to biome default over ~1.5s
+  let revealMul = 1;
+  if (state.revealStart) {
+    const k = (performance.now() - state.revealStart) / 1500;
+    if (k < 1) {
+      const e = (1 - Math.max(0, k)) ** 3; // ease-out cubic
+      revealMul = 1 + 5 * e;
+    }
+  }
   _scene.fog.density =
     state.dayNight.fogDensity *
     (1 + nightAmt * 0.2) *
     state.userSettings.fogMultiplier *
-    (1 - ab * 0.5); // thinner fog at high ambient
+    (1 - ab * 0.5) * // thinner fog at high ambient
+    revealMul;
 
   state.sunLight.color.copy(state.dayNight.sun).lerp(NIGHT_SUN, nightAmt);
   state.sunLight.intensity = 0.45 + dayFactor * 0.95 + ab * 1.6;
@@ -406,4 +416,7 @@ export function generateWorld(seed) {
   // restore native Math.random so per-frame animation isn't deterministic
   Math.random = originalRandom;
   writeSeedToUrl(seed);
+
+  // kick off the reveal animation — updateDayNight reads this timestamp
+  state.revealStart = performance.now();
 }
