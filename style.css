@@ -29,6 +29,7 @@ body {
   width: 100vw;
   height: 100vh;
   display: block;
+  touch-action: none;
 }
 
 /* ─── film grain overlay ─── */
@@ -69,12 +70,14 @@ body {
   position: fixed;
   left: 0;
   right: 0;
-  padding: 32px 44px;
+  padding: max(32px, env(safe-area-inset-top)) max(44px, env(safe-area-inset-right))
+    max(32px, env(safe-area-inset-bottom)) max(44px, env(safe-area-inset-left));
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
   z-index: 10;
   pointer-events: none;
+  gap: 18px;
 }
 
 .hud > * {
@@ -294,8 +297,73 @@ body {
 
 /* responsive */
 @media (max-width: 720px) {
-  .hud { padding: 22px 22px; }
-  .stats { gap: 18px; flex-wrap: wrap; }
-  .biome-card { min-width: 0; }
+  .hud {
+    padding: max(16px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right))
+      max(16px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left));
+    gap: 10px;
+  }
+  .hud-top { align-items: flex-start; }
+  .hud-bottom {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 14px;
+  }
+  .title-block { max-width: 60vw; gap: 4px; }
+  .title { font-size: clamp(28px, 9vw, 44px); }
+  .eyebrow { font-size: 8px; letter-spacing: 0.35em; }
+  .biome-card { min-width: 0; max-width: 38vw; gap: 4px; }
+  .biome-name { font-size: clamp(15px, 4.2vw, 20px); }
+  .biome-sub { font-size: 12px; line-height: 1.15; }
+  .stats {
+    gap: 14px;
+    row-gap: 10px;
+    justify-content: flex-start;
+  }
+  .stat { min-width: 44px; gap: 2px; }
+  .value { font-size: 15px; }
+  .stat .label { font-size: 8px; letter-spacing: 0.3em; }
+  .controls {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+  }
   .controls .hint { display: none; }
+  .regen {
+    flex: 1 1 auto;
+    justify-content: center;
+    padding: 14px 16px;
+    font-size: 10px;
+    letter-spacing: 0.28em;
+    min-height: 44px;
+  }
+  .regen:hover {
+    letter-spacing: 0.28em;
+    padding-right: 16px;
+  }
+  .corner { font-size: 11px; }
+  .corner-tl, .corner-tr { top: 6px; }
+  .corner-bl, .corner-br { bottom: 6px; }
+  .corner-tl, .corner-bl { left: 8px; }
+  .corner-tr, .corner-br { right: 8px; }
+}
+
+@media (max-width: 420px) {
+  .biome-card { max-width: 42vw; }
+  .title { font-size: clamp(24px, 8vw, 36px); }
+  .stats { gap: 10px 14px; }
+  .value { font-size: 14px; }
+}
+
+@media (hover: none) {
+  /* avoid stuck hover-state on touch devices */
+  .regen:hover {
+    border-color: var(--ink-dim);
+    background: transparent;
+    letter-spacing: 0.32em;
+    padding-right: 22px;
+  }
+  .regen:hover::before,
+  .regen:hover::after { border-color: var(--ink-dim); }
+  .regen:hover .regen-glyph { transform: none; }
 }

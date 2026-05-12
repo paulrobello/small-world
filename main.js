@@ -204,6 +204,11 @@ controls.maxDistance = 55;
 controls.maxPolarAngle = Math.PI / 2.15;
 controls.minPolarAngle = Math.PI / 6;
 controls.target.set(0, 1.5, 0);
+// touch gestures: one finger rotates, two-finger pinch dollies (no pan)
+controls.touches = {
+  ONE: THREE.TOUCH.ROTATE,
+  TWO: THREE.TOUCH.DOLLY_ROTATE,
+};
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Terrain height function — circular floating island with smoothstep falloff
@@ -347,6 +352,45 @@ function jitterGeo(geo, amount = 0.05) {
   return welded;
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Wind sway — shared shader injection for flora / grass / wildflowers
+// ─────────────────────────────────────────────────────────────────────────────
+// Single shared uniform advanced each frame. applyWindSway() patches a
+// MeshStandardMaterial's vertex shader so geometry sways more the higher its
+// local Y is — trunks at y≈0 stay put, leaves and grass tips bend.
+const windUniforms = { uTime: { value: 0 } };
+
+function applyWindSway(material, strength = 1.0) {
+  material.onBeforeCompile = (shader) => {
+    shader.uniforms.uTime = windUniforms.uTime;
+    shader.uniforms.uWindStrength = { value: strength };
+    shader.vertexShader = shader.vertexShader
+      .replace(
+        "#include <common>",
+        "#include <common>\nuniform float uTime;\nuniform float uWindStrength;"
+      )
+      .replace(
+        "#include <begin_vertex>",
+        `#include <begin_vertex>
+        {
+          float windY = max(transformed.y, 0.0);
+          float windAmp = windY * windY * uWindStrength;
+          #ifdef USE_INSTANCING
+            vec4 wp = modelMatrix * instanceMatrix * vec4(transformed, 1.0);
+          #else
+            vec4 wp = modelMatrix * vec4(transformed, 1.0);
+          #endif
+          float w1 = sin(uTime * 1.4 + wp.x * 0.30 + wp.z * 0.40);
+          float w2 = sin(uTime * 0.9 + wp.x * 0.15 - wp.z * 0.25);
+          transformed.x += w1 * windAmp * 0.06;
+          transformed.z += w2 * windAmp * 0.05;
+        }`
+      );
+  };
+  material.needsUpdate = true;
+  return material;
+}
+
 const FLORA_BUILDERS = {
   tree(biome) {
     const g = new THREE.Group();
@@ -365,11 +409,14 @@ const FLORA_BUILDERS = {
     g.add(trunk);
     const leaves = new THREE.Mesh(
       jitterGeo(new THREE.IcosahedronGeometry(0.75, 0), 0.12),
-      new THREE.MeshStandardMaterial({
-        color: leafCol,
-        flatShading: true,
-        roughness: 0.85,
-      })
+      applyWindSway(
+        new THREE.MeshStandardMaterial({
+          color: leafCol,
+          flatShading: true,
+          roughness: 0.85,
+        }),
+        1.0
+      )
     );
     leaves.position.y = 1.45;
     leaves.scale.set(1, 1.15, 1);
@@ -391,11 +438,16 @@ const FLORA_BUILDERS = {
     trunk.position.y = 0.2;
     trunk.castShadow = true;
     g.add(trunk);
+    // shared cone material — windy
+    const coneMat = applyWindSway(
+      new THREE.MeshStandardMaterial({ color: col, flatShading: true }),
+      0.6
+    );
     const tiers = 3 + Math.floor(Math.random() * 2);
     for (let i = 0; i < tiers; i++) {
       const cone = new THREE.Mesh(
         new THREE.ConeGeometry(0.65 - i * 0.13, 0.65, 6),
-        new THREE.MeshStandardMaterial({ color: col, flatShading: true })
+        coneMat
       );
       cone.position.y = 0.45 + i * 0.42;
       cone.castShadow = true;
@@ -450,11 +502,14 @@ const FLORA_BUILDERS = {
     const capCol = new THREE.Color(biome.accent);
     const cap = new THREE.Mesh(
       new THREE.SphereGeometry(0.22, 8, 6, 0, Math.PI * 2, 0, Math.PI / 2),
-      new THREE.MeshStandardMaterial({
-        color: capCol,
-        flatShading: true,
-        roughness: 0.6,
-      })
+      applyWindSway(
+        new THREE.MeshStandardMaterial({
+          color: capCol,
+          flatShading: true,
+          roughness: 0.6,
+        }),
+        0.4
+      )
     );
     cap.position.y = 0.36;
     cap.scale.set(1.4, 0.9, 1.4);
@@ -466,10 +521,13 @@ const FLORA_BUILDERS = {
   fern(biome) {
     const g = new THREE.Group();
     const col = new THREE.Color(biome.ground[0]).offsetHSL(0, 0, 0.15);
-    const mat = new THREE.MeshStandardMaterial({
-      color: col,
-      flatShading: true,
-    });
+    const mat = applyWindSway(
+      new THREE.MeshStandardMaterial({
+        color: col,
+        flatShading: true,
+      }),
+      1.4
+    );
     const blades = 4 + Math.floor(Math.random() * 3);
     for (let i = 0; i < blades; i++) {
       const blade = new THREE.Mesh(
@@ -508,10 +566,13 @@ const FLORA_BUILDERS = {
 
   reed() {
     const g = new THREE.Group();
-    const mat = new THREE.MeshStandardMaterial({
-      color: "#6d4f8a",
-      flatShading: true,
-    });
+    const mat = applyWindSway(
+      new THREE.MeshStandardMaterial({
+        color: "#6d4f8a",
+        flatShading: true,
+      }),
+      1.6
+    );
     const count = 5 + Math.floor(Math.random() * 4);
     for (let i = 0; i < count; i++) {
       const h = 0.6 + Math.random() * 0.5;
@@ -533,10 +594,13 @@ const FLORA_BUILDERS = {
   grass(biome) {
     const g = new THREE.Group();
     const col = new THREE.Color(biome.ground[2]).offsetHSL(0, 0, -0.1);
-    const mat = new THREE.MeshStandardMaterial({
-      color: col,
-      flatShading: true,
-    });
+    const mat = applyWindSway(
+      new THREE.MeshStandardMaterial({
+        color: col,
+        flatShading: true,
+      }),
+      1.8
+    );
     const count = 3 + Math.floor(Math.random() * 4);
     for (let i = 0; i < count; i++) {
       const blade = new THREE.Mesh(
@@ -1541,20 +1605,36 @@ function placeInstanced(geo, mat, count, heightFn, opts = {}) {
 
 function makeGrassField(biome, heightFn) {
   const count = GRASS_DENSITY[biome.id] ?? 300;
-  const g = new THREE.ConeGeometry(0.03, 0.32, 3, 1);
-  g.translate(0, 0.16, 0);
+  // Short ribbon — a tall thin plane with extra height segments so the wind
+  // shader can curve the blade smoothly. Slightly tapered toward the tip
+  // by hand-warping the top vertices.
+  const blade = new THREE.PlaneGeometry(0.06, 0.34, 1, 3);
+  // taper the top + push bottom flat to the ground
+  const bp = blade.attributes.position;
+  for (let i = 0; i < bp.count; i++) {
+    const y = bp.getY(i) + 0.17; // shift so base sits at y=0, tip at y=0.34
+    bp.setY(i, y);
+    // taper width with height
+    const taper = 1 - Math.min(1, y / 0.34) * 0.6;
+    bp.setX(i, bp.getX(i) * taper);
+  }
+  blade.computeVertexNormals();
+
   const base = new THREE.Color(biome.ground[1]).offsetHSL(
     (Math.random() - 0.5) * 0.04, 0.1, -0.08
   );
-  const m = new THREE.MeshStandardMaterial({
-    color: base,
-    flatShading: true,
-    roughness: 0.95,
-  });
-  return placeInstanced(g, m, count, heightFn, {
-    minScale: 0.5,
-    maxScale: 1.3,
-    tilt: 0.3,
+  const m = applyWindSway(
+    new THREE.MeshStandardMaterial({
+      color: base,
+      roughness: 0.95,
+      side: THREE.DoubleSide,
+    }),
+    1.8
+  );
+  return placeInstanced(blade, m, count, heightFn, {
+    minScale: 0.6,
+    maxScale: 1.4,
+    tilt: 0.18,
   });
 }
 
@@ -1567,11 +1647,14 @@ function makeWildflowerField(biome, heightFn) {
   for (const color of palette) {
     const g = new THREE.IcosahedronGeometry(0.05, 0);
     g.scale(1, 0.7, 1);
-    const m = new THREE.MeshStandardMaterial({
-      color: new THREE.Color(color),
-      flatShading: true,
-      roughness: 0.4,
-    });
+    const m = applyWindSway(
+      new THREE.MeshStandardMaterial({
+        color: new THREE.Color(color),
+        flatShading: true,
+        roughness: 0.4,
+      }),
+      1.2
+    );
     meshes.push(
       placeInstanced(g, m, perColor, heightFn, {
         yOffset: 0.08,
@@ -1602,6 +1685,57 @@ function makePebbleField(biome, heightFn) {
     maxScale: 1.1,
     tilt: 0.5,
   });
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Parallax distance ring — soft far-distance silhouette behind the fog
+// ─────────────────────────────────────────────────────────────────────────────
+// A tall open-ended cylinder placed well beyond the island, with the top
+// edge wobbled to suggest distant hills. The fog largely consumes it, so it
+// reads as a parallax silhouette that drifts past as the camera orbits.
+function makeParallaxRing(biome) {
+  const radius = 58;
+  const height = 22;
+  const segs = 96;
+  const geo = new THREE.CylinderGeometry(
+    radius, radius, height, segs, 4, true
+  );
+  const pos = geo.attributes.position;
+  // wobble the top half so the upper rim has a hill silhouette
+  for (let i = 0; i < pos.count; i++) {
+    const y = pos.getY(i);
+    if (y > 0) {
+      const x = pos.getX(i);
+      const z = pos.getZ(i);
+      const a = Math.atan2(z, x);
+      const wobble =
+        Math.sin(a * 7.0) * 1.8 +
+        Math.sin(a * 13.0 + 1.7) * 1.1 +
+        Math.sin(a * 3.0 - 0.4) * 2.4;
+      const lift = (y / (height * 0.5)) * wobble;
+      pos.setY(i, y + lift);
+    }
+  }
+  geo.computeVertexNormals();
+
+  // tint between sky and fog so the ring blends — slightly toward sky so
+  // it's faintly visible against fog when sky is the lighter of the two.
+  const skyC = new THREE.Color(biome.sky);
+  const fogC = new THREE.Color(biome.fog);
+  const tint = fogC.clone().lerp(skyC, 0.55);
+
+  const mat = new THREE.MeshBasicMaterial({
+    color: tint,
+    side: THREE.BackSide,
+    fog: true,
+    transparent: true,
+    opacity: 0.85,
+    depthWrite: false,
+  });
+  const mesh = new THREE.Mesh(geo, mat);
+  mesh.position.y = 1.5;
+  mesh.renderOrder = -1;
+  return mesh;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1813,6 +1947,12 @@ let currentBiome = null;
 let currentSeed = 0;
 let maxElev = 0;
 
+// Day/night cycle state — set up in generateWorld, animated in animate().
+let sunLight = null;
+let hemiLight = null;
+let parallaxRingMesh = null;
+let dayNight = null;
+
 function disposeGroup(g) {
   g.traverse((o) => {
     if (o.geometry) o.geometry.dispose();
@@ -1821,6 +1961,52 @@ function disposeGroup(g) {
       else o.material.dispose();
     }
   });
+}
+
+// Slow day/night cycle. Lerps a handful of scene values between the biome's
+// daytime palette and a generic deep-night palette using a cosine curve.
+const NIGHT_SKY = new THREE.Color("#0a0d24");
+const NIGHT_FOG = new THREE.Color("#070a1f");
+const NIGHT_SUN = new THREE.Color("#7a89b8");
+const NIGHT_HEMI_GROUND = new THREE.Color("#06070d");
+const DAY_NIGHT_PERIOD_S = 120; // one full cycle every two minutes
+
+function updateDayNight(t) {
+  if (!dayNight || !sunLight || !hemiLight) return;
+  const phase = (t * 2 * Math.PI) / DAY_NIGHT_PERIOD_S;
+  // dayFactor: 1 = noon, 0 = midnight
+  const dayFactor = (Math.cos(phase) + 1) * 0.5;
+  const nightAmt = 1 - dayFactor;
+
+  // sky + fog colour
+  scene.background.copy(dayNight.sky).lerp(NIGHT_SKY, nightAmt);
+  scene.fog.color.copy(dayNight.fog).lerp(NIGHT_FOG, nightAmt);
+  scene.fog.density =
+    dayNight.fogDensity * (1 + nightAmt * 0.6);
+
+  // sun
+  sunLight.color.copy(dayNight.sun).lerp(NIGHT_SUN, nightAmt);
+  sunLight.intensity = 0.18 + dayFactor * 1.15;
+  // arc the sun across the sky so shadows shift over the cycle
+  const sunAngle = phase + Math.PI; // sun rises opposite of cos peak
+  const sunR = 26;
+  sunLight.position.set(
+    Math.cos(sunAngle) * sunR,
+    Math.max(6, Math.sin(sunAngle) * 28 + 8),
+    Math.sin(sunAngle * 0.5) * 12 + 4
+  );
+
+  // hemisphere
+  hemiLight.color.copy(dayNight.skyForHemi).lerp(NIGHT_SKY, nightAmt);
+  hemiLight.groundColor.copy(dayNight.ground).lerp(NIGHT_HEMI_GROUND, nightAmt);
+  hemiLight.intensity = 0.12 + dayFactor * 0.55;
+
+  // parallax ring tinted to match
+  if (parallaxRingMesh) {
+    parallaxRingMesh.material.color
+      .copy(dayNight.ringTint)
+      .lerp(NIGHT_FOG, nightAmt * 0.7);
+  }
 }
 
 function randInt(lo, hi) {
@@ -1853,7 +2039,7 @@ function generateWorld(seed) {
   currentBiome = biome;
   currentSeed = seed;
 
-  // atmosphere
+  // atmosphere — Color/Fog instances are mutated by updateDayNight()
   scene.background = new THREE.Color(biome.sky);
   scene.fog = new THREE.FogExp2(new THREE.Color(biome.fog), biome.fogDensity);
 
@@ -1864,19 +2050,24 @@ function generateWorld(seed) {
     0.65
   );
   world.add(hemi);
+  hemiLight = hemi;
 
   const sun = new THREE.DirectionalLight(new THREE.Color(biome.sun), 1.25);
   sun.position.set(18, 28, 12);
   sun.castShadow = true;
-  sun.shadow.mapSize.set(1024, 1024);
+  // larger shadow map + soft PCF radius for the soft-shadow pass
+  sun.shadow.mapSize.set(2048, 2048);
   sun.shadow.camera.left = -ISLAND_SIZE / 2;
   sun.shadow.camera.right = ISLAND_SIZE / 2;
   sun.shadow.camera.top = ISLAND_SIZE / 2;
   sun.shadow.camera.bottom = -ISLAND_SIZE / 2;
   sun.shadow.camera.near = 0.5;
-  sun.shadow.camera.far = 60;
-  sun.shadow.bias = -0.0008;
+  sun.shadow.camera.far = 80;
+  sun.shadow.bias = -0.0006;
+  sun.shadow.normalBias = 0.04;
+  sun.shadow.radius = 3.5;
   world.add(sun);
+  sunLight = sun;
 
   const accent = new THREE.PointLight(
     new THREE.Color(biome.accent),
@@ -1886,6 +2077,21 @@ function generateWorld(seed) {
   );
   accent.position.set(0, 8, 0);
   world.add(accent);
+
+  // parallax distance ring + day/night palette snapshot
+  const ring = makeParallaxRing(biome);
+  world.add(ring);
+  parallaxRingMesh = ring;
+
+  dayNight = {
+    sky: new THREE.Color(biome.sky),
+    skyForHemi: new THREE.Color(biome.sky),
+    fog: new THREE.Color(biome.fog),
+    sun: new THREE.Color(biome.sun),
+    ground: new THREE.Color(biome.ground[0]),
+    ringTint: ring.material.color.clone(),
+    fogDensity: biome.fogDensity,
+  };
 
   // terrain
   const noise2D = createNoise2D();
@@ -2033,6 +2239,10 @@ function animate() {
   const dt = Math.min(clock.getDelta(), 0.05);
   const t = clock.elapsedTime;
 
+  // shared wind shader time
+  windUniforms.uTime.value = t;
+  updateDayNight(t);
+
   for (const c of creatures) stepCreature(c, dt, t, heightFn);
   for (const c of caterpillars) stepCaterpillar(c, dt, t, heightFn);
   for (const b of butterflies) stepButterfly(b, dt, t, flowerSpots, heightFn);
@@ -2066,11 +2276,14 @@ window.addEventListener("popstate", () => {
   if (s !== null && s !== currentSeed) generateWorld(s);
 });
 
-window.addEventListener("resize", () => {
+function handleResize() {
   camera.aspect = window.innerWidth / window.innerHeight;
   camera.updateProjectionMatrix();
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
   renderer.setSize(window.innerWidth, window.innerHeight);
-});
+}
+window.addEventListener("resize", handleResize);
+window.addEventListener("orientationchange", handleResize);
 
 // kickoff — honour ?seed=XXXX in the URL if present
 const initialSeed = readSeedFromUrl() ?? newRandomSeed();
