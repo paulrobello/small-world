@@ -7,6 +7,35 @@ import { wakeCreature } from "./fauna.js";
 let followTarget = null;
 let selectingCreature = false;
 
+// Persisted settings ----------------------------------------------------------
+// Only fields explicitly listed here are read/written; unknown keys in
+// localStorage are ignored so we can change the schema later without breaking.
+const SETTINGS_KEY = "smallworld:settings:v1";
+const PERSISTED_KEYS = ["fogMultiplier", "autoCycle", "manualDayFactor", "autoRotate"];
+
+function loadSettings() {
+  try {
+    const raw = localStorage.getItem(SETTINGS_KEY);
+    if (!raw) return;
+    const saved = JSON.parse(raw);
+    for (const k of PERSISTED_KEYS) {
+      if (k in saved) state.userSettings[k] = saved[k];
+    }
+  } catch {
+    // corrupted or unavailable — fall back to defaults
+  }
+}
+
+function saveSettings() {
+  try {
+    const out = {};
+    for (const k of PERSISTED_KEYS) out[k] = state.userSettings[k];
+    localStorage.setItem(SETTINGS_KEY, JSON.stringify(out));
+  } catch {
+    // localStorage may throw in private mode / quota — non-fatal
+  }
+}
+
 export function getFollowTarget() {
   return followTarget;
 }
@@ -41,6 +70,11 @@ function setSelectingCreature(on) {
 }
 
 export function initUi({ camera, canvas, controls, renderer }) {
+  // Restore persisted settings before reading any defaults — UI inputs and
+  // controls below sync themselves from state.userSettings.
+  loadSettings();
+  controls.autoRotate = state.userSettings.autoRotate;
+
   _canvas = canvas;
   _settingsPanel = document.getElementById("settings-panel");
   _followBanner = document.getElementById("follow-banner");
@@ -71,12 +105,17 @@ export function initUi({ camera, canvas, controls, renderer }) {
   });
 
   const autoRotateInput = document.getElementById("setting-auto-rotate");
+  autoRotateInput.checked = state.userSettings.autoRotate;
   autoRotateInput.addEventListener("change", () => {
     controls.autoRotate = autoRotateInput.checked;
+    state.userSettings.autoRotate = autoRotateInput.checked;
+    saveSettings();
   });
 
   const autoCycleInput = document.getElementById("setting-auto-cycle");
+  autoCycleInput.checked = state.userSettings.autoCycle;
   const timeSlider = document.getElementById("setting-time");
+  timeSlider.value = String(Math.round(state.userSettings.manualDayFactor * 1000));
   const timeValue = document.getElementById("setting-time-value");
   function timeLabel(f) {
     if (f < 0.08) return "midnight";
@@ -94,18 +133,23 @@ export function initUi({ camera, canvas, controls, renderer }) {
   autoCycleInput.addEventListener("change", () => {
     state.userSettings.autoCycle = autoCycleInput.checked;
     syncTimeUi();
+    saveSettings();
   });
   timeSlider.addEventListener("input", () => {
     state.userSettings.manualDayFactor = Number(timeSlider.value) / 1000;
     syncTimeUi();
+    saveSettings();
   });
 
   const fogSlider = document.getElementById("setting-fog");
   const fogValue = document.getElementById("setting-fog-value");
+  fogSlider.value = String(Math.round(state.userSettings.fogMultiplier * 100));
+  fogValue.textContent = fogSlider.value + "%";
   fogSlider.addEventListener("input", () => {
     const v = Number(fogSlider.value);
     state.userSettings.fogMultiplier = v / 100;
     fogValue.textContent = v + "%";
+    saveSettings();
   });
 
   syncTimeUi();

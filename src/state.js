@@ -32,9 +32,10 @@ export const state = {
   dayNight: null,
   windUniforms: { uTime: { value: 0 } },
   userSettings: {
-    fogMultiplier: 1.0,
+    fogMultiplier: 0.2,
     autoCycle: false,
     manualDayFactor: 0.75,
+    autoRotate: true,
   },
 };
 

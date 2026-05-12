@@ -383,8 +383,8 @@ export function generateWorld(seed) {
   document.getElementById("elevation").textContent =
     Math.round(state.maxElev * 120) + "m";
 
-  // brief intro flourish: zoom-in
-  if (_controls) _controls.autoRotate = true;
+  // restore the user's auto-rotate preference (regen shouldn't override it)
+  if (_controls) _controls.autoRotate = state.userSettings.autoRotate;
 
   // restore native Math.random so per-frame animation isn't deterministic
   Math.random = originalRandom;
