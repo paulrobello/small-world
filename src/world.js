@@ -28,6 +28,7 @@ import {
   makeSwarm,
 } from "./fauna.js";
 import { makeFlock } from "./birds.js";
+import { makeShadowDisks } from "./shadows.js";
 import {
   makeParticles,
   makeGrassField,
@@ -484,6 +485,10 @@ export function generateWorld(seed) {
   // particles
   state.particles = makeParticles(biome);
   state.world.add(state.particles);
+
+  // Soft circular ground shadows under creatures + caterpillars.
+  state.shadowDisks = makeShadowDisks(biome);
+  state.world.add(state.shadowDisks);
 
   // HUD
   document.getElementById("biome-name").textContent = biome.name;
