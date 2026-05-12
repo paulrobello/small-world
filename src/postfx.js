@@ -68,7 +68,11 @@ export function initPostFX(renderer, scene, camera) {
   const renderPass = new RenderPass(scene, camera);
   composer.addPass(renderPass);
 
-  const bloomPass = new UnrealBloomPass(size.clone(), 0.55, 0.45, 0.85);
+  // Threshold 0.96: only true emissive surfaces (crystal lights, lantern orbs,
+  // glowFlowers/glowEyes, the sun) bloom. Lit creature bodies with light
+  // palette colours like cream (#fff2b3) hit ~0.9 luminance and would
+  // otherwise glow as if emissive too.
+  const bloomPass = new UnrealBloomPass(size.clone(), 0.55, 0.45, 0.96);
   bloomPass.enabled = state.userSettings.bloom;
   composer.addPass(bloomPass);
 

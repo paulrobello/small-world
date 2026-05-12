@@ -20,12 +20,14 @@ A handful of seeds across different biomes — click any image to load that exac
 ## Features
 
 - Twelve biomes, each with its own palette, weather, flora, and creature variants.
-- Big-eyed creatures that wander, sleep, burrow, and occasionally travel in families.
+- Big-eyed creatures that wander, sleep, burrow, and occasionally travel in families. Walkers and caterpillars in **fuzzy biomes** (mossy ruins, cloud island, frozen vale, mushroom grove) wear a shell-fur shader for a soft hairy silhouette.
 - Caterpillars, butterflies, bees, and flocks of birds that pick targets within the world.
 - Day/night cycle with per-biome dusk and night palettes.
+- Per-frame visual polish: selective bloom on emissive elements (glow flowers, lanterns, sun), optional tilt-shift miniature blur, soft circular shadows under every creature, sky reflections on water biomes, parallax mountain backdrop, GPU-particle shader with per-particle life/size, dust kicks under footsteps.
 - Photo mode (freeze the sim, save a PNG) and first-person stroll mode.
+- **Inspect mode** (`?inspect=1`) — a neutral studio backdrop for examining a single creature or caterpillar. Cycle biome/variant with keyboard, pause and frame-step animation, copy the URL to share an exact recreation.
 - Follow-a-creature camera, bookmarks, biome filter, shareable seed links.
-- Mobile-friendly — touch gestures, low-FX mode on lower-end devices.
+- Mobile-friendly — touch gestures, low-FX mode (`?lowfx=1`) on lower-end devices that drops fur, post-FX, and particle counts.
 
 ## Running it locally
 
