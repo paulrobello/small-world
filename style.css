@@ -367,3 +367,265 @@ body {
   .regen:hover::after { border-color: var(--ink-dim); }
   .regen:hover .regen-glyph { transform: none; }
 }
+
+/* ─── Settings panel ─────────────────────────────────────────────────── */
+.settings-toggle {
+  position: fixed;
+  top: 150px;
+  right: 14px;
+  z-index: 11;
+  width: 36px;
+  height: 36px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(20, 20, 24, 0.35);
+  border: 1px solid var(--ink-dim);
+  color: var(--ink);
+  font-family: "Major Mono Display", monospace;
+  font-size: 16px;
+  cursor: pointer;
+  backdrop-filter: blur(4px);
+  transition: border-color 0.4s ease, background 0.4s ease, transform 0.4s ease;
+}
+.settings-toggle:hover {
+  border-color: var(--ink);
+  background: rgba(245, 240, 230, 0.1);
+}
+.settings-glyph {
+  display: inline-block;
+  transition: transform 0.6s cubic-bezier(0.7, 0, 0.3, 1);
+}
+.settings-toggle:hover .settings-glyph { transform: rotate(72deg); }
+
+.settings-panel {
+  position: fixed;
+  top: 200px;
+  right: 14px;
+  z-index: 11;
+  width: 280px;
+  max-width: calc(100vw - 28px);
+  max-height: calc(100vh - 220px);
+  overflow-y: auto;
+  padding: 16px 18px 14px;
+  background: rgba(14, 14, 18, 0.82);
+  border: 1px solid var(--ink-dim);
+  backdrop-filter: blur(8px);
+  color: var(--ink);
+  font-family: "DM Mono", monospace;
+  opacity: 0;
+  transform: translateY(-6px);
+  pointer-events: none;
+  transition: opacity 0.32s ease, transform 0.32s ease;
+  text-shadow: var(--shadow);
+}
+.settings-panel.open {
+  opacity: 1;
+  transform: translateY(0);
+  pointer-events: auto;
+}
+
+.settings-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-bottom: 14px;
+}
+.settings-title {
+  font-size: 10px;
+  letter-spacing: 0.4em;
+  text-transform: uppercase;
+  color: var(--ink-dim);
+}
+.settings-close {
+  background: transparent;
+  border: none;
+  color: var(--ink-dim);
+  font-size: 22px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0 4px;
+  transition: color 0.3s ease;
+}
+.settings-close:hover { color: var(--ink); }
+
+.settings-section + .settings-section { margin-top: 16px; }
+.settings-section-label {
+  font-size: 9px;
+  letter-spacing: 0.4em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+  border-bottom: 1px solid rgba(245, 240, 230, 0.12);
+  padding-bottom: 6px;
+  margin-bottom: 10px;
+}
+
+.setting {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  gap: 6px 10px;
+  margin-bottom: 12px;
+  font-size: 11px;
+  letter-spacing: 0.15em;
+  text-transform: lowercase;
+}
+.setting .setting-label {
+  grid-column: 1;
+  color: var(--ink-dim);
+}
+.setting input[type="range"] {
+  grid-column: 1 / span 2;
+  appearance: none;
+  -webkit-appearance: none;
+  width: 100%;
+  height: 18px;
+  background: transparent;
+  cursor: pointer;
+}
+.setting input[type="range"]::-webkit-slider-runnable-track {
+  height: 1px;
+  background: var(--ink-dim);
+}
+.setting input[type="range"]::-moz-range-track {
+  height: 1px;
+  background: var(--ink-dim);
+}
+.setting input[type="range"]::-webkit-slider-thumb {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--ink);
+  border: 1px solid var(--ink);
+  margin-top: -6px;
+  transition: transform 0.2s ease;
+}
+.setting input[type="range"]::-moz-range-thumb {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--ink);
+  border: 1px solid var(--ink);
+}
+.setting input[type="range"]:hover::-webkit-slider-thumb { transform: scale(1.2); }
+.setting-value {
+  grid-column: 2;
+  font-size: 10px;
+  color: var(--ink);
+  letter-spacing: 0.1em;
+  text-align: right;
+  min-width: 48px;
+}
+
+.setting-checkbox {
+  grid-template-columns: auto 1fr;
+  margin-bottom: 8px;
+}
+.setting-checkbox input {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 14px;
+  height: 14px;
+  border: 1px solid var(--ink-dim);
+  background: transparent;
+  cursor: pointer;
+  position: relative;
+  transition: border-color 0.3s ease, background 0.3s ease;
+}
+.setting-checkbox input:hover { border-color: var(--ink); }
+.setting-checkbox input:checked {
+  background: var(--ink);
+  border-color: var(--ink);
+}
+.setting-checkbox input:checked::after {
+  content: "";
+  position: absolute;
+  inset: 2px;
+  background: #111;
+  clip-path: polygon(20% 50%, 45% 75%, 85% 20%, 85% 35%, 45% 90%, 10% 60%);
+}
+.setting-checkbox .setting-label { color: var(--ink); }
+
+.setting-button {
+  display: block;
+  width: 100%;
+  text-align: left;
+  background: transparent;
+  border: 1px solid var(--ink-dim);
+  color: var(--ink);
+  font-family: "DM Mono", monospace;
+  padding: 10px 12px;
+  margin-bottom: 8px;
+  cursor: pointer;
+  transition: border-color 0.3s ease, background 0.3s ease;
+}
+.setting-button:hover {
+  border-color: var(--ink);
+  background: rgba(245, 240, 230, 0.06);
+}
+.setting-button.active {
+  border-color: var(--ink);
+  background: rgba(245, 240, 230, 0.12);
+}
+.setting-button-label {
+  display: block;
+  font-size: 11px;
+  letter-spacing: 0.2em;
+  text-transform: lowercase;
+}
+.setting-button-hint {
+  display: block;
+  font-size: 9px;
+  color: var(--ink-faint);
+  letter-spacing: 0.3em;
+  text-transform: uppercase;
+  margin-top: 2px;
+}
+
+.follow-banner {
+  position: fixed;
+  top: 16px;
+  left: 50%;
+  transform: translateX(-50%) translateY(-12px);
+  z-index: 9;
+  padding: 8px 14px;
+  background: rgba(14, 14, 18, 0.78);
+  border: 1px solid var(--ink-dim);
+  color: var(--ink);
+  font-family: "DM Mono", monospace;
+  font-size: 11px;
+  letter-spacing: 0.18em;
+  text-transform: lowercase;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.3s ease, transform 0.3s ease;
+  backdrop-filter: blur(4px);
+}
+.follow-banner.visible {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+}
+.follow-banner kbd {
+  border: 1px solid var(--ink-dim);
+  padding: 1px 5px;
+  font-family: inherit;
+  font-size: 10px;
+  letter-spacing: 0.1em;
+}
+
+@media (max-width: 720px) {
+  .settings-panel {
+    top: 230px;
+    left: 12px;
+    right: 12px;
+    width: auto;
+    max-width: none;
+    max-height: calc(100vh - 250px);
+  }
+  .settings-toggle {
+    top: 180px;
+    right: 12px;
+  }
+}

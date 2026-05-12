@@ -81,6 +81,60 @@
   <div class="corner corner-bl">+</div>
   <div class="corner corner-br">+</div>
 
+  <button class="settings-toggle" id="settings-toggle" aria-label="settings" title="settings">
+    <span class="settings-glyph">✦</span>
+  </button>
+
+  <aside class="settings-panel" id="settings-panel" aria-hidden="true">
+    <div class="settings-head">
+      <span class="settings-title">settings</span>
+      <button class="settings-close" id="settings-close" aria-label="close">×</button>
+    </div>
+
+    <section class="settings-section">
+      <div class="settings-section-label">atmosphere</div>
+
+      <label class="setting">
+        <span class="setting-label">fog</span>
+        <input type="range" id="setting-fog" min="0" max="200" step="1" value="100" />
+        <span class="setting-value" id="setting-fog-value">100%</span>
+      </label>
+
+      <label class="setting">
+        <span class="setting-label">time of day</span>
+        <input type="range" id="setting-time" min="0" max="1000" step="1" value="750" />
+        <span class="setting-value" id="setting-time-value">day</span>
+      </label>
+
+      <label class="setting setting-checkbox">
+        <input type="checkbox" id="setting-auto-cycle" />
+        <span class="setting-label">auto day/night cycle</span>
+      </label>
+    </section>
+
+    <section class="settings-section">
+      <div class="settings-section-label">camera</div>
+
+      <label class="setting setting-checkbox">
+        <input type="checkbox" id="setting-auto-rotate" checked />
+        <span class="setting-label">auto-rotate</span>
+      </label>
+
+      <button class="setting-button" id="setting-follow">
+        <span class="setting-button-label">follow a creature</span>
+        <span class="setting-button-hint">click to select</span>
+      </button>
+
+      <button class="setting-button" id="setting-reset-camera">
+        <span class="setting-button-label">reset camera</span>
+      </button>
+    </section>
+  </aside>
+
+  <div class="follow-banner" id="follow-banner" aria-hidden="true">
+    click a creature to follow it · press <kbd>esc</kbd> to cancel
+  </div>
+
   <script type="module" src="main.js"></script>
 </body>
 </html>

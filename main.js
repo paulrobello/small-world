@@ -1546,24 +1546,24 @@ function makeButterfly(palette, biome) {
   backGeo.scale(1.0, 0.05, 1.0);
 
   const wings = [];
-  // front (upper) pair — slightly forward
+  // front (forewing) pair — larger, on the +Z (motion-forward) side
   for (const side of [-1, 1]) {
     const pivot = new THREE.Group();
-    pivot.position.set(0, 0.01, -0.04);
+    pivot.position.set(0, 0.01, 0.04);
     group.add(pivot);
     const w = new THREE.Mesh(frontGeo, wingMat1);
-    w.position.set(side * 0.15, 0, -0.04);
+    w.position.set(side * 0.15, 0, 0.04);
     w.castShadow = true;
     pivot.add(w);
     wings.push({ pivot, side, isBack: false });
   }
-  // back (lower) pair — slightly aft, smaller
+  // back (hindwing) pair — smaller, on the -Z (trailing) side
   for (const side of [-1, 1]) {
     const pivot = new THREE.Group();
-    pivot.position.set(0, 0.005, 0.04);
+    pivot.position.set(0, 0.005, -0.04);
     group.add(pivot);
     const w = new THREE.Mesh(backGeo, wingMat2);
-    w.position.set(side * 0.10, 0, 0.05);
+    w.position.set(side * 0.10, 0, -0.05);
     w.castShadow = true;
     pivot.add(w);
     wings.push({ pivot, side, isBack: true });
@@ -1661,10 +1661,10 @@ function stepButterfly(b, dt, t, flowerSpots, heightFn) {
     if (b.velocity.y < 0) b.velocity.y = 0.2;
   }
 
-  // orient toward velocity — body's head is on +Z, so look "back" from motion
-  // direction so lookAt's -Z forward convention puts head leading.
+  // orient toward velocity — Object3D.lookAt() points local +Z at the target,
+  // so the larger forewing pair (placed at +Z) leads the direction of motion.
   if (b.velocity.lengthSq() > 0.08) {
-    _bflyTarget.copy(pos).sub(b.velocity);
+    _bflyTarget.copy(pos).add(b.velocity);
     b.group.lookAt(_bflyTarget);
   }
 
@@ -2252,22 +2252,38 @@ const NIGHT_SUN = new THREE.Color("#7a89b8");
 const NIGHT_HEMI_GROUND = new THREE.Color("#06070d");
 const DAY_NIGHT_PERIOD_S = 120; // one full cycle every two minutes
 
+// User-controllable settings — wired up at the bottom of the file. Defaults
+// here preserve the original automatic behaviour so the first paint is sane.
+const userSettings = {
+  fogMultiplier: 1.0,    // 0 .. 2
+  autoCycle: false,      // when off, manualDayFactor is used
+  manualDayFactor: 0.75, // 0 = midnight, 1 = noon
+};
+
 function updateDayNight(t) {
   if (!dayNight || !sunLight || !hemiLight) return;
-  const phase = (t * 2 * Math.PI) / DAY_NIGHT_PERIOD_S;
-  // dayFactor: 1 = noon, 0 = midnight
-  const dayFactor = (Math.cos(phase) + 1) * 0.5;
+  let dayFactor;
+  let phase;
+  if (userSettings.autoCycle) {
+    phase = (t * 2 * Math.PI) / DAY_NIGHT_PERIOD_S;
+    dayFactor = (Math.cos(phase) + 1) * 0.5;
+  } else {
+    dayFactor = userSettings.manualDayFactor;
+    // Map dayFactor back onto the cosine cycle so the sun arc still tracks.
+    // dayFactor = (cos(phase) + 1) / 2  →  phase = acos(2*dayFactor - 1).
+    phase = Math.acos(2 * dayFactor - 1);
+  }
   const nightAmt = 1 - dayFactor;
 
   // sky + fog colour
   scene.background.copy(dayNight.sky).lerp(NIGHT_SKY, nightAmt);
   scene.fog.color.copy(dayNight.fog).lerp(NIGHT_FOG, nightAmt);
   scene.fog.density =
-    dayNight.fogDensity * (1 + nightAmt * 0.6);
+    dayNight.fogDensity * (1 + nightAmt * 0.2) * userSettings.fogMultiplier;
 
   // sun
   sunLight.color.copy(dayNight.sun).lerp(NIGHT_SUN, nightAmt);
-  sunLight.intensity = 0.18 + dayFactor * 1.15;
+  sunLight.intensity = 0.45 + dayFactor * 0.95;
   // arc the sun across the sky so shadows shift over the cycle
   const sunAngle = phase + Math.PI; // sun rises opposite of cos peak
   const sunR = 26;
@@ -2280,7 +2296,7 @@ function updateDayNight(t) {
   // hemisphere
   hemiLight.color.copy(dayNight.skyForHemi).lerp(NIGHT_SKY, nightAmt);
   hemiLight.groundColor.copy(dayNight.ground).lerp(NIGHT_HEMI_GROUND, nightAmt);
-  hemiLight.intensity = 0.12 + dayFactor * 0.55;
+  hemiLight.intensity = 0.32 + dayFactor * 0.45;
 
   // parallax ring tinted to match
   if (parallaxRingMesh) {
@@ -2316,6 +2332,8 @@ function generateWorld(seed) {
   butterflies = [];
   flowerSpots = [];
   particles = null;
+  // release any followed creature — the entity it pointed to no longer exists
+  if (typeof setFollowTarget === "function") setFollowTarget(null);
 
   currentBiome = biome;
   currentSeed = seed;
@@ -2530,6 +2548,18 @@ function animate() {
   for (const f of flocks) stepFlock(f, dt, t);
   stepParticles(particles, dt, t);
 
+  // Smoothly track a followed creature, if any.
+  if (followTarget && followTarget.group && followTarget.group.parent) {
+    const p = followTarget.group.position;
+    const k = Math.min(1, dt * 4);
+    controls.target.x += (p.x - controls.target.x) * k;
+    controls.target.y += (p.y + 0.6 - controls.target.y) * k;
+    controls.target.z += (p.z - controls.target.z) * k;
+  } else if (followTarget) {
+    // creature was removed (e.g. world regenerated) — release follow
+    setFollowTarget(null);
+  }
+
   controls.update();
   renderer.render(scene, camera);
 }
@@ -2565,6 +2595,137 @@ function handleResize() {
 }
 window.addEventListener("resize", handleResize);
 window.addEventListener("orientationchange", handleResize);
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Settings panel + camera-follow wiring
+// ─────────────────────────────────────────────────────────────────────────────
+let followTarget = null;
+let selectingCreature = false;
+
+const settingsPanel = document.getElementById("settings-panel");
+const settingsToggle = document.getElementById("settings-toggle");
+const settingsClose = document.getElementById("settings-close");
+const followBanner = document.getElementById("follow-banner");
+const followButton = document.getElementById("setting-follow");
+
+function setSettingsOpen(open) {
+  settingsPanel.classList.toggle("open", open);
+  settingsPanel.setAttribute("aria-hidden", open ? "false" : "true");
+}
+settingsToggle.addEventListener("click", () =>
+  setSettingsOpen(!settingsPanel.classList.contains("open"))
+);
+settingsClose.addEventListener("click", () => setSettingsOpen(false));
+
+function setFollowTarget(creatureOrNull) {
+  followTarget = creatureOrNull;
+  followButton.classList.toggle("active", !!followTarget);
+  followButton.querySelector(".setting-button-label").textContent = followTarget
+    ? "release follow"
+    : "follow a creature";
+  followButton.querySelector(".setting-button-hint").textContent = followTarget
+    ? "tracking · click to release"
+    : "click to select";
+}
+
+function setSelectingCreature(on) {
+  selectingCreature = on;
+  followBanner.classList.toggle("visible", on);
+  followBanner.setAttribute("aria-hidden", on ? "false" : "true");
+  canvas.style.cursor = on ? "crosshair" : "";
+}
+
+followButton.addEventListener("click", () => {
+  if (followTarget) {
+    setFollowTarget(null);
+    return;
+  }
+  setSelectingCreature(!selectingCreature);
+});
+
+document.getElementById("setting-reset-camera").addEventListener("click", () => {
+  setFollowTarget(null);
+  setSelectingCreature(false);
+  controls.target.set(0, 1.5, 0);
+});
+
+const autoRotateInput = document.getElementById("setting-auto-rotate");
+autoRotateInput.addEventListener("change", () => {
+  controls.autoRotate = autoRotateInput.checked;
+});
+
+const autoCycleInput = document.getElementById("setting-auto-cycle");
+const timeSlider = document.getElementById("setting-time");
+const timeValue = document.getElementById("setting-time-value");
+function timeLabel(f) {
+  if (f < 0.08) return "midnight";
+  if (f < 0.28) return "dawn";
+  if (f < 0.72) return "day";
+  if (f < 0.92) return "dusk";
+  return "night";
+}
+function syncTimeUi() {
+  const f = userSettings.manualDayFactor;
+  timeValue.textContent = userSettings.autoCycle ? "auto" : timeLabel(f);
+  timeSlider.disabled = userSettings.autoCycle;
+  timeSlider.style.opacity = userSettings.autoCycle ? "0.4" : "";
+}
+autoCycleInput.addEventListener("change", () => {
+  userSettings.autoCycle = autoCycleInput.checked;
+  syncTimeUi();
+});
+timeSlider.addEventListener("input", () => {
+  userSettings.manualDayFactor = Number(timeSlider.value) / 1000;
+  syncTimeUi();
+});
+
+const fogSlider = document.getElementById("setting-fog");
+const fogValue = document.getElementById("setting-fog-value");
+fogSlider.addEventListener("input", () => {
+  const v = Number(fogSlider.value);
+  userSettings.fogMultiplier = v / 100;
+  fogValue.textContent = v + "%";
+});
+
+// Initial UI sync
+syncTimeUi();
+
+// Click-to-pick a creature when in selection mode.
+const _raycaster = new THREE.Raycaster();
+const _ndc = new THREE.Vector2();
+canvas.addEventListener("click", (e) => {
+  if (!selectingCreature) return;
+  const rect = canvas.getBoundingClientRect();
+  _ndc.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+  _ndc.y = -(((e.clientY - rect.top) / rect.height) * 2 - 1);
+  _raycaster.setFromCamera(_ndc, camera);
+  // Build a flat list of pickable groups; raycaster walks descendants.
+  const targets = [
+    ...creatures.map((c) => c.group),
+    ...caterpillars.map((c) => c.group),
+  ];
+  const hits = _raycaster.intersectObjects(targets, true);
+  if (hits.length === 0) return;
+  // walk up the hit object's parents to find which entity owns it
+  let hitRoot = hits[0].object;
+  while (hitRoot && !targets.includes(hitRoot)) hitRoot = hitRoot.parent;
+  if (!hitRoot) return;
+  const creature =
+    creatures.find((c) => c.group === hitRoot) ||
+    caterpillars.find((c) => c.group === hitRoot);
+  if (creature) {
+    setFollowTarget(creature);
+    setSelectingCreature(false);
+  }
+});
+
+window.addEventListener("keydown", (e) => {
+  if (e.key === "Escape") {
+    if (selectingCreature) setSelectingCreature(false);
+    else if (followTarget) setFollowTarget(null);
+    else if (settingsPanel.classList.contains("open")) setSettingsOpen(false);
+  }
+});
 
 // kickoff — honour ?seed=XXXX in the URL if present
 const initialSeed = readSeedFromUrl() ?? newRandomSeed();
