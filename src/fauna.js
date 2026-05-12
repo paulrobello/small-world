@@ -560,14 +560,14 @@ export function stepCreature(c, dt, t, heightFn) {
   // and out — eyes scale, body squashes, head-bob falls to a slow breath.
   if (!c.flies && c.sleepiness > 0.05 && !c._waking) {
     const s = c.sleepiness;
-    // eyes squint shut as sleepiness rises (clamped to keep them readable
-    // until really drowsy)
-    const eyeOpen = Math.max(0, 1 - s * 1.2);
+    // Curl reaches full posture at s=0.6 (the same threshold the zZz sprite
+    // fades in on) so motion stops the moment the creature reads as sleeping.
+    const curl = Math.min(1, s / 0.6);
+    const eyeOpen = Math.max(0, 1 - curl * 1.2);
     for (const e of c.eyeParts) e.scale.setScalar(eyeOpen);
-    // body curls
-    c.body.scale.y = c.bodyBaseY * (1 + (0.55 - 1) * s);
-    c.body.scale.x = c.bodyBaseX * (1 + (1.18 - 1) * s);
-    if (s > 0.9) {
+    c.body.scale.y = c.bodyBaseY * (1 + (0.55 - 1) * curl);
+    c.body.scale.x = c.bodyBaseX * (1 + (1.18 - 1) * curl);
+    if (s > 0.6) {
       // fully curled — slow breath, no motion, planted on the ground
       const breath = Math.sin(t * 1.1 + c.flapPhase) * 0.03;
       c.body.scale.y = c.bodyBaseY * 0.55 + breath;
