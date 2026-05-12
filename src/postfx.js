@@ -68,7 +68,11 @@ export function initPostFX(renderer, scene, camera) {
   const renderPass = new RenderPass(scene, camera);
   composer.addPass(renderPass);
 
-  const bloomPass = new UnrealBloomPass(size.clone(), 0.55, 0.45, 0.85);
+  // Threshold 0.96: only true emissive surfaces (crystal lights, lantern orbs,
+  // glowFlowers/glowEyes, the sun) bloom. Lit creature bodies with light
+  // palette colours like cream (#fff2b3) hit ~0.93 luminance and would
+  // otherwise glow as if emissive too.
+  const bloomPass = new UnrealBloomPass(size.clone(), 0.55, 0.45, 0.96);
   bloomPass.enabled = state.userSettings.bloom;
   composer.addPass(bloomPass);
 
@@ -77,7 +81,20 @@ export function initPostFX(renderer, scene, camera) {
   tiltShiftPass.enabled = state.userSettings.tiltShift;
   composer.addPass(tiltShiftPass);
 
-  composer.addPass(new OutputPass());
+  // OutputPass reads renderer.toneMapping each frame to pick its tone-mapping
+  // algorithm. We disable the renderer's tone mapping during composer.render
+  // so RenderPass doesn't double-tone-map the scene — but OutputPass would
+  // then also skip tone mapping, leaving HDR values washed out. Wrap its
+  // render() to force ACES regardless of renderer state.
+  const outputPass = new OutputPass();
+  const _origOutputRender = outputPass.render.bind(outputPass);
+  outputPass.render = function (rdr, writeBuf, readBuf, dt, maskActive) {
+    const prev = rdr.toneMapping;
+    rdr.toneMapping = THREE.ACESFilmicToneMapping;
+    _origOutputRender(rdr, writeBuf, readBuf, dt, maskActive);
+    rdr.toneMapping = prev;
+  };
+  composer.addPass(outputPass);
 
   return {
     composer,
@@ -89,7 +106,15 @@ export function initPostFX(renderer, scene, camera) {
       // per session, but cheap to assign).
       renderPass.scene = s;
       renderPass.camera = cam;
+      // Disable renderer tone mapping during the composer chain so RenderPass
+      // emits HDR-ish values; OutputPass (above) overrides back to ACES to
+      // do the single tone-map at the end. Restored after for any other
+      // direct renderer.render calls that happen this frame (reflection RT
+      // updates, photo capture, etc.).
+      const prevTone = renderer.toneMapping;
+      renderer.toneMapping = THREE.NoToneMapping;
       composer.render();
+      renderer.toneMapping = prevTone;
     },
     onResize: (w, h) => {
       composer.setSize(w, h);
