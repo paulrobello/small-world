@@ -83,7 +83,11 @@ export function updateDayNight(t) {
 
   state.hemiLight.color.copy(state.dayNight.skyForHemi).lerp(NIGHT_SKY, nightAmt);
   state.hemiLight.groundColor.copy(state.dayNight.ground).lerp(NIGHT_HEMI_GROUND, nightAmt);
-  state.hemiLight.intensity = 0.32 + dayFactor * 0.45;
+  // ambientBoost is mostly there for dark biomes / night — it lifts the
+  // hemi fill light and a touch of the sun so glowing motifs still pop.
+  const ab = state.userSettings.ambientBoost ?? 0;
+  state.hemiLight.intensity = 0.32 + dayFactor * 0.45 + ab * 1.6;
+  state.sunLight.intensity += ab * 0.4;
 
   if (state.parallaxRingMesh) {
     state.parallaxRingMesh.material.color

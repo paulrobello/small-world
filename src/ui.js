@@ -11,7 +11,7 @@ let selectingCreature = false;
 // Only fields explicitly listed here are read/written; unknown keys in
 // localStorage are ignored so we can change the schema later without breaking.
 const SETTINGS_KEY = "smallworld:settings:v1";
-const PERSISTED_KEYS = ["fogMultiplier", "autoCycle", "manualDayFactor", "autoRotate"];
+const PERSISTED_KEYS = ["fogMultiplier", "autoCycle", "manualDayFactor", "autoRotate", "ambientBoost"];
 
 function loadSettings() {
   try {
@@ -149,6 +149,17 @@ export function initUi({ camera, canvas, controls, renderer }) {
     const v = Number(fogSlider.value);
     state.userSettings.fogMultiplier = v / 100;
     fogValue.textContent = v + "%";
+    saveSettings();
+  });
+
+  const ambientSlider = document.getElementById("setting-ambient");
+  const ambientValue = document.getElementById("setting-ambient-value");
+  ambientSlider.value = String(Math.round(state.userSettings.ambientBoost * 100));
+  ambientValue.textContent = ambientSlider.value + "%";
+  ambientSlider.addEventListener("input", () => {
+    const v = Number(ambientSlider.value);
+    state.userSettings.ambientBoost = v / 100;
+    ambientValue.textContent = v + "%";
     saveSettings();
   });
 

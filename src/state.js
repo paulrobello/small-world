@@ -36,6 +36,7 @@ export const state = {
     autoCycle: false,
     manualDayFactor: 0.75,
     autoRotate: true,
+    ambientBoost: 0,
   },
 };
 
