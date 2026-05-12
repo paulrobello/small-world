@@ -162,10 +162,13 @@ export function makeCreature(biome, opts = {}) {
     });
     for (const sign of [-1, 1]) {
       const stalk = new THREE.Mesh(
-        new THREE.CylinderGeometry(0.012, 0.012, 0.22, 4),
+        new THREE.CylinderGeometry(0.012, 0.012, 0.32, 4),
         antMat
       );
-      stalk.position.set(sign * 0.1, 0.42, 0.1);
+      // Stalk center sits deeper inside the body so the base never floats
+      // free when a jitter-perturbed body vertex pulls in. Tip ends up at the
+      // same visible height (0.52) as before.
+      stalk.position.set(sign * 0.1, 0.36, 0.1);
       stalk.rotation.z = sign * -0.25;
       group.add(stalk);
       const tip = new THREE.Mesh(

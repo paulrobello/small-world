@@ -84,7 +84,7 @@ function buildStage(scene) {
   _stage.add(dome);
 
   // Small turntable disc for the specimen to stand on
-  const discGeo = new THREE.CylinderGeometry(1.6, 1.6, 0.06, 36);
+  const discGeo = new THREE.CylinderGeometry(0.9, 0.9, 0.05, 36);
   const discMat = new THREE.MeshStandardMaterial({ color: 0x2a2c30, roughness: 0.9 });
   const disc = new THREE.Mesh(discGeo, discMat);
   disc.position.y = -0.03;
@@ -151,13 +151,11 @@ function spawnSpecimen(scene) {
   _specimenKind = variant.kind;
   if (variant.kind === "caterpillar") {
     state.caterpillars.push(c);
-    c.group.position.set(0, 0.05, 0);
+    c.group.position.set(0, 0.02, 0);
   } else {
     state.creatures.push(c);
     c.group.position.set(0, c.flies ? 1.2 : 0.45, 0);
   }
-  // Scale up for inspection
-  c.group.scale.multiplyScalar(2.4);
   scene.add(c.group);
   updateHud();
 }
@@ -177,10 +175,10 @@ function updateHud() {
 const _flatHeight = () => 0;
 
 export function setupInspect(scene, renderer, camera, controls) {
-  camera.position.set(4.5, 2.8, 4.5);
-  controls.target.set(0, 0.7, 0);
-  controls.minDistance = 1.4;
-  controls.maxDistance = 12;
+  camera.position.set(1.7, 1.0, 1.7);
+  controls.target.set(0, 0.35, 0);
+  controls.minDistance = 0.8;
+  controls.maxDistance = 6;
   controls.autoRotate = true;
   controls.autoRotateSpeed = 0.6;
   controls.maxPolarAngle = Math.PI * 0.9;
