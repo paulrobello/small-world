@@ -314,12 +314,16 @@ export function makeCreature(biome, opts = {}) {
   const isSleeper = !!opts.sleeper && !flies;
   const isBurrower = !!opts.burrower && !flies;
 
-  // Sleepers spawn already curled (eyes scaled to 0, body squashed).
-  // stepCreature animates the wake-up in reverse.
+  // Sleepers spawn already curled (eyes scaled to 0, body squashed, legs
+  // tucked under the body). stepCreature animates the wake-up in reverse.
   let wakeProgress = isSleeper ? 0 : 1;
   if (isSleeper) {
     for (const e of eyeParts) e.scale.setScalar(0);
     body.scale.set(bodyBaseX * 1.18, bodyBaseY * 0.55, bodyBaseZ * 1.05);
+    for (let i = 0; i < legs.length; i++) {
+      legs[i].scale.y = 0.02;
+      feet[i].position.y = -0.15;
+    }
   }
 
   // Personality stamp — pulled from the deterministic RNG during world-gen,
@@ -542,13 +546,19 @@ export function stepCreature(c, dt, t, heightFn) {
     const breath = Math.sin(t * 1.1 + c.flapPhase) * 0.03;
     c.body.scale.y = c.bodyBaseY * 0.55 + breath;
     c.body.scale.x = c.bodyBaseX * (1.18 - breath * 0.3);
+    // legs/feet tucked under the body (set in makeCreature) — keep them
+    // there in case anything else perturbed them
+    for (let i = 0; i < c.legs.length; i++) {
+      c.legs[i].scale.y = 0.02;
+      c.feet[i].position.y = -0.15;
+    }
     // keep planted at ground height
     const ground = heightFn(c.group.position.x, c.group.position.z);
     c.group.position.y = ground + 0.28 * c.scale;
     return;
   }
 
-  // ── waking-up animation (unfurl eyes + body) ──────────────────────────
+  // ── waking-up animation (unfurl eyes + body + legs) ───────────────────
   if (c._waking) {
     c.wakeProgress = Math.min(1, c.wakeProgress + dt * 1.8);
     const w = c.wakeProgress;
@@ -557,6 +567,11 @@ export function stepCreature(c, dt, t, heightFn) {
     // takes over once we're fully awake)
     c.body.scale.x = c.bodyBaseX * (1.18 + (1 - 1.18) * w);
     c.body.scale.y = c.bodyBaseY * (0.55 + (1 - 0.55) * w);
+    // legs extend back to resting length, feet drop to their normal place
+    for (let i = 0; i < c.legs.length; i++) {
+      c.legs[i].scale.y = 0.02 + (0.22 - 0.02) * w;
+      c.feet[i].position.y = -0.15 + (-0.32 - -0.15) * w;
+    }
     if (w >= 1) c._waking = false;
   }
 
@@ -572,6 +587,11 @@ export function stepCreature(c, dt, t, heightFn) {
     for (const e of c.eyeParts) e.scale.setScalar(eyeOpen);
     c.body.scale.y = c.bodyBaseY * (1 + (0.55 - 1) * curl);
     c.body.scale.x = c.bodyBaseX * (1 + (1.18 - 1) * curl);
+    // Legs and feet retract as the creature curls
+    for (let i = 0; i < c.legs.length; i++) {
+      c.legs[i].scale.y = 0.22 + (0.02 - 0.22) * curl;
+      c.feet[i].position.y = -0.32 + (-0.15 - -0.32) * curl;
+    }
     if (s > 0.6) {
       // fully curled — slow breath, no motion, planted on the ground
       const breath = Math.sin(t * 1.1 + c.flapPhase) * 0.03;
