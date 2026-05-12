@@ -866,13 +866,18 @@ export function initUi({ camera, canvas, controls, renderer }) {
       _lastLookedAt = null;
       return;
     }
-    let root = hits[0].object;
+    const hitObj = hits[0].object;
+    let root = hitObj;
     while (root && !groups.includes(root)) root = root.parent;
     if (!root) return;
     const c = state.creatures.find((s) => s.group === root);
     if (!c) return;
+    // Fur shells extend the body's raycast silhouette outward, which would
+    // wake fuzzy sleepers from cursor positions that aren't actually over the
+    // visible body. Treat a fur-shell-only hit as a passive look-at.
+    const furOnly = !!hitObj?.userData?.isFurShell;
     if (c.isSleeper) {
-      wakeCreature(c);
+      if (!furOnly) wakeCreature(c);
     } else if (c !== _lastLookedAt) {
       lookAtCreature(c);
       _lastLookedAt = c;

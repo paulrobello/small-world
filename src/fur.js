@@ -109,6 +109,7 @@ export function applyShellFur(body, biome, opts = {}) {
     mat.uniforms.uLightDir = sharedFurUniforms.uLightDir;
     mat.uniforms.uLightIntensity = sharedFurUniforms.uLightIntensity;
     const shell = new THREE.Mesh(body.geometry, mat);
+    shell.userData.isFurShell = true;
     // Children of body inherit body's animated scale/rotation/squash.
     body.add(shell);
     shells.push(shell);
