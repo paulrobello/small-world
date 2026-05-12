@@ -14,13 +14,17 @@ const _furVS = `
 uniform float uShellLayer;
 uniform float uLayers;
 uniform float uFurLength;
-varying vec2 vHairUv;
+varying vec3 vPos;
 varying float vLayerT;
 varying vec3 vNormal;
 void main() {
   vLayerT = uShellLayer / uLayers;
   vec3 p = position + normal * uFurLength * vLayerT;
-  vHairUv = position.xy * 75.0 + position.zx * 50.0;
+  // Pass the ORIGINAL (un-displaced) position so the fragment shader can
+  // compute a stable per-cell hash that matches across all shells — that's
+  // what makes a single hair appear as one column running through every
+  // layer instead of disconnected stripes.
+  vPos = position;
   vNormal = normalMatrix * normal;
   gl_Position = projectionMatrix * modelViewMatrix * vec4(p, 1.0);
 }
@@ -31,18 +35,24 @@ precision highp float;
 uniform vec3 uBaseColor;
 uniform vec3 uTipColor;
 uniform vec3 uLightDir;
-varying vec2 vHairUv;
+varying vec3 vPos;
 varying float vLayerT;
 varying vec3 vNormal;
 
-float hash21(vec2 p) {
-  p = fract(p * vec2(123.34, 456.21));
-  p += dot(p, p + 45.32);
-  return fract(p.x * p.y);
+// 3D point hash — irrational multipliers in each axis decorrelate the
+// output so adjacent cells get visually random values. Returns [0, 1].
+float hash13(vec3 p) {
+  p = fract(p * vec3(443.897, 441.423, 437.195));
+  p += dot(p, p.yzx + 19.19);
+  return fract((p.x + p.y) * p.z);
 }
 
 void main() {
-  float h = hash21(floor(vHairUv));
+  // Sample a 3D grid in object space — cell size ~1/120 of a unit. The
+  // floor() runs in the fragment so every fragment lands in a single
+  // cell, giving point-distributed hairs instead of interpolated bands.
+  vec3 cell = floor(vPos * 120.0);
+  float h = hash13(cell);
   float threshold = 0.62 + vLayerT * 0.34;
   if (h < threshold) discard;
   vec3 N = normalize(vNormal);
