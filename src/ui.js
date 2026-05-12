@@ -467,9 +467,6 @@ export function initUi({ camera, canvas, controls, renderer }) {
 
   syncTimeUi();
 
-  // Rendering — bloom + tilt-shift. Values come from state.userSettings,
-  // which loadSettings() already populated from localStorage at the top of
-  // initUi(), falling back to defaults in state.js.
   const bloomEl = document.getElementById("setting-bloom");
   const tiltEl = document.getElementById("setting-tiltshift");
   const lowfxHint = document.getElementById("setting-lowfx-hint");
@@ -480,7 +477,7 @@ export function initUi({ camera, canvas, controls, renderer }) {
   if (LOWFX) {
     bloomEl.disabled = true;
     tiltEl.disabled = true;
-    if (lowfxHint) lowfxHint.hidden = false;
+    lowfxHint.hidden = false;
   }
 
   bloomEl.addEventListener("change", () => {

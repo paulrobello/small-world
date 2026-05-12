@@ -32,12 +32,11 @@ export const state = {
   clouds: null,
   starfield: null,
   aurora: null,
-  // Visual polish additions
   shadowDisks: null,
-  waterReflection: null,   // { rt, camera, scene } when active
+  waterReflection: null,
   mountainBasePos: null,
   dustKicks: [],
-  postfx: null,            // { composer, bloomPass, tiltShiftPass, ... } once initialised
+  postfx: null,
   heightFn: () => 0,
   currentBiome: null,
   currentSeed: 0,
