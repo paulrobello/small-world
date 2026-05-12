@@ -766,6 +766,12 @@ export function makeCaterpillar(biome, opts = {}) {
 }
 
 export function stepCaterpillar(c, dt, t, heightFn) {
+  // Photo mode passes dt=0 to freeze the sim. Returning early matters here
+  // because the trail is unshifted unconditionally below — without this, the
+  // 300-entry trail would fill with duplicate copies of the (now-stationary)
+  // head position frame after frame, and body segments sampling that trail
+  // would all slide into the head as the older real trail points fall off.
+  if (dt <= 0) return;
   c.age += dt;
   c.nextThink -= dt;
   if (c.nextThink <= 0) {
