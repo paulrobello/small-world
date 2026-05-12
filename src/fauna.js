@@ -331,6 +331,9 @@ export function makeCreature(biome, opts = {}) {
     belly.scale.set(0, 0, 0);
     // Uniform scale so the tip (child of stalk at local +Y) collapses with it.
     for (const a of antennae) a.scale.setScalar(0);
+    // Fur shells inherit the squashed body scale and read as a pixelated
+    // pattern on a flat surface — hide them while curled.
+    if (furShells) for (const s of furShells) s.visible = false;
   }
 
   // Personality stamp — pulled from the deterministic RNG during world-gen,
@@ -565,6 +568,8 @@ export function stepCreature(c, dt, t, heightFn) {
     if (c.belly) c.belly.scale.set(0, 0, 0);
     // antennae retracted so they don't float disconnected above the body
     if (c.antennae) for (const a of c.antennae) a.scale.setScalar(0);
+    // fur shells hidden — they read as flat noise on the squashed body
+    if (c.furShells) for (const s of c.furShells) s.visible = false;
     // keep planted at ground height
     const ground = heightFn(c.group.position.x, c.group.position.z);
     c.group.position.y = ground + 0.28 * c.scale;
@@ -592,6 +597,9 @@ export function stepCreature(c, dt, t, heightFn) {
     }
     // antennae grow back to full length
     if (c.antennae) for (const a of c.antennae) a.scale.setScalar(w);
+    // fur reappears once the body is mostly unfurled (binary pop is fine —
+    // the body is rapidly changing shape, the swap is masked)
+    if (c.furShells) for (const s of c.furShells) s.visible = w > 0.6;
     if (w >= 1) c._waking = false;
   }
 
@@ -620,6 +628,8 @@ export function stepCreature(c, dt, t, heightFn) {
     }
     // Antennae fold down toward the body
     if (c.antennae) for (const a of c.antennae) a.scale.setScalar(1 - curl);
+    // Fur hidden once the body squashes more than halfway down
+    if (c.furShells) for (const fs of c.furShells) fs.visible = curl < 0.6;
     if (s > 0.6) {
       // fully curled — slow breath, no motion, planted on the ground
       const breath = Math.sin(t * 1.1 + c.flapPhase) * 0.03;
