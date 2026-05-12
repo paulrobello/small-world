@@ -42,6 +42,13 @@ export const state = {
   windUniforms: { uTime: { value: 0 } },
   revealStart: 0,
   lastSimT: 0,
+  // Camera ref, set in main.js on boot. Read by stepCreature for the
+  // look-at-camera response when the user hovers a creature.
+  camera: null,
+  // 0 = full day, 1 = full night. Updated each frame in updateDayNight so
+  // fauna can react (sleep cycle at night). Personality may shift each
+  // creature's effective threshold.
+  nightFactor: 0,
   userSettings: {
     fogMultiplier: 0.2,
     autoCycle: false,

@@ -9,6 +9,63 @@ import { makeDirtPuff } from "./environment.js";
 // ground above 0 keeps them clear of waves and out of the shallow draft.
 const WATER_AVOID_Y = 0.0;
 
+// Personality presets — picked once per creature at spawn, tweak how it walks,
+// thinks, hops, herds, and sleeps. Subtle multipliers; the cute baseline is
+// still recognisable.
+const PERSONALITIES = {
+  shy:    { speedMul: 0.75, bobSpeedMul: 0.9, bobAmpMul: 0.85, pauseChance: 0.4,  hopProb: 0.12, herdStrength: 0.2,  nightThresh: 0.55 },
+  bold:   { speedMul: 1.25, bobSpeedMul: 1.0, bobAmpMul: 1.1,  pauseChance: 0.05, hopProb: 0.45, herdStrength: 0.45, nightThresh: 0.85 },
+  sleepy: { speedMul: 0.75, bobSpeedMul: 0.7, bobAmpMul: 0.9,  pauseChance: 0.45, hopProb: 0.1,  herdStrength: 0.3,  nightThresh: 0.40 },
+  bouncy: { speedMul: 1.05, bobSpeedMul: 1.4, bobAmpMul: 1.5,  pauseChance: 0.1,  hopProb: 0.55, herdStrength: 0.35, nightThresh: 0.75 },
+};
+const PERSONALITY_NAMES = Object.keys(PERSONALITIES);
+
+// Shared "zZz" texture for the night-sleep sprite. Built lazily on first
+// drowsy creature, then reused for every sprite material across the session.
+let _zTexture = null;
+function getZTexture() {
+  if (_zTexture) return _zTexture;
+  const c = document.createElement("canvas");
+  c.width = 96;
+  c.height = 64;
+  const ctx = c.getContext("2d");
+  ctx.clearRect(0, 0, 96, 64);
+  ctx.fillStyle = "#fafaf2";
+  ctx.font = "italic bold 36px 'Quicksand', sans-serif";
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  // soft shadow for legibility against bright biomes
+  ctx.shadowColor = "rgba(0,0,0,0.45)";
+  ctx.shadowBlur = 4;
+  ctx.shadowOffsetY = 1;
+  ctx.fillText("zZz", 48, 36);
+  const tex = new THREE.CanvasTexture(c);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  _zTexture = tex;
+  return tex;
+}
+function makeZSprite() {
+  const mat = new THREE.SpriteMaterial({
+    map: getZTexture(),
+    transparent: true,
+    opacity: 0,
+    depthWrite: false,
+  });
+  const s = new THREE.Sprite(mat);
+  s.scale.set(0.7, 0.45, 1);
+  s.position.set(0.15, 0.85, 0);
+  return s;
+}
+
+// Color similarity test for the herding check. Cheap RGB distance — fine for
+// the small biome palettes used here.
+function colorsClose(a, b) {
+  const dr = a.r - b.r;
+  const dg = a.g - b.g;
+  const db = a.b - b.b;
+  return dr * dr + dg * dg + db * db < 0.04;
+}
+
 // opts:
 //   role         — "parent" | "kid"   (for family groups)
 //   parent       — reference to the parent creature (for kids)
@@ -249,6 +306,16 @@ export function makeCreature(biome, opts = {}) {
     body.scale.set(bodyBaseX * 1.18, bodyBaseY * 0.55, bodyBaseZ * 1.05);
   }
 
+  // Personality stamp — pulled from the deterministic RNG during world-gen,
+  // applies subtle multipliers to speed/think/bob and biases the sleep,
+  // herd, and hop responses below.
+  const personalityName =
+    PERSONALITY_NAMES[Math.floor(Math.random() * PERSONALITY_NAMES.length)];
+  const personality = PERSONALITIES[personalityName];
+
+  const baseSpeed = flies ? 1.1 + Math.random() * 0.9 : 0.6 + Math.random() * 0.7;
+  const baseBobSpeed = flies ? 4 + Math.random() * 2 : 6 + Math.random() * 3;
+
   return {
     group,
     body,
@@ -262,9 +329,9 @@ export function makeCreature(biome, opts = {}) {
     role: opts.role || null,         // "parent" | "kid" | null
     parent: opts.parent || null,     // reference to parent creature (kids only)
     heading: Math.random() * Math.PI * 2,
-    speed: flies ? 1.1 + Math.random() * 0.9 : 0.6 + Math.random() * 0.7,
+    speed: baseSpeed * personality.speedMul,
     bob: Math.random() * Math.PI * 2,
-    bobSpeed: flies ? 4 + Math.random() * 2 : 6 + Math.random() * 3,
+    bobSpeed: baseBobSpeed * personality.bobSpeedMul,
     flapSpeed: 16 + Math.random() * 10,
     flapPhase: Math.random() * Math.PI * 2,
     hoverHeight,
@@ -275,6 +342,7 @@ export function makeCreature(biome, opts = {}) {
     bodyBaseY,
     bodyBaseX,
     bodyBaseZ,
+    bodyColor: bodyCol.clone(),
     nextThink: Math.random() * 2.5,
     pauseUntil: 0,
     age: Math.random() * 100,
@@ -287,7 +355,96 @@ export function makeCreature(biome, opts = {}) {
     burrowTimer: isBurrower ? 2 + Math.random() * 4 : 0,
     burrowDepth: 0,           // 0 = on ground, 1 = fully submerged
     dirtColor: new THREE.Color(biome.cliff),
+    // Personality + behavior knobs read by stepCreature
+    personality: personalityName,
+    pauseChance: personality.pauseChance,
+    bobAmpMul: personality.bobAmpMul,
+    hopProb: personality.hopProb,
+    herdStrength: personality.herdStrength,
+    nightThresh: personality.nightThresh,
+    // Look-at-camera — set by the UI hover handler to N seconds; stepCreature
+    // decrements and overrides the heading-based rotation while > 0.
+    lookTimer: 0,
+    // Curiosity hop — a vertical pos.y bump added on top of the regular
+    // ground+bob math. hopVy is the integrated vertical velocity, hopOffset
+    // the current height above resting, hopCooldown the gate.
+    hopVy: 0,
+    hopOffset: 0,
+    hopCooldown: 1.5 + Math.random() * 3,
+    // Night-sleep — 0..1 sleepiness target driven by state.nightFactor and
+    // personality.nightThresh. zSprite lazily attached when first drowsy.
+    sleepiness: 0,
+    zSprite: null,
   };
+}
+
+// Trigger a brief look-at-camera response. Called from the UI hover/tap
+// handler — the stepCreature override decays via c.lookTimer.
+export function lookAtCreature(c) {
+  if (c.isSleeper) return;
+  // 1.5s of camera-facing — long enough to read, short enough to not feel sticky
+  c.lookTimer = 1.5;
+}
+
+// Find distance to nearest butterfly or bee for the curiosity-hop trigger.
+// Returns Infinity if no buzzers are loaded. Cheap — we early-exit on the
+// first close-enough hit so most checks bail in a handful of cells.
+function nearestBuzzer(pos) {
+  let best = Infinity;
+  const list1 = state.butterflies;
+  for (let i = 0; i < list1.length; i++) {
+    const bp = list1[i].group.position;
+    const dx = bp.x - pos.x;
+    const dz = bp.z - pos.z;
+    const d2 = dx * dx + dz * dz;
+    if (d2 < best) best = d2;
+    if (best < 1.0) return Math.sqrt(best);
+  }
+  const list2 = state.bees;
+  for (let i = 0; i < list2.length; i++) {
+    const bp = list2[i].group.position;
+    const dx = bp.x - pos.x;
+    const dz = bp.z - pos.z;
+    const d2 = dx * dx + dz * dz;
+    if (d2 < best) best = d2;
+    if (best < 1.0) return Math.sqrt(best);
+  }
+  return Math.sqrt(best);
+}
+
+// Nudge `c.heading` toward the nearest same-color creature so kin pair up
+// into loose pairs/trios. Capped by `c.herdStrength` and a max distance so
+// it never overpowers the existing random wander.
+function herdInfluence(c, dt) {
+  const me = c.group.position;
+  let best = null;
+  let bestD = Infinity;
+  const list = state.creatures;
+  for (let i = 0; i < list.length; i++) {
+    const o = list[i];
+    if (o === c) continue;
+    if (o.isSleeper || o.isBurrower) continue;
+    if (!o.bodyColor || !colorsClose(o.bodyColor, c.bodyColor)) continue;
+    const op = o.group.position;
+    const dx = op.x - me.x;
+    const dz = op.z - me.z;
+    const d2 = dx * dx + dz * dz;
+    if (d2 > 64) continue;        // ignore peers more than 8 units away
+    if (d2 < bestD) {
+      bestD = d2;
+      best = o;
+    }
+  }
+  if (!best) return;
+  const op = best.group.position;
+  const d = Math.sqrt(bestD);
+  // Too close → drift apart slightly. Sweet spot 1.4–4 units → pull toward.
+  const sign = d < 1.2 ? -1 : 1;
+  const targetH = Math.atan2(op.z - me.z, op.x - me.x);
+  let diff = targetH - c.heading;
+  while (diff > Math.PI) diff -= Math.PI * 2;
+  while (diff < -Math.PI) diff += Math.PI * 2;
+  c.heading += sign * diff * c.herdStrength * 0.4;
 }
 
 // Wake a sleeping creature. Called from the UI hover handler.
@@ -304,6 +461,57 @@ export function wakeCreature(c) {
 export function stepCreature(c, dt, t, heightFn) {
   c.age += dt;
   c.nextThink -= dt;
+  if (c.lookTimer > 0) c.lookTimer -= dt;
+  if (c.hopCooldown > 0) c.hopCooldown -= dt;
+
+  // Sleepiness target — driven by the global night factor and the personality
+  // threshold. Sleepy creatures yawn earlier; bold ones tough it out until
+  // it's properly dark. Smoothstep gives a soft on/off so the body curl
+  // animates rather than snapping.
+  if (!c.isSleeper && !c.flies) {
+    const nf = state.nightFactor ?? 0;
+    const a = c.nightThresh - 0.08;
+    const b = c.nightThresh + 0.08;
+    let target = (nf - a) / Math.max(0.001, b - a);
+    if (target < 0) target = 0;
+    else if (target > 1) target = 1;
+    else target = target * target * (3 - 2 * target);
+    // ease toward target at ~0.6/s so dawn/dusk transitions are smooth
+    c.sleepiness += (target - c.sleepiness) * Math.min(1, dt * 0.6);
+  } else if (c.flies && !c.isFish) {
+    // fliers don't fully sleep, but they get drowsy + descend toward rest
+    const nf = state.nightFactor ?? 0;
+    const a = c.nightThresh - 0.08;
+    const b = c.nightThresh + 0.08;
+    let target = (nf - a) / Math.max(0.001, b - a);
+    if (target < 0) target = 0;
+    else if (target > 1) target = 1;
+    c.sleepiness += (target - c.sleepiness) * Math.min(1, dt * 0.6);
+  }
+
+  // Lazily attach the zZz sprite the first time we drift into drowsy.
+  if (c.sleepiness > 0.05 && !c.zSprite && !c.flies) {
+    c.zSprite = makeZSprite();
+    c.group.add(c.zSprite);
+  }
+  if (c.zSprite) {
+    const targetOpacity = c.sleepiness > 0.6 ? Math.min(0.95, (c.sleepiness - 0.6) * 2.4) : 0;
+    c.zSprite.material.opacity +=
+      (targetOpacity - c.zSprite.material.opacity) * Math.min(1, dt * 3);
+    // gentle vertical wobble so the sprite drifts up
+    c.zSprite.position.y = 0.85 + Math.sin(t * 1.4 + c.flapPhase) * 0.08;
+  }
+
+  // Integrate the hop physics every frame so a hop in flight smoothly settles
+  // even if the cooldown is later overwritten.
+  if (c.hopVy !== 0 || c.hopOffset !== 0) {
+    c.hopOffset += c.hopVy * dt;
+    c.hopVy -= 14 * dt;
+    if (c.hopOffset <= 0) {
+      c.hopOffset = 0;
+      c.hopVy = 0;
+    }
+  }
 
   // ── sleeping (curled, eyes closed, no motion) ─────────────────────────
   if (c.isSleeper) {
@@ -327,6 +535,29 @@ export function stepCreature(c, dt, t, heightFn) {
     c.body.scale.x = c.bodyBaseX * (1.18 + (1 - 1.18) * w);
     c.body.scale.y = c.bodyBaseY * (0.55 + (1 - 0.55) * w);
     if (w >= 1) c._waking = false;
+  }
+
+  // ── night sleep (walkers only) ────────────────────────────────────────
+  // High sleepiness curls a walker down on the spot. Smooth transitions in
+  // and out — eyes scale, body squashes, head-bob falls to a slow breath.
+  if (!c.flies && c.sleepiness > 0.05 && !c._waking) {
+    const s = c.sleepiness;
+    // eyes squint shut as sleepiness rises (clamped to keep them readable
+    // until really drowsy)
+    const eyeOpen = Math.max(0, 1 - s * 1.2);
+    for (const e of c.eyeParts) e.scale.setScalar(eyeOpen);
+    // body curls
+    c.body.scale.y = c.bodyBaseY * (1 + (0.55 - 1) * s);
+    c.body.scale.x = c.bodyBaseX * (1 + (1.18 - 1) * s);
+    if (s > 0.9) {
+      // fully curled — slow breath, no motion, planted on the ground
+      const breath = Math.sin(t * 1.1 + c.flapPhase) * 0.03;
+      c.body.scale.y = c.bodyBaseY * 0.55 + breath;
+      c.body.scale.x = c.bodyBaseX * (1.18 - breath * 0.3);
+      const ground = heightFn(c.group.position.x, c.group.position.z);
+      c.group.position.y = ground + 0.28 * c.scale + c.hopOffset;
+      return;
+    }
   }
 
   // ── burrower state machine ────────────────────────────────────────────
@@ -379,15 +610,28 @@ export function stepCreature(c, dt, t, heightFn) {
     c.landTimer -= dt;
     const restH = 0.35 * c.scale;
 
+    // Drowsy fliers want down — force a descent if they're still flying,
+    // and refuse to lift off until they've slept it off.
+    if (c.sleepiness > 0.6 && c.landState === "flying") {
+      c.landState = "descending";
+      c.landTimer = 8 + Math.random() * 6;
+    }
+    if (c.sleepiness > 0.6 && c.landState === "ascending") {
+      c.landState = "descending";
+    }
+
     if (c.landState === "flying" && c.landTimer <= 0) {
       c.landState = "descending";
-    } else if (c.landState === "landed" && c.landTimer <= 0) {
+    } else if (c.landState === "landed" && c.landTimer <= 0 && c.sleepiness < 0.5) {
       c.landState = "ascending";
     }
 
+    // pull the hover ceiling down with sleepiness so a flier slowly sinks
+    // toward the ground at night even before reaching the landed state.
+    const hoverCeil = c.hoverHeight * (1 - 0.7 * c.sleepiness);
     const targetH =
       c.landState === "flying" || c.landState === "ascending"
-        ? c.hoverHeight
+        ? hoverCeil
         : restH;
     // smooth lerp for the descent/ascent
     c.currentHover += (targetH - c.currentHover) * Math.min(1, dt * 1.4);
@@ -411,10 +655,30 @@ export function stepCreature(c, dt, t, heightFn) {
 
   // think — fliers never pause while airborne; walkers + landed fliers can
   if (c.nextThink <= 0) {
-    if ((!c.flies || grounded) && Math.random() < 0.25) {
+    if ((!c.flies || grounded) && Math.random() < c.pauseChance) {
       c.pauseUntil = t + 0.6 + Math.random() * 1.4;
     } else {
       c.heading += (Math.random() - 0.5) * (c.flies && !grounded ? 1.2 : 1.6);
+      // Herding — pull toward the nearest same-color creature (capped). Only
+      // applied during the think event so it's cheap (O(creatures) per
+      // creature ~once a second) and doesn't fight the natural wander.
+      if (!c.flies || grounded) {
+        herdInfluence(c, dt);
+      }
+    }
+    // Trigger a curiosity hop if a butterfly or bee is buzzing nearby. Walkers
+    // and landed fliers only — airborne fliers don't need to hop.
+    if (
+      (!c.flies || grounded) &&
+      c.hopCooldown <= 0 &&
+      c.hopOffset === 0 &&
+      c.sleepiness < 0.4
+    ) {
+      const near = nearestBuzzer(c.group.position);
+      if (near < 2.4 && Math.random() < c.hopProb) {
+        c.hopVy = 2.0 + Math.random() * 0.6;
+        c.hopCooldown = 3 + Math.random() * 3;
+      }
     }
     c.nextThink = (c.flies ? 0.7 : 1.2) + Math.random() * (c.flies ? 1.8 : 3.0);
   }
@@ -443,7 +707,7 @@ export function stepCreature(c, dt, t, heightFn) {
   const pos = c.group.position;
 
   if (moving) {
-    const step = c.speed * dt;
+    const step = c.speed * dt * (1 - c.sleepiness * 0.85);
     const nx = pos.x + Math.cos(c.heading) * step;
     const nz = pos.z + Math.sin(c.heading) * step;
     // Edge avoidance:
@@ -489,10 +753,10 @@ export function stepCreature(c, dt, t, heightFn) {
     const bobAmp = grounded
       ? 0.02
       : 0.28 * Math.min(1, c.currentHover / Math.max(0.1, c.hoverHeight));
-    pos.y = ground + c.currentHover + Math.sin(c.bob) * bobAmp;
+    pos.y = ground + c.currentHover + Math.sin(c.bob) * bobAmp * c.bobAmpMul + c.hopOffset;
   } else {
-    const bobAmp = moving ? 0.08 : 0.02;
-    pos.y = ground + 0.35 * c.scale + Math.sin(c.bob) * bobAmp;
+    const bobAmp = (moving ? 0.08 : 0.02) * c.bobAmpMul;
+    pos.y = ground + 0.35 * c.scale + Math.sin(c.bob) * bobAmp + c.hopOffset;
     // burrowers sink/rise — burrowDepth=0 sits at surface, 1 fully under
     if (c.isBurrower && c.burrowDepth > 0) {
       pos.y -= c.burrowDepth * (0.8 + 0.4 * c.scale);
@@ -507,8 +771,24 @@ export function stepCreature(c, dt, t, heightFn) {
   while (diff < -Math.PI) diff += Math.PI * 2;
   c.group.rotation.y = cur + diff * Math.min(1, dt * 6);
 
-  // squash & stretch body (the wake-up unfurl owns body scale until it finishes)
-  if (!c._waking) {
+  // Look-at-camera override — when the user hovers/taps a creature, pull its
+  // facing toward the camera for ~1.5s. Stronger lerp than the regular
+  // heading-follow so the response reads as deliberate.
+  if (c.lookTimer > 0 && state.camera) {
+    const camDx = state.camera.position.x - c.group.position.x;
+    const camDz = state.camera.position.z - c.group.position.z;
+    const camHeading = Math.atan2(camDz, camDx);
+    const lookRot = -camHeading + Math.PI / 2;
+    let lcur = c.group.rotation.y;
+    let ldiff = lookRot - lcur;
+    while (ldiff > Math.PI) ldiff -= Math.PI * 2;
+    while (ldiff < -Math.PI) ldiff += Math.PI * 2;
+    c.group.rotation.y = lcur + ldiff * Math.min(1, dt * 9);
+  }
+
+  // squash & stretch body (the wake-up unfurl owns body scale until it finishes;
+  // night-sleep also owns body scale while drowsy)
+  if (!c._waking && !(!c.flies && c.sleepiness > 0.05)) {
     const squash = 1 + Math.sin(c.bob) * 0.05 * (moving ? 1 : 0.4);
     c.body.scale.y = c.bodyBaseY * squash;
     c.body.scale.x = c.bodyBaseX / Math.sqrt(squash);

@@ -13,14 +13,6 @@ Remove completed items from this list, commit and push so its live on github pag
 - **Hidden landmarks** (M) — 1-in-N chance per world of spawning a single tiny set piece (stone arch, tilted obelisk, mushroom ring, bird's nest with eggs) at a chosen `pickGroundPoint`. Surface "found: <thing>" in the HUD. New module `src/landmarks.js`.
 - **Footpaths** (M) — when a creature is followed for a while, leave a faint worn dirt path along its trace by tinting the underlying terrain colors. Touches `src/fauna.js` + `src/terrain.js`.
 
-## Creatures & Behavior
-
-- **Look-at-camera** (S) — when the user hovers/taps a creature, it briefly rotates its head/body to face the camera with a soft ease. Already have raycaster picking in follow mode — reuse it. Touches `src/ui.js` + `src/fauna.js`.
-- **Sleep cycle** (M) — at high night-factor, creatures slow, settle on the ground, and emit a faint `zZz` sprite. Wake on dawn. Tie into `updateDayNight`. Touches `src/fauna.js` + `src/world.js`.
-- **Herding / flocking on the ground** (M) — give same-color creatures a mild attractor to each other (capped) so they sometimes cluster into pairs/trios. Subtle — not a full boids rewrite. Touches `src/fauna.js`.
-- **Curiosity hop** (S) — creatures occasionally do a small vertical hop when a butterfly or bee passes nearby. Touches `src/fauna.js`.
-- **Personality stamp per creature** (S) — at spawn, pick one of {shy, bold, sleepy, bouncy} from the deterministic RNG; tweak speed/idle/bob constants per personality. Touches `src/fauna.js`.
-
 ## Weather & Atmosphere
 
 - **Passing storm** (M) — occasionally drift a darker cloud across the island that casts a soft ground shadow, briefly intensifies fog, and triggers rain particles if biome allows. Touches `src/sky.js` + `src/environment.js`.

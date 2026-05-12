@@ -90,6 +90,8 @@ export function updateDayNight(t) {
   // ambient boost reduces night-darkening so dark biomes don't swallow the lift
   const liftedDay = dayFactor + (1 - dayFactor) * ab * 0.7;
   const nightAmt = 1 - liftedDay;
+  // expose to fauna step (sleep cycle reads this each frame)
+  state.nightFactor = nightAmt;
   const dn = state.dayNight;
 
   blendPalette(_scene.background, dn.sky, dn.duskSky, dn.nightSky, liftedDay);
