@@ -585,7 +585,8 @@ export const FLORA_BUILDERS = {
     base.scale.set(1.1, 0.55, 1.1);
     base.castShadow = true;
     g.add(base);
-    // 3–5 fan branches arching upward
+    // 3–5 fan branches arching upward. Each branch is its own Group
+    // so the stalk + tip + knobs stay rigidly attached when the branch tilts.
     const branches = 3 + Math.floor(Math.random() * 3);
     for (let i = 0; i < branches; i++) {
       const a = (i / branches) * Math.PI * 2 + Math.random() * 0.4;
@@ -595,29 +596,34 @@ export const FLORA_BUILDERS = {
         flatShading: true,
         roughness: 0.5,
       });
+
+      const branch = new THREE.Group();
+      // anchor the branch group at the base, pointing along the group's local +Y
+      branch.position.set(Math.cos(a) * 0.05, 0.15, Math.sin(a) * 0.05);
+      // tilt outward — rotation is applied to the group, all children follow
+      branch.rotation.z = Math.cos(a) * 0.55;
+      branch.rotation.x = -Math.sin(a) * 0.55;
+      g.add(branch);
+
       const stalk = new THREE.Mesh(
         new THREE.CylinderGeometry(0.04, 0.07, len, 5),
         branchMat
       );
-      stalk.position.set(Math.cos(a) * 0.05, 0.15 + len / 2, Math.sin(a) * 0.05);
-      // tilt outward and arch a bit
-      stalk.rotation.z = Math.cos(a) * 0.55;
-      stalk.rotation.x = -Math.sin(a) * 0.55;
+      stalk.position.y = len / 2;
       stalk.castShadow = true;
-      g.add(stalk);
-      // little blob at the tip — coral polyp
+      branch.add(stalk);
+
+      // little blob at the tip — coral polyp, parented to the branch so it
+      // tracks the rotated stalk's end.
       const tip = new THREE.Mesh(
         jitterGeo(new THREE.IcosahedronGeometry(0.11, 0), 0.04),
         branchMat
       );
-      tip.position.set(
-        Math.cos(a) * (0.05 + Math.sin(0.55) * len),
-        0.18 + len * 0.95,
-        Math.sin(a) * (0.05 + Math.sin(0.55) * len)
-      );
+      tip.position.y = len + 0.02;
       tip.scale.set(1.2, 0.7, 1.2);
       tip.castShadow = true;
-      g.add(tip);
+      branch.add(tip);
+
       // 2 tiny side blobs along the branch
       for (let k = 0; k < 2; k++) {
         const u = 0.4 + k * 0.3;
@@ -626,11 +632,11 @@ export const FLORA_BUILDERS = {
           branchMat
         );
         knob.position.set(
-          Math.cos(a) * (0.05 + Math.sin(0.55) * len * u) + (Math.random() - 0.5) * 0.08,
-          0.18 + len * u,
-          Math.sin(a) * (0.05 + Math.sin(0.55) * len * u) + (Math.random() - 0.5) * 0.08
+          (Math.random() - 0.5) * 0.06,
+          len * u,
+          (Math.random() - 0.5) * 0.06
         );
-        g.add(knob);
+        branch.add(knob);
       }
     }
     return g;

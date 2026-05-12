@@ -351,7 +351,6 @@ export function generateWorld(seed) {
           seed.z + (Math.random() - 0.5) * 1.0
         );
         state.world.add(bee.group);
-        state.world.add(bee.trail);
         state.bees.push(bee);
       }
     }

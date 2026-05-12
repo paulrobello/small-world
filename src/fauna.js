@@ -518,15 +518,15 @@ export function stepCreature(c, dt, t, heightFn) {
         1,
         (c.currentHover - 0.35 * c.scale) / Math.max(0.1, c.hoverHeight - 0.35 * c.scale)
       );
-      const flapStrength = 0.4 + 0.6 * altRatio; // weaker flap near the ground
+      const flapStrength = 0.55 + 0.45 * altRatio; // weaker flap near the ground
       const phase = t * c.flapSpeed + c.flapPhase;
       const flap = Math.sin(phase);
       for (let i = 0; i < c.wings.length; i++) {
         const sign = i === 0 ? -1 : 1;
-        c.wings[i].rotation.z = sign * (0.25 + flap * 0.75 * flapStrength);
-        c.wings[i].rotation.x = Math.cos(phase) * 0.12 * flapStrength;
+        c.wings[i].rotation.z = sign * (0.15 + flap * 1.2 * flapStrength);
+        c.wings[i].rotation.x = Math.cos(phase) * 0.18 * flapStrength;
       }
-      c.body.rotation.z = -flap * 0.04 * flapStrength;
+      c.body.rotation.z = -flap * 0.06 * flapStrength;
     }
   } else if (moving) {
     // diagonal trot pattern: FL+BR phase, FR+BL counter-phase
@@ -551,8 +551,10 @@ function findTrailPointAt(trail, distance) {
   for (let i = 1; i < trail.length; i++) {
     const cur = trail[i];
     const dx = cur.x - prev.x;
+    const dy = (cur.y ?? 0) - (prev.y ?? 0);
     const dz = cur.z - prev.z;
-    const d = Math.sqrt(dx * dx + dz * dz);
+    // 3D arc-length so segments stay tight on sloped terrain
+    const d = Math.sqrt(dx * dx + dy * dy + dz * dz);
     if (acc + d >= distance) {
       const u = d > 1e-4 ? (distance - acc) / d : 0;
       return {
@@ -702,9 +704,9 @@ export function makeCaterpillar(biome, opts = {}) {
   const startZ = sp.z;
   const startHeading = Math.random() * Math.PI * 2;
   // tighter than 2r — icospheres at exactly 2r touch only at corners, so
-  // their flat faces leave a visible gap. Overlap a bit so segments visibly
-  // read as touching even over sloped terrain.
-  const segSpacing = 1.4 * segRadius * scale;
+  // their flat faces leave a visible gap. Overlap noticeably so segments
+  // stay touching even on steep terrain.
+  const segSpacing = 1.15 * segRadius * scale;
 
   // pre-seed the trail behind the head so segments aren't stacked at frame 0
   const trail = [];
@@ -712,6 +714,7 @@ export function makeCaterpillar(biome, opts = {}) {
   for (let i = 0; i < 250; i++) {
     trail.push({
       x: startX - Math.cos(startHeading) * i * seedStep,
+      y: 0,
       z: startZ - Math.sin(startHeading) * i * seedStep,
     });
   }
@@ -761,8 +764,8 @@ export function stepCaterpillar(c, dt, t, heightFn) {
   head.rotation.y = -c.heading + Math.PI / 2;
   head.rotation.x = Math.sin(c.age * 4) * 0.06;
 
-  // record path
-  c.trail.unshift({ x: nx, z: nz });
+  // record path (3D so 3D-arclength following stays accurate on slopes)
+  c.trail.unshift({ x: nx, y: headY, z: nz });
   if (c.trail.length > 300) c.trail.length = 300;
 
   // body segments sample the trail at fixed arc-length offsets
@@ -956,8 +959,6 @@ export function stepButterfly(b, dt, t, flowerSpots, heightFn) {
 // A "swarm" is a shared object { target, retargetAt }; each bee references
 // it so they all migrate together when the swarm picks a new flower.
 // ─────────────────────────────────────────────────────────────────────────────
-const BEE_TRAIL_POINTS = 14;
-
 export function makeSwarm() {
   return {
     target: null,                         // current shared flower Vector3
@@ -1018,29 +1019,11 @@ export function makeBee(swarm, biome) {
 
   group.scale.setScalar(0.6);
 
-  // thin trail — a Line that draws the last N positions of this bee.
-  const trailPositions = new Float32Array(BEE_TRAIL_POINTS * 3);
-  const trailGeo = new THREE.BufferGeometry();
-  trailGeo.setAttribute("position", new THREE.BufferAttribute(trailPositions, 3));
-  trailGeo.setDrawRange(0, 0);
-  const trailMat = new THREE.LineBasicMaterial({
-    color: new THREE.Color(biome.accent).lerp(new THREE.Color("#ffd13b"), 0.55),
-    transparent: true,
-    opacity: 0.45,
-    depthWrite: false,
-  });
-  const trail = new THREE.Line(trailGeo, trailMat);
-  // the trail lives on the world group (sibling, not parented to group)
-  // so its segments stay in world space.
-
   const bee = {
     group,
     body,
     wings,
     swarm,
-    trail,
-    trailPositions,
-    trailLen: 0,
     // per-bee personality so they don't all overlap on the same point
     orbitPhase: Math.random() * Math.PI * 2,
     orbitSpeed: 1.6 + Math.random() * 1.3,
@@ -1141,15 +1124,6 @@ export function stepBee(b, dt, t, flowerSpots, heightFn) {
     const f = Math.sin(t * b.flapSpeed + b.flapPhase);
     w.pivot.rotation.z = w.side * (0.5 + f * 0.85);
   }
-
-  // trail — push current world-space pos to a small ring buffer, draw line
-  const arr = b.trailPositions;
-  // shift back by one slot (could be replaced by an index but N is tiny)
-  for (let i = (BEE_TRAIL_POINTS - 1) * 3; i >= 3; i--) arr[i] = arr[i - 3];
-  arr[0] = pos.x; arr[1] = pos.y; arr[2] = pos.z;
-  if (b.trailLen < BEE_TRAIL_POINTS) b.trailLen++;
-  b.trail.geometry.setDrawRange(0, b.trailLen);
-  b.trail.geometry.attributes.position.needsUpdate = true;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
