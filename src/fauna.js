@@ -1122,9 +1122,10 @@ export function makeCaterpillar(biome, opts = {}) {
   head.position.set(startX, 0, startZ);
 
   // Fur — applied per segment so head and body each get their own shell stack.
-  // Auto-on in fuzzy biomes; can be forced via opts.furry.
+  // Auto-on in fuzzy biomes; can be forced via opts.furry. Snails are excluded
+  // (a furry snail shell reads as a hairy rock, not as a snail).
   let furShells = null;
-  if (opts.furry ?? biome.fuzzy) {
+  if (!isSnail && (opts.furry ?? biome.fuzzy)) {
     furShells = [];
     // Length scaled to segment radius (creatures use 0.072 on radius 0.42,
     // ~17% — match that ratio here).
