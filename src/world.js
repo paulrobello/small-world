@@ -53,6 +53,7 @@ export function setFollowReleaseCallback(fn) {
 
 // Slow day/night cycle. Lerps a handful of scene values between the biome's
 // daytime palette and a generic deep-night palette using a cosine curve.
+const AMBIENT_LIFT = new THREE.Color("#a8b4c8");
 export function updateDayNight(t) {
   if (!state.dayNight || !state.sunLight || !state.hemiLight || !_scene) return;
   let dayFactor;
@@ -64,15 +65,22 @@ export function updateDayNight(t) {
     dayFactor = state.userSettings.manualDayFactor;
     phase = Math.acos(2 * dayFactor - 1);
   }
-  const nightAmt = 1 - dayFactor;
+  const ab = state.userSettings.ambientBoost ?? 0;
+  // ambient boost reduces night-darkening so dark biomes don't swallow the lift
+  const nightAmt = (1 - dayFactor) * (1 - ab * 0.7);
 
   _scene.background.copy(state.dayNight.sky).lerp(NIGHT_SKY, nightAmt);
+  if (ab > 0) _scene.background.lerp(AMBIENT_LIFT, ab * 0.55);
   _scene.fog.color.copy(state.dayNight.fog).lerp(NIGHT_FOG, nightAmt);
+  if (ab > 0) _scene.fog.color.lerp(AMBIENT_LIFT, ab * 0.6);
   _scene.fog.density =
-    state.dayNight.fogDensity * (1 + nightAmt * 0.2) * state.userSettings.fogMultiplier;
+    state.dayNight.fogDensity *
+    (1 + nightAmt * 0.2) *
+    state.userSettings.fogMultiplier *
+    (1 - ab * 0.5); // thinner fog at high ambient
 
   state.sunLight.color.copy(state.dayNight.sun).lerp(NIGHT_SUN, nightAmt);
-  state.sunLight.intensity = 0.45 + dayFactor * 0.95;
+  state.sunLight.intensity = 0.45 + dayFactor * 0.95 + ab * 1.6;
   const sunAngle = phase + Math.PI;
   const sunR = 26;
   state.sunLight.position.set(
@@ -82,12 +90,11 @@ export function updateDayNight(t) {
   );
 
   state.hemiLight.color.copy(state.dayNight.skyForHemi).lerp(NIGHT_SKY, nightAmt);
+  if (ab > 0) state.hemiLight.color.lerp(AMBIENT_LIFT, ab * 0.7);
   state.hemiLight.groundColor.copy(state.dayNight.ground).lerp(NIGHT_HEMI_GROUND, nightAmt);
-  // ambientBoost is mostly there for dark biomes / night — it lifts the
-  // hemi fill light and a touch of the sun so glowing motifs still pop.
-  const ab = state.userSettings.ambientBoost ?? 0;
-  state.hemiLight.intensity = 0.32 + dayFactor * 0.45 + ab * 1.6;
-  state.sunLight.intensity += ab * 0.4;
+  if (ab > 0) state.hemiLight.groundColor.lerp(AMBIENT_LIFT, ab * 0.5);
+  // hemi fill scales hard with ambient so dark biomes actually brighten
+  state.hemiLight.intensity = 0.32 + dayFactor * 0.45 + ab * 4.5;
 
   if (state.parallaxRingMesh) {
     state.parallaxRingMesh.material.color
