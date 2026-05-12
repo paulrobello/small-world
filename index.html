@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>a small world — terrarium</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link
+    href="https://fonts.googleapis.com/css2?family=Cormorant+Infant:ital,wght@1,300;1,500&family=Major+Mono+Display&family=DM+Mono:wght@300;400;500&display=swap"
+    rel="stylesheet"
+  />
+  <link rel="stylesheet" href="style.css" />
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://cdn.jsdelivr.net/npm/three@0.184.0/build/three.module.js",
+        "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.184.0/examples/jsm/",
+        "simplex-noise": "https://cdn.jsdelivr.net/npm/simplex-noise@4.0.3/dist/esm/simplex-noise.js"
+      }
+    }
+  </script>
+</head>
+<body>
+  <canvas id="scene"></canvas>
+
+  <div class="grain"></div>
+  <div class="vignette"></div>
+
+  <header class="hud hud-top">
+    <div class="title-block">
+      <div class="eyebrow">field notes &nbsp;·&nbsp; vol. iii</div>
+      <h1 class="title"><em>a small</em> world<span class="cursor">_</span></h1>
+    </div>
+    <div class="biome-card">
+      <div class="label">current biome</div>
+      <div class="biome-name" id="biome-name">—</div>
+      <div class="biome-sub" id="biome-sub">awaiting genesis</div>
+    </div>
+  </header>
+
+  <footer class="hud hud-bottom">
+    <div class="stats">
+      <div class="stat">
+        <span class="label">seed</span>
+        <span class="value" id="seed">0x0000</span>
+      </div>
+      <div class="stat">
+        <span class="label">creatures</span>
+        <span class="value" id="creature-count">00</span>
+      </div>
+      <div class="stat">
+        <span class="label">flora</span>
+        <span class="value" id="flora-count">00</span>
+      </div>
+      <div class="stat">
+        <span class="label">birds</span>
+        <span class="value" id="bird-count">00</span>
+      </div>
+      <div class="stat">
+        <span class="label">elevation</span>
+        <span class="value" id="elevation">000m</span>
+      </div>
+    </div>
+
+    <div class="controls">
+      <div class="hint">drag · zoom · observe</div>
+      <button class="regen" id="regen">
+        <span class="regen-glyph">↻</span>
+        <span class="regen-label">regenerate world</span>
+      </button>
+    </div>
+  </footer>
+
+  <div class="corner corner-tl">+</div>
+  <div class="corner corner-tr">+</div>
+  <div class="corner corner-bl">+</div>
+  <div class="corner corner-br">+</div>
+
+  <script type="module" src="main.js"></script>
+</body>
+</html>
