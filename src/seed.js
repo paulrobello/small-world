@@ -1,0 +1,48 @@
+import { BIOMES } from "./biomes.js";
+
+// mulberry32 — small, fast, decent quality, takes a 32-bit seed.
+export function mulberry32(seed) {
+  let a = seed >>> 0;
+  return function () {
+    a = (a + 0x6d2b79f5) >>> 0;
+    let t = a;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+export function formatSeed(seed) {
+  return "0x" + (seed >>> 0).toString(16).padStart(4, "0");
+}
+
+export function parseSeed(str) {
+  if (!str) return null;
+  const s = String(str).trim();
+  if (/^0x[0-9a-f]+$/i.test(s)) return parseInt(s.slice(2), 16) >>> 0;
+  if (/^[0-9a-f]{1,8}$/i.test(s) && /[a-f]/i.test(s))
+    return parseInt(s, 16) >>> 0;
+  const n = parseInt(s, 10);
+  return Number.isFinite(n) ? n >>> 0 : null;
+}
+
+export function readSeedFromUrl() {
+  return parseSeed(new URLSearchParams(window.location.search).get("seed"));
+}
+
+export function writeSeedToUrl(seed) {
+  const url = new URL(window.location.href);
+  url.searchParams.set("seed", formatSeed(seed));
+  history.replaceState(null, "", url.toString());
+}
+
+export function newRandomSeed(excludeBiomeId) {
+  // Reroll a few times to avoid landing on the same biome on regenerate.
+  for (let i = 0; i < 24; i++) {
+    const s = Math.floor(Math.random() * 0x10000);
+    if (!excludeBiomeId) return s;
+    const peekBiome = BIOMES[Math.floor(mulberry32(s)() * BIOMES.length)];
+    if (peekBiome.id !== excludeBiomeId) return s;
+  }
+  return Math.floor(Math.random() * 0x10000);
+}
