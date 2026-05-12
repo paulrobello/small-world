@@ -116,9 +116,17 @@ export function makeParticles(biome) {
     ember: "#3a2018", spark: "#fff2b3",
   };
   const sizeMap = {
-    firefly: 24, snow: 14, lichenmote: 18, feather: 28,
-    bubble: 20, leaf: 24, spark: 12, rain: 8,
-    pollen: 10, dust: 10, ember: 18,
+    firefly: 0.16,
+    snow: 0.1,
+    lichenmote: 0.12,
+    feather: 0.18,
+    bubble: 0.13,
+    leaf: 0.16,
+    spark: 0.08,
+    rain: 0.06,
+    pollen: 0.08,
+    dust: 0.09,
+    ember: 0.12,
   };
   const opacityMap = {
     dust: 0.35, feather: 0.7, bubble: 0.55, leaf: 0.85, spark: 0.95, rain: 0.55,
@@ -133,7 +141,7 @@ export function makeParticles(biome) {
     uniforms: {
       uTime: { value: 0 },
       uPixelRatio: { value: pixelRatio },
-      uBaseSize: { value: sizeMap[kind] ?? 14 },
+      uBaseSize: { value: sizeMap[kind] ?? 0.07 },
       uColor: { value: new THREE.Color(colorMap[kind]) },
       uColor2: { value: new THREE.Color(color2Map[kind] ?? colorMap[kind]) },
       uOpacity: { value: opacityMap[kind] ?? 0.85 },
