@@ -1121,6 +1121,25 @@ export function makeCaterpillar(biome, opts = {}) {
 
   head.position.set(startX, 0, startZ);
 
+  // Fur — applied per segment so head and body each get their own shell stack.
+  // Auto-on in fuzzy biomes; can be forced via opts.furry.
+  let furShells = null;
+  if (opts.furry ?? biome.fuzzy) {
+    furShells = [];
+    // Length scaled to segment radius (creatures use 0.072 on radius 0.42,
+    // ~17% — match that ratio here).
+    const furLen = segRadius * 0.17;
+    for (const seg of segments) {
+      const segCol = seg.material.color.clone();
+      const shells = applyShellFur(seg, biome, {
+        baseColor: segCol,
+        tipColor: segCol.clone().offsetHSL(0, -0.05, 0.10),
+        length: furLen,
+      });
+      if (shells) furShells.push(...shells);
+    }
+  }
+
   return {
     type: isSnail ? "snail" : "caterpillar",
     group,
@@ -1133,6 +1152,7 @@ export function makeCaterpillar(biome, opts = {}) {
     speed: isSnail ? 0.12 + Math.random() * 0.08 : 0.5 + Math.random() * 0.3,
     nextThink: Math.random() * 2.5,
     age: Math.random() * 100,
+    furShells,
   };
 }
 
