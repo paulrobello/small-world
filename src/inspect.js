@@ -257,6 +257,29 @@ function updateHud() {
 
 const _flatHeight = () => 0;
 
+// Minimal inspect-only caterpillar/snail animation. Bypasses stepCaterpillar
+// because that function unshifts a duplicate head-position entry onto the
+// trail every frame; with c.speed=0 the trail fills with duplicates and body
+// segments collapse onto the head within a second. Here we place segments
+// statically behind the head along c.heading and apply the breathing/wave
+// bob from c.age.
+function stepInspectCaterpillar(c, dt) {
+  c.age = Math.max(0, c.age + dt);
+  const head = c.segments[0];
+  const baseOffset = c.segRadius * 0.7 * c.scale;
+  head.position.set(0, baseOffset, 0);
+  head.rotation.y = -c.heading + Math.PI / 2;
+  head.rotation.x = Math.sin(c.age * 4) * 0.06;
+  const dx = -Math.cos(c.heading);
+  const dz = -Math.sin(c.heading);
+  for (let i = 1; i < c.segments.length; i++) {
+    const off = i * c.segSpacing;
+    const bob = Math.sin(c.age * 3.5 - i * 0.7) * 0.03 * c.scale;
+    c.segments[i].position.set(dx * off, baseOffset + bob, dz * off);
+    c.segments[i].rotation.z = Math.sin(c.age * 2 - i * 0.5) * 0.06;
+  }
+}
+
 export function setupInspect(scene, renderer, camera, controls) {
   camera.position.set(1.7, 1.0, 1.7);
   controls.target.set(0, 0.35, 0);
@@ -349,7 +372,7 @@ export function stepInspect(dt, t) {
     _frozenT = t;
   }
   if (_specimenKind === "caterpillar") {
-    stepCaterpillar(_specimen, useDt, useT, _flatHeight);
+    stepInspectCaterpillar(_specimen, useDt);
   } else {
     stepCreature(_specimen, useDt, useT, _flatHeight);
     // Keep the specimen pinned to the turntable center — internal animations
