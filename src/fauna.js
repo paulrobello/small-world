@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import { state } from "./state.js";
 import { jitterGeo } from "./util.js";
-import { pickGroundPoint } from "./terrain.js";
+import { pickGroundPoint, nearestCenter } from "./terrain.js";
 import { makeDirtPuff } from "./environment.js";
 
 // opts:
@@ -443,14 +443,25 @@ export function stepCreature(c, dt, t, heightFn) {
     const nz = pos.z + Math.sin(c.heading) * step;
     // Edge avoidance: flying creatures can range a bit beyond ground; walkers
     // turn back the moment their next step is over a void or steep cliff.
+    // Both bounds are layout-aware — "back" means toward the nearest island
+    // center, not the world origin (which sits in the void on archipelagos).
     const overVoid = heightFn(nx, nz) < -0.35;
-    const wouldStray =
-      c.flies && c.landState === "flying"
-        ? Math.sqrt(nx * nx + nz * nz) > state.ISLAND_RADIUS * 1.18
-        : overVoid;
+    let wouldStray;
+    let nearest;
+    if (c.flies && c.landState === "flying") {
+      nearest = nearestCenter(nx, nz);
+      const dx = nx - nearest.cx;
+      const dz = nz - nearest.cz;
+      wouldStray = Math.sqrt(dx * dx + dz * dz) > nearest.radius * 1.18;
+    } else {
+      wouldStray = overVoid;
+      if (wouldStray) nearest = nearestCenter(pos.x, pos.z);
+    }
 
     if (wouldStray) {
-      c.heading = Math.atan2(-nz, -nx) + (Math.random() - 0.5) * 0.5;
+      c.heading =
+        Math.atan2(nearest.cz - pos.z, nearest.cx - pos.x) +
+        (Math.random() - 0.5) * 0.5;
     } else {
       pos.x = nx;
       pos.z = nz;
@@ -749,9 +760,14 @@ export function stepCaterpillar(c, dt, t, heightFn) {
   let nx = head.position.x + Math.cos(c.heading) * step;
   let nz = head.position.z + Math.sin(c.heading) * step;
 
-  // edge avoidance — if the next step is over a void or steep cliff, turn back
+  // edge avoidance — if the next step is over a void or steep cliff, turn
+  // toward the nearest island center (not the world origin, which sits in
+  // the void between islands on archipelago worlds).
   if (heightFn(nx, nz) < -0.25) {
-    c.heading = Math.atan2(-nz, -nx) + (Math.random() - 0.5) * 0.4;
+    const nearest = nearestCenter(head.position.x, head.position.z);
+    c.heading =
+      Math.atan2(nearest.cz - head.position.z, nearest.cx - head.position.x) +
+      (Math.random() - 0.5) * 0.4;
     nx = head.position.x + Math.cos(c.heading) * step;
     nz = head.position.z + Math.sin(c.heading) * step;
   }

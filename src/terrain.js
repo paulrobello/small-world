@@ -79,6 +79,22 @@ export function pickGroundPoint(maxRadiusFrac = 0.88) {
   };
 }
 
+// Nearest island center to (x, z). Used by entity edge-avoidance so creatures
+// in multi-island worlds steer back to their own island rather than the world
+// origin (which usually sits in the void between islands).
+export function nearestCenter(x, z) {
+  const centers = state.currentLayout.centers;
+  let best = centers[0];
+  let bestD2 = Infinity;
+  for (const c of centers) {
+    const dx = x - c.cx;
+    const dz = z - c.cz;
+    const d2 = dx * dx + dz * dz;
+    if (d2 < bestD2) { bestD2 = d2; best = c; }
+  }
+  return best;
+}
+
 // Pick a layout for a freshly seeded world. Called inside `generateWorld`
 // while `Math.random` is the seeded PRNG so the choice is deterministic.
 export function pickLayout() {
