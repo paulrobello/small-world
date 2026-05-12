@@ -53,7 +53,7 @@ void main() {
   // cell, giving point-distributed hairs instead of interpolated bands.
   vec3 cell = floor(vPos * 120.0);
   float h = hash13(cell);
-  float threshold = 0.30 + vLayerT * 0.62;
+  float threshold = 0.0 + vLayerT * 0.85;
   if (h < threshold) discard;
   vec3 N = normalize(vNormal);
   float lam = max(0.0, dot(N, normalize(uLightDir)));
