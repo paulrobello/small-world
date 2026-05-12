@@ -465,6 +465,49 @@ export function initUi({ camera, canvas, controls, renderer }) {
 
   syncTimeUi();
 
+  // Rendering — bloom + tilt-shift
+  const SETTINGS_KEY = "small-world.settings";
+  function loadStoredSettings() {
+    try {
+      const raw = localStorage.getItem(SETTINGS_KEY);
+      return raw ? JSON.parse(raw) : {};
+    } catch { return {}; }
+  }
+  function persistSettings() {
+    const data = {
+      bloom: state.userSettings.bloom,
+      tiltShift: state.userSettings.tiltShift,
+    };
+    try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(data)); } catch {}
+  }
+  const stored = loadStoredSettings();
+  if (typeof stored.bloom === "boolean") state.userSettings.bloom = stored.bloom;
+  if (typeof stored.tiltShift === "boolean") state.userSettings.tiltShift = stored.tiltShift;
+
+  const bloomEl = document.getElementById("setting-bloom");
+  const tiltEl = document.getElementById("setting-tiltshift");
+  const lowfxHint = document.getElementById("setting-lowfx-hint");
+
+  bloomEl.checked = state.userSettings.bloom;
+  tiltEl.checked = state.userSettings.tiltShift;
+
+  if (LOWFX) {
+    bloomEl.disabled = true;
+    tiltEl.disabled = true;
+    if (lowfxHint) lowfxHint.hidden = false;
+  }
+
+  bloomEl.addEventListener("change", () => {
+    state.userSettings.bloom = bloomEl.checked;
+    if (state.postfx) state.postfx.setBloom(bloomEl.checked);
+    persistSettings();
+  });
+  tiltEl.addEventListener("change", () => {
+    state.userSettings.tiltShift = tiltEl.checked;
+    if (state.postfx) state.postfx.setTiltShift(tiltEl.checked);
+    persistSettings();
+  });
+
   // Auto-regenerate timer — fires the regen button on an interval so the
   // world cycles itself without user input. Persisted via userSettings.
   const autoRegenInput = document.getElementById("setting-auto-regen");

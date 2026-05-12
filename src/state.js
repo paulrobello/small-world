@@ -32,6 +32,12 @@ export const state = {
   clouds: null,
   starfield: null,
   aurora: null,
+  // Visual polish additions
+  shadowDisks: null,
+  waterReflection: null,   // { rt, camera, scene } when active
+  mountainBasePos: null,
+  dustKicks: [],
+  postfx: null,            // { composer, bloomPass, tiltShiftPass, ... } once initialised
   heightFn: () => 0,
   currentBiome: null,
   currentSeed: 0,
@@ -58,6 +64,8 @@ export const state = {
     worldScale: 1,
     autoRegen: false,
     autoRegenMinutes: 2,
+    bloom: true,
+    tiltShift: false,
   },
 };
 
