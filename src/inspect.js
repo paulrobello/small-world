@@ -31,15 +31,60 @@ const VARIANTS = [
   { name: "snail",       kind: "caterpillar", build: (biome) => makeCaterpillar(biome, { kind: "snail" }) },
 ];
 
-let _biomeIdx = 0;
-let _variantIdx = 0;
+// Parse URL params for deterministic recreation.
+//   ?inspect=1                    — enter inspect mode (required)
+//   &biome=<id>                   — biome id from BIOMES (default: first entry)
+//   &variant=<name>               — walker | flier | sleeper | burrower | caterpillar | snail
+//   &seed=<hex|int>               — specimen seed (default: derived from biome+variant)
+//   &paused=1                     — start paused
+function _findBiomeIdx(id) {
+  if (!id) return 0;
+  const i = BIOMES.findIndex((b) => b.id === id);
+  return i >= 0 ? i : 0;
+}
+function _findVariantIdx(name) {
+  if (!name) return 0;
+  const i = VARIANTS.findIndex((v) => v.name === name);
+  return i >= 0 ? i : 0;
+}
+function _parseSeed(raw) {
+  if (raw == null) return null;
+  const n = raw.startsWith("0x") ? parseInt(raw, 16) : parseInt(raw, 10);
+  return Number.isFinite(n) ? (n >>> 0) : null;
+}
+
+let _biomeIdx = _findBiomeIdx(_params.get("biome"));
+let _variantIdx = _findVariantIdx(_params.get("variant"));
+// Explicit override; null means use the derived seed in spawnSpecimen.
+let _seedOverride = _parseSeed(_params.get("seed"));
 let _specimen = null;
 let _specimenKind = "creature";
 let _hudEl = null;
 let _stage = null;
-let _paused = false;
-let _stepOnce = false;
+let _paused = _params.get("paused") === "1";
+// Pending single-frame step. 0 = no step. Positive = forward, negative = back.
+let _stepDt = 0;
 let _frozenT = 0;
+
+function _derivedSeed() {
+  return (0x1234 + _biomeIdx * 17 + _variantIdx * 31) >>> 0;
+}
+
+// Reflect current state back to the URL so the user can copy the address bar
+// to share an exact recreation.
+function _syncUrl() {
+  const sp = new URLSearchParams();
+  sp.set("inspect", "1");
+  sp.set("biome", BIOMES[_biomeIdx].id);
+  sp.set("variant", VARIANTS[_variantIdx].name);
+  const seed = _seedOverride ?? _derivedSeed();
+  sp.set("seed", "0x" + seed.toString(16).padStart(4, "0"));
+  if (_paused) sp.set("paused", "1");
+  const next = window.location.pathname + "?" + sp.toString();
+  if (next !== window.location.pathname + window.location.search) {
+    window.history.replaceState(null, "", next);
+  }
+}
 
 function disposeObject(o) {
   o.traverse((child) => {
@@ -140,9 +185,11 @@ function spawnSpecimen(scene) {
   const variant = VARIANTS[_variantIdx];
 
   // Seeded RNG so the same biome+variant always produces the same look —
-  // makes A/B comparison across reloads possible.
+  // makes A/B comparison across reloads possible. An explicit seed param
+  // (via reroll or URL) overrides the derived value.
+  const seed = _seedOverride ?? _derivedSeed();
   const original = Math.random;
-  Math.random = mulberry32(0x1234 + _biomeIdx * 17 + _variantIdx * 31);
+  Math.random = mulberry32(seed);
   let c;
   try {
     c = variant.build(biome);
@@ -161,6 +208,7 @@ function spawnSpecimen(scene) {
   }
   scene.add(c.group);
   updateHud();
+  _syncUrl();
 }
 
 function updateHud() {
@@ -174,7 +222,7 @@ function updateHud() {
     `<span class="ihud-sep">·</span>` +
     `<span class="ihud-val">${variant.name}</span>` +
     pauseTag +
-    `<span class="ihud-keys">[/] biome &nbsp; ,/. variant &nbsp; r reroll &nbsp; space pause &nbsp; → step</span>`;
+    `<span class="ihud-keys">[/] biome &nbsp; ,/. variant &nbsp; r reroll &nbsp; space pause &nbsp; ←/→ step</span>`;
 }
 
 const _flatHeight = () => 0;
@@ -184,7 +232,7 @@ export function setupInspect(scene, renderer, camera, controls) {
   controls.target.set(0, 0.35, 0);
   controls.minDistance = 0.8;
   controls.maxDistance = 6;
-  controls.autoRotate = true;
+  controls.autoRotate = !_paused;
   controls.autoRotateSpeed = 0.6;
   controls.maxPolarAngle = Math.PI * 0.9;
   controls.update();
@@ -211,31 +259,39 @@ export function setupInspect(scene, renderer, camera, controls) {
     if (tag === "INPUT" || tag === "TEXTAREA") return;
     if (e.key === "[") {
       _biomeIdx = (_biomeIdx - 1 + BIOMES.length) % BIOMES.length;
+      _seedOverride = null; // new context — derive a fresh seed
       spawnSpecimen(scene);
     } else if (e.key === "]") {
       _biomeIdx = (_biomeIdx + 1) % BIOMES.length;
+      _seedOverride = null;
       spawnSpecimen(scene);
     } else if (e.key === ",") {
       _variantIdx = (_variantIdx - 1 + VARIANTS.length) % VARIANTS.length;
+      _seedOverride = null;
       spawnSpecimen(scene);
     } else if (e.key === ".") {
       _variantIdx = (_variantIdx + 1) % VARIANTS.length;
+      _seedOverride = null;
       spawnSpecimen(scene);
     } else if (e.key === "r") {
-      // Re-seed with a different offset so re-roll picks a different specimen
-      const r = Math.random;
-      Math.random = mulberry32(Date.now() & 0xffff);
+      // Pick a fresh random seed and keep it so the URL stays reproducible
+      _seedOverride = (Math.random() * 0x10000) | 0;
       spawnSpecimen(scene);
-      Math.random = r;
     } else if (e.key === " ") {
       _paused = !_paused;
-      _stepOnce = false;
+      _stepDt = 0;
       // Freeze camera auto-rotate too so screenshots compose cleanly
       controls.autoRotate = !_paused;
       updateHud();
+      _syncUrl();
       e.preventDefault();
     } else if (e.key === "ArrowRight" && _paused) {
-      _stepOnce = true;
+      _stepDt = 1 / 60;
+    } else if (e.key === "ArrowLeft" && _paused) {
+      // Negative dt steps integrated state (c.bob, c.age, hopOffset) back.
+      // Step-based randomness (think pauses, herding) isn't re-rolled, but
+      // for short back/forth nudges the visible result is symmetric.
+      _stepDt = -1 / 60;
     }
   });
 
@@ -250,11 +306,11 @@ export function stepInspect(dt, t) {
   let useDt = dt;
   let useT = t;
   if (_paused) {
-    if (_stepOnce) {
-      useDt = 1 / 60;
-      _frozenT += useDt;
+    if (_stepDt !== 0) {
+      useDt = _stepDt;
+      _frozenT += _stepDt;
       useT = _frozenT;
-      _stepOnce = false;
+      _stepDt = 0;
     } else {
       useDt = 0;
       useT = _frozenT;
