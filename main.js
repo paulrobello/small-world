@@ -25,6 +25,7 @@ import {
   stepStroll,
   isPhotoMode,
 } from "./src/ui.js";
+import { INSPECT, setupInspect, stepInspect } from "./src/inspect.js";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Renderer / scene / camera
@@ -113,16 +114,31 @@ function animate() {
   const dt = paused ? 0 : rawDt;
   const t = paused ? (state.lastSimT ?? rawT) : rawT;
 
+  // Fur shells read these once per frame — shared across all fur instances.
+  // Done before INSPECT branch so fuzzy specimens get lit correctly.
+  if (state.sunLight) {
+    sharedFurUniforms.uLightDir.value
+      .copy(state.sunLight.position)
+      .normalize();
+  }
+
+  if (INSPECT) {
+    // shared wind shader time still needs to advance for any swaying flora
+    state.windUniforms.uTime.value = t;
+    stepInspect(dt, t);
+    controls.update();
+    if (state.postfx && state.postfx.isActive && state.postfx.isActive()) {
+      state.postfx.render(scene, camera);
+    } else {
+      renderer.render(scene, camera);
+    }
+    return;
+  }
+
   if (!paused) {
     // shared wind shader time
     state.windUniforms.uTime.value = t;
     updateDayNight(t);
-    // Fur shells read these once per frame — shared across all fur instances.
-    if (state.sunLight) {
-      sharedFurUniforms.uLightDir.value
-        .copy(state.sunLight.position)
-        .normalize();
-    }
   }
 
   for (const c of state.creatures) stepCreature(c, dt, t, state.heightFn);
@@ -199,7 +215,11 @@ function animate() {
 
 initUi({ camera, canvas, controls, renderer });
 
-// kickoff — honour ?seed=XXXX in the URL if present
-const initialSeed = readSeedFromUrl() ?? newRandomSeed();
-generateWorld(initialSeed);
+// kickoff — honour ?seed=XXXX in the URL if present, or ?inspect=1 for studio
+if (INSPECT) {
+  setupInspect(scene, renderer, camera, controls);
+} else {
+  const initialSeed = readSeedFromUrl() ?? newRandomSeed();
+  generateWorld(initialSeed);
+}
 animate();
