@@ -8,9 +8,9 @@ import {
   setSceneRef,
   setControlsRef,
 } from "./src/world.js";
-import { stepCreature, stepCaterpillar, stepButterfly } from "./src/fauna.js";
+import { stepCreature, stepCaterpillar, stepButterfly, stepBee } from "./src/fauna.js";
 import { stepFlock } from "./src/birds.js";
-import { stepParticles, stepWater } from "./src/environment.js";
+import { stepParticles, stepWater, stepDirtPuffs } from "./src/environment.js";
 import { initUi, getFollowTarget, setFollowTarget } from "./src/ui.js";
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -77,9 +77,12 @@ function animate() {
   for (const c of state.caterpillars) stepCaterpillar(c, dt, t, state.heightFn);
   for (const b of state.butterflies)
     stepButterfly(b, dt, t, state.flowerSpots, state.heightFn);
+  for (const b of state.bees)
+    stepBee(b, dt, t, state.flowerSpots, state.heightFn);
   for (const f of state.flocks) stepFlock(f, dt, t);
   stepParticles(state.particles, dt, t);
   stepWater(state.waterMesh, dt, t);
+  stepDirtPuffs(state.dirtPuffs, dt);
 
   // Smoothly track a followed creature, if any.
   const ft = getFollowTarget();

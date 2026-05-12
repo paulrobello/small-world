@@ -171,6 +171,69 @@ export function stepParticles(points, dt, t) {
   points.geometry.attributes.position.needsUpdate = true;
 }
 
+// ─── dirt puffs (burrower emerge/sink bursts) ───
+//
+// Each puff is a small Points cloud of ~12 brown specks that fly outward,
+// fall under "gravity," and fade out. Self-contained — the world manager
+// adds them to the scene at spawn; stepDirtPuffs removes them at expiry.
+const PUFF_PARTICLES = 12;
+const PUFF_LIFE = 0.85; // seconds
+export function makeDirtPuff(x, y, z, baseColor) {
+  const positions = new Float32Array(PUFF_PARTICLES * 3);
+  const velocities = new Float32Array(PUFF_PARTICLES * 3);
+  for (let i = 0; i < PUFF_PARTICLES; i++) {
+    positions[i * 3 + 0] = x;
+    positions[i * 3 + 1] = y + 0.05;
+    positions[i * 3 + 2] = z;
+    const ang = Math.random() * Math.PI * 2;
+    const sp = 1.2 + Math.random() * 1.4;
+    velocities[i * 3 + 0] = Math.cos(ang) * sp;
+    velocities[i * 3 + 1] = 1.6 + Math.random() * 1.2;
+    velocities[i * 3 + 2] = Math.sin(ang) * sp;
+  }
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute("position", new THREE.BufferAttribute(positions, 3));
+  const mat = new THREE.PointsMaterial({
+    color: new THREE.Color(baseColor).offsetHSL(0, -0.05, 0.05),
+    size: 0.14,
+    transparent: true,
+    opacity: 0.9,
+    depthWrite: false,
+    sizeAttenuation: true,
+  });
+  const points = new THREE.Points(geo, mat);
+  points.userData = { velocities, age: 0 };
+  return points;
+}
+
+export function stepDirtPuffs(puffs, dt) {
+  if (!puffs || !puffs.length) return;
+  for (let p = puffs.length - 1; p >= 0; p--) {
+    const puff = puffs[p];
+    const d = puff.userData;
+    d.age += dt;
+    const pos = puff.geometry.attributes.position.array;
+    const v = d.velocities;
+    for (let i = 0; i < PUFF_PARTICLES; i++) {
+      const ix = i * 3;
+      pos[ix + 0] += v[ix + 0] * dt;
+      pos[ix + 1] += v[ix + 1] * dt;
+      pos[ix + 2] += v[ix + 2] * dt;
+      v[ix + 1] -= 6.5 * dt; // gravity
+      v[ix + 0] *= 0.94;
+      v[ix + 2] *= 0.94;
+    }
+    puff.geometry.attributes.position.needsUpdate = true;
+    puff.material.opacity = Math.max(0, 0.9 * (1 - d.age / PUFF_LIFE));
+    if (d.age >= PUFF_LIFE) {
+      if (puff.parent) puff.parent.remove(puff);
+      puff.geometry.dispose();
+      puff.material.dispose();
+      puffs.splice(p, 1);
+    }
+  }
+}
+
 // ─── ground cover + water ───
 export function placeInstanced(geo, mat, count, heightFn, opts = {}) {
   const {

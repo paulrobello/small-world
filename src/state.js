@@ -16,6 +16,8 @@ export const state = {
   creatures: [],
   caterpillars: [],
   butterflies: [],
+  bees: [],
+  dirtPuffs: [],
   flowerSpots: [],
   flocks: [],
   particles: null,

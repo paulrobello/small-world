@@ -20,7 +20,13 @@ import {
   makeIslandUnderside,
 } from "./terrain.js";
 import { FLORA_BUILDERS } from "./flora.js";
-import { makeCreature, makeCaterpillar, makeButterfly } from "./fauna.js";
+import {
+  makeCreature,
+  makeCaterpillar,
+  makeButterfly,
+  makeBee,
+  makeSwarm,
+} from "./fauna.js";
 import { makeFlock } from "./birds.js";
 import {
   makeParticles,
@@ -113,6 +119,8 @@ export function generateWorld(seed) {
   state.flocks = [];
   state.caterpillars = [];
   state.butterflies = [];
+  state.bees = [];
+  state.dirtPuffs = [];
   state.flowerSpots = [];
   state.particles = null;
   state.waterMesh = null;
@@ -224,10 +232,14 @@ export function generateWorld(seed) {
   }
   state.world.add(makePebbleField(biome, state.heightFn));
 
-  // creatures
+  // creatures — fish biomes don't get sleepers/burrowers (they float).
+  // We treat ncreatures as a budget; family parents consume +1 per kid,
+  // so the actual headcount can be slightly higher than the configured range.
   const ncreatures = randInt(...biome.creatureCount);
-  for (let i = 0; i < ncreatures; i++) {
-    const c = makeCreature(biome);
+  const allowGroundVariants = biome.creatureKind !== "fish";
+  let spawned = 0;
+  let budget = ncreatures;
+  function placeOnGround(c) {
     let p = { x: 0, z: 0 };
     let y = -10;
     for (let tries = 0; tries < 20 && y < 0; tries++) {
@@ -237,14 +249,61 @@ export function generateWorld(seed) {
     c.group.position.set(p.x, y + 0.4, p.z);
     state.world.add(c.group);
     state.creatures.push(c);
+    spawned++;
+  }
+  while (budget > 0) {
+    const r = Math.random();
+    // budget rolls: family (parent + kids), sleeper, burrower, plain
+    if (allowGroundVariants && budget >= 2 && r < 0.18) {
+      // family group — 1 parent + 1-2 kids
+      const parent = makeCreature(biome, { role: "parent" });
+      placeOnGround(parent);
+      budget--;
+      const kidCount = Math.min(budget, 1 + (Math.random() < 0.5 ? 1 : 0));
+      for (let k = 0; k < kidCount; k++) {
+        const kid = makeCreature(biome, {
+          role: "kid",
+          parent,
+          sizeMul: 0.6 + Math.random() * 0.1,
+        });
+        // spawn near the parent so they don't tow from the void
+        const pp = parent.group.position;
+        const ang = Math.random() * Math.PI * 2;
+        const off = 1.0 + Math.random() * 0.8;
+        const nx = pp.x + Math.cos(ang) * off;
+        const nz = pp.z + Math.sin(ang) * off;
+        kid.group.position.set(nx, state.heightFn(nx, nz) + 0.4, nz);
+        state.world.add(kid.group);
+        state.creatures.push(kid);
+        spawned++;
+        budget--;
+      }
+    } else if (allowGroundVariants && r < 0.30) {
+      placeOnGround(makeCreature(biome, { sleeper: true }));
+      budget--;
+    } else if (allowGroundVariants && r < 0.38) {
+      placeOnGround(makeCreature(biome, { burrower: true }));
+      budget--;
+    } else {
+      placeOnGround(makeCreature(biome));
+      budget--;
+    }
   }
 
-  // caterpillars — multi-segment crawlers
+  // caterpillars — multi-segment crawlers, occasionally swapped for snails
   const ncats = 1 + Math.floor(Math.random() * 3); // 1–3
   for (let i = 0; i < ncats; i++) {
     const cat = makeCaterpillar(biome);
     state.world.add(cat.group);
     state.caterpillars.push(cat);
+  }
+  // snails — 0-2 per world (cute, slow). They live in the caterpillars array
+  // so they get stepped and ray-picked alongside their cousins.
+  const nsnails = Math.random() < 0.7 ? (Math.random() < 0.4 ? 2 : 1) : 0;
+  for (let i = 0; i < nsnails; i++) {
+    const snail = makeCaterpillar(biome, { kind: "snail" });
+    state.world.add(snail.group);
+    state.caterpillars.push(snail);
   }
 
   // butterflies — drift between flower positions
@@ -270,6 +329,34 @@ export function generateWorld(seed) {
     state.butterflies.push(bf);
   }
 
+  // bee swarms — 1-2 swarms of 4-8 bees, only if there are flowers to dance
+  // around. Each swarm shares a target flower; bees flock to it together.
+  if (state.flowerSpots.length > 0) {
+    const swarmCount = 1 + (Math.random() < 0.55 ? 1 : 0);
+    for (let s = 0; s < swarmCount; s++) {
+      const swarm = makeSwarm();
+      const beesInSwarm = 4 + Math.floor(Math.random() * 5);
+      // seed the first target so all bees converge from frame 1
+      const seed = state.flowerSpots[
+        Math.floor(Math.random() * state.flowerSpots.length)
+      ];
+      swarm.target = new THREE.Vector3(seed.x, seed.y + 0.35, seed.z);
+      swarm.retargetIn = 4 + Math.random() * 5;
+      for (let i = 0; i < beesInSwarm; i++) {
+        const bee = makeBee(swarm, biome);
+        // spawn around the swarm seed flower
+        bee.group.position.set(
+          seed.x + (Math.random() - 0.5) * 1.0,
+          seed.y + 0.4 + Math.random() * 0.6,
+          seed.z + (Math.random() - 0.5) * 1.0
+        );
+        state.world.add(bee.group);
+        state.world.add(bee.trail);
+        state.bees.push(bee);
+      }
+    }
+  }
+
   // bird flocks
   const numFlocks = 1 + Math.floor(Math.random() * 3); // 1–3
   let totalBirds = 0;
@@ -288,7 +375,7 @@ export function generateWorld(seed) {
   document.getElementById("biome-name").textContent = biome.name;
   document.getElementById("biome-sub").textContent = biome.sub;
   document.getElementById("creature-count").textContent = String(
-    ncreatures + ncats
+    state.creatures.length + state.caterpillars.length
   ).padStart(2, "0");
   document.getElementById("flora-count").textContent = String(placed).padStart(2, "0");
   document.getElementById("bird-count").textContent = String(totalBirds).padStart(2, "0");

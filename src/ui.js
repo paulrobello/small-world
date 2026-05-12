@@ -2,6 +2,7 @@ import * as THREE from "three";
 import { state } from "./state.js";
 import { readSeedFromUrl, newRandomSeed } from "./seed.js";
 import { generateWorld, setFollowReleaseCallback } from "./world.js";
+import { wakeCreature } from "./fauna.js";
 
 let followTarget = null;
 let selectingCreature = false;
@@ -164,6 +165,30 @@ export function initUi({ camera, canvas, controls, renderer }) {
       setFollowTarget(creature);
       setSelectingCreature(false);
     }
+  });
+
+  // Hover-to-wake — when the cursor passes over a sleeping creature we wake
+  // them. Throttled so it only raycasts when there's something to wake.
+  let _lastHoverTs = 0;
+  canvas.addEventListener("mousemove", (e) => {
+    const now = performance.now();
+    if (now - _lastHoverTs < 60) return; // throttle to ~16Hz
+    _lastHoverTs = now;
+    // short-circuit if no sleepers in the world
+    const sleepers = state.creatures.filter((c) => c.isSleeper);
+    if (sleepers.length === 0) return;
+    const rect = canvas.getBoundingClientRect();
+    _ndc.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+    _ndc.y = -(((e.clientY - rect.top) / rect.height) * 2 - 1);
+    _raycaster.setFromCamera(_ndc, camera);
+    const groups = sleepers.map((c) => c.group);
+    const hits = _raycaster.intersectObjects(groups, true);
+    if (!hits.length) return;
+    let root = hits[0].object;
+    while (root && !groups.includes(root)) root = root.parent;
+    if (!root) return;
+    const c = sleepers.find((s) => s.group === root);
+    if (c) wakeCreature(c);
   });
 
   window.addEventListener("keydown", (e) => {

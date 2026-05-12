@@ -2,10 +2,19 @@ import * as THREE from "three";
 import { state } from "./state.js";
 import { jitterGeo } from "./util.js";
 import { pickGroundPoint } from "./terrain.js";
+import { makeDirtPuff } from "./environment.js";
 
-export function makeCreature(biome) {
+// opts:
+//   role         — "parent" | "kid"   (for family groups)
+//   parent       — reference to the parent creature (for kids)
+//   sizeMul      — overall size multiplier (default 1)
+//   sleeper      — spawn in sleeping state (walkers only)
+//   burrower     — spawn as burrower variant (walkers only)
+export function makeCreature(biome, opts = {}) {
   const isFish = biome.creatureKind === "fish";
-  const flies = isFish ? true : Math.random() < 0.3;
+  // sleepers and burrowers must be walkers — sleeping fliers in mid-air look broken
+  const forceWalk = !!(opts.sleeper || opts.burrower);
+  const flies = isFish ? true : forceWalk ? false : Math.random() < 0.3;
 
   const group = new THREE.Group();
   const palette = biome.creatureColors;
@@ -61,13 +70,16 @@ export function makeCreature(biome) {
       });
   const eyeGeo = new THREE.SphereGeometry(0.11, 10, 8);
   const pupilGeo = new THREE.SphereGeometry(0.05, 8, 8);
+  const eyeParts = [];
   for (const sign of [-1, 1]) {
     const eye = new THREE.Mesh(eyeGeo, eyeMat);
     eye.position.set(sign * 0.16, 0.17, 0.4);
     group.add(eye);
+    eyeParts.push(eye);
     const pupil = new THREE.Mesh(pupilGeo, pupilMat);
     pupil.position.set(sign * 0.16, 0.17, 0.48);
     group.add(pupil);
+    eyeParts.push(pupil);
   }
 
   // antennae for some
@@ -212,10 +224,25 @@ export function makeCreature(biome) {
     legGeoTemplate.dispose();
   }
 
-  const scale = 0.65 + Math.random() * 0.6;
+  const sizeMul = opts.sizeMul ?? 1;
+  const baseScale = 0.65 + Math.random() * 0.6;
+  // burrowers are notably smaller; kids inherit sizeMul on top
+  const burrowScale = opts.burrower ? 0.55 : 1;
+  const scale = baseScale * sizeMul * burrowScale;
   group.scale.setScalar(scale);
 
   const hoverHeight = 1.4 + Math.random() * 1.8;
+
+  const isSleeper = !!opts.sleeper && !flies;
+  const isBurrower = !!opts.burrower && !flies;
+
+  // Sleepers spawn already curled (eyes scaled to 0, body squashed).
+  // stepCreature animates the wake-up in reverse.
+  let wakeProgress = isSleeper ? 0 : 1;
+  if (isSleeper) {
+    for (const e of eyeParts) e.scale.setScalar(0);
+    body.scale.set(bodyBaseX * 1.18, bodyBaseY * 0.55, bodyBaseZ * 1.05);
+  }
 
   return {
     group,
@@ -223,9 +250,12 @@ export function makeCreature(biome) {
     feet,
     legs,
     wings,
+    eyeParts,
     flies,
     isFish,
     scale,
+    role: opts.role || null,         // "parent" | "kid" | null
+    parent: opts.parent || null,     // reference to parent creature (kids only)
     heading: Math.random() * Math.PI * 2,
     speed: flies ? 1.1 + Math.random() * 0.9 : 0.6 + Math.random() * 0.7,
     bob: Math.random() * Math.PI * 2,
@@ -239,15 +269,104 @@ export function makeCreature(biome) {
     currentHover: hoverHeight, // animated; lerps between hoverHeight and rest
     bodyBaseY,
     bodyBaseX,
+    bodyBaseZ,
     nextThink: Math.random() * 2.5,
     pauseUntil: 0,
     age: Math.random() * 100,
+    // sleeper state — when isSleeper, the creature won't think/move until woken.
+    isSleeper,
+    wakeProgress,             // 0 = fully asleep, 1 = fully awake
+    // burrower state — alternating cycles of above-ground/burrowed life
+    isBurrower,
+    burrowState: isBurrower ? "surface" : null, // "surface" | "descending" | "burrowed" | "emerging"
+    burrowTimer: isBurrower ? 2 + Math.random() * 4 : 0,
+    burrowDepth: 0,           // 0 = on ground, 1 = fully submerged
+    dirtColor: new THREE.Color(biome.cliff),
   };
+}
+
+// Wake a sleeping creature. Called from the UI hover handler.
+export function wakeCreature(c) {
+  if (!c.isSleeper) return;
+  // mark "waking" — wakeProgress will animate from 0→1 in stepCreature
+  c.isSleeper = false;          // logically awake (no longer blocks movement)
+  c._waking = true;             // animate the unfurl
+  // small heading kick so they wander off in a fresh direction
+  c.heading = Math.random() * Math.PI * 2;
+  c.nextThink = 0.3 + Math.random() * 0.6;
 }
 
 export function stepCreature(c, dt, t, heightFn) {
   c.age += dt;
   c.nextThink -= dt;
+
+  // ── sleeping (curled, eyes closed, no motion) ─────────────────────────
+  if (c.isSleeper) {
+    // slow "breathing" — body bob on y axis, very small amplitude
+    const breath = Math.sin(t * 1.1 + c.flapPhase) * 0.03;
+    c.body.scale.y = c.bodyBaseY * 0.55 + breath;
+    c.body.scale.x = c.bodyBaseX * (1.18 - breath * 0.3);
+    // keep planted at ground height
+    const ground = heightFn(c.group.position.x, c.group.position.z);
+    c.group.position.y = ground + 0.28 * c.scale;
+    return;
+  }
+
+  // ── waking-up animation (unfurl eyes + body) ──────────────────────────
+  if (c._waking) {
+    c.wakeProgress = Math.min(1, c.wakeProgress + dt * 1.8);
+    const w = c.wakeProgress;
+    for (const e of c.eyeParts) e.scale.setScalar(w);
+    // body lerps from curled → resting baseline (the squash anim below
+    // takes over once we're fully awake)
+    c.body.scale.x = c.bodyBaseX * (1.18 + (1 - 1.18) * w);
+    c.body.scale.y = c.bodyBaseY * (0.55 + (1 - 0.55) * w);
+    if (w >= 1) c._waking = false;
+  }
+
+  // ── burrower state machine ────────────────────────────────────────────
+  if (c.isBurrower) {
+    c.burrowTimer -= dt;
+    if (c.burrowState === "surface" && c.burrowTimer <= 0) {
+      c.burrowState = "descending";
+      c.burrowTimer = 0.6;
+    } else if (c.burrowState === "descending") {
+      c.burrowDepth = Math.min(1, c.burrowDepth + dt * 1.6);
+      if (c.burrowDepth >= 1) {
+        c.burrowState = "burrowed";
+        c.group.visible = false;
+        c.burrowTimer = 3 + Math.random() * 4;
+      }
+    } else if (c.burrowState === "burrowed" && c.burrowTimer <= 0) {
+      // teleport to a fresh nearby ground point and emerge there
+      const pos = c.group.position;
+      const ang = Math.random() * Math.PI * 2;
+      const dist = 2.5 + Math.random() * 4;
+      let nx = pos.x + Math.cos(ang) * dist;
+      let nz = pos.z + Math.sin(ang) * dist;
+      if (heightFn(nx, nz) < 0) {
+        // fall back to a nudge toward origin if we'd surface in the void
+        nx = pos.x * 0.5;
+        nz = pos.z * 0.5;
+      }
+      pos.x = nx;
+      pos.z = nz;
+      c.group.visible = true;
+      c.burrowState = "emerging";
+      // emit a small dirt puff at the surface point
+      const puff = makeDirtPuff(nx, heightFn(nx, nz), nz, c.dirtColor);
+      state.world.add(puff);
+      state.dirtPuffs.push(puff);
+    } else if (c.burrowState === "emerging") {
+      c.burrowDepth = Math.max(0, c.burrowDepth - dt * 1.8);
+      if (c.burrowDepth <= 0) {
+        c.burrowState = "surface";
+        c.burrowTimer = 5 + Math.random() * 6;
+      }
+    }
+    // while burrowed, skip all motion/animation
+    if (c.burrowState === "burrowed") return;
+  }
 
   // ── flier landing state machine ────────────────────────────────────────
   // Fish never land — they always float.
@@ -295,6 +414,24 @@ export function stepCreature(c, dt, t, heightFn) {
     c.nextThink = (c.flies ? 0.7 : 1.2) + Math.random() * (c.flies ? 1.8 : 3.0);
   }
 
+  // family kids — if we've drifted too far from the parent, bias heading
+  // toward them. Only nudges the heading; the normal think loop still adds jitter.
+  if (c.role === "kid" && c.parent && c.parent.group.parent) {
+    const pp = c.parent.group.position;
+    const me = c.group.position;
+    const dx = pp.x - me.x;
+    const dz = pp.z - me.z;
+    const d = Math.sqrt(dx * dx + dz * dz);
+    if (d > 2.2) {
+      const target = Math.atan2(dz, dx);
+      // shortest-arc lerp toward parent heading
+      let diff = target - c.heading;
+      while (diff > Math.PI) diff -= Math.PI * 2;
+      while (diff < -Math.PI) diff += Math.PI * 2;
+      c.heading += diff * Math.min(1, dt * 1.2);
+    }
+  }
+
   let moving = t > c.pauseUntil;
   // landed fliers stay put — they perched
   if (grounded) moving = false;
@@ -333,6 +470,10 @@ export function stepCreature(c, dt, t, heightFn) {
   } else {
     const bobAmp = moving ? 0.08 : 0.02;
     pos.y = ground + 0.35 * c.scale + Math.sin(c.bob) * bobAmp;
+    // burrowers sink/rise — burrowDepth=0 sits at surface, 1 fully under
+    if (c.isBurrower && c.burrowDepth > 0) {
+      pos.y -= c.burrowDepth * (0.8 + 0.4 * c.scale);
+    }
   }
 
   // face heading (smoothed)
@@ -343,10 +484,12 @@ export function stepCreature(c, dt, t, heightFn) {
   while (diff < -Math.PI) diff += Math.PI * 2;
   c.group.rotation.y = cur + diff * Math.min(1, dt * 6);
 
-  // squash & stretch body
-  const squash = 1 + Math.sin(c.bob) * 0.05 * (moving ? 1 : 0.4);
-  c.body.scale.y = c.bodyBaseY * squash;
-  c.body.scale.x = c.bodyBaseX / Math.sqrt(squash);
+  // squash & stretch body (the wake-up unfurl owns body scale until it finishes)
+  if (!c._waking) {
+    const squash = 1 + Math.sin(c.bob) * 0.05 * (moving ? 1 : 0.4);
+    c.body.scale.y = c.bodyBaseY * squash;
+    c.body.scale.x = c.bodyBaseX / Math.sqrt(squash);
+  }
 
   if (c.flies) {
     if (c.isFish) {
@@ -423,7 +566,10 @@ function findTrailPointAt(trail, distance) {
   return prev;
 }
 
-export function makeCaterpillar(biome) {
+// opts.kind: undefined | "snail". Snails are slow, have fewer segments,
+// and a fat shell parented to the last body segment.
+export function makeCaterpillar(biome, opts = {}) {
+  const isSnail = opts.kind === "snail";
   const group = new THREE.Group();
   const palette = biome.creatureColors;
   const baseCol = new THREE.Color(
@@ -432,9 +578,9 @@ export function makeCaterpillar(biome) {
   const altCol = baseCol.clone().offsetHSL(0, 0.05, 0.12);
 
   const segments = [];
-  const segCount = 3 + Math.floor(Math.random() * 4); // 3-6 body segments
+  const segCount = isSnail ? 2 : 3 + Math.floor(Math.random() * 4); // snails: short body
   // uniform radius for head + every body segment — keeps them touching
-  const segRadius = 0.28;
+  const segRadius = isSnail ? 0.24 : 0.28;
 
   // ── head ───────────────────────────────────────────────────────────────
   const headGeo = jitterGeo(
@@ -512,8 +658,43 @@ export function makeCaterpillar(biome) {
     segments.push(seg);
   }
 
-  const scale = 0.7 + Math.random() * 0.4;
+  const scale = isSnail ? 0.85 + Math.random() * 0.25 : 0.7 + Math.random() * 0.4;
   for (const s of segments) s.scale.setScalar(scale);
+
+  // snail shell — a fat, slightly squashed icosphere parented to the
+  // last body segment, in a contrasting color so it reads as a shell.
+  if (isSnail) {
+    const shellCol = baseCol.clone().offsetHSL(0.08, -0.05, -0.18);
+    const shellGeo = jitterGeo(new THREE.IcosahedronGeometry(segRadius * 1.55, 1), 0.04);
+    shellGeo.scale(1.0, 0.95, 0.85);
+    const shell = new THREE.Mesh(
+      shellGeo,
+      new THREE.MeshStandardMaterial({
+        color: shellCol,
+        flatShading: true,
+        roughness: 0.45,
+        metalness: 0.05,
+      })
+    );
+    // sit on top of the back segment, slightly forward
+    shell.position.set(0, segRadius * 0.55, segRadius * 0.1);
+    shell.castShadow = true;
+    // a couple of darker "ridges" — small thin rings around the equator
+    const ridgeMat = new THREE.MeshStandardMaterial({
+      color: shellCol.clone().offsetHSL(0, 0, -0.18),
+      flatShading: true,
+    });
+    for (let r = 0; r < 2; r++) {
+      const ring = new THREE.Mesh(
+        new THREE.TorusGeometry(segRadius * 1.25 - r * 0.07, 0.015, 6, 16),
+        ridgeMat
+      );
+      ring.rotation.x = Math.PI / 2;
+      ring.position.y = -0.04 + r * 0.07;
+      shell.add(ring);
+    }
+    segments[segments.length - 1].add(shell);
+  }
 
   // initial placement — anywhere on solid ground
   const sp = pickGroundPoint(0.55);
@@ -538,7 +719,7 @@ export function makeCaterpillar(biome) {
   head.position.set(startX, 0, startZ);
 
   return {
-    type: "caterpillar",
+    type: isSnail ? "snail" : "caterpillar",
     group,
     segments,
     segRadius,
@@ -546,7 +727,7 @@ export function makeCaterpillar(biome) {
     segSpacing,
     scale,
     heading: startHeading,
-    speed: 0.5 + Math.random() * 0.3,
+    speed: isSnail ? 0.12 + Math.random() * 0.08 : 0.5 + Math.random() * 0.3,
     nextThink: Math.random() * 2.5,
     age: Math.random() * 100,
   };
@@ -768,6 +949,207 @@ export function stepButterfly(b, dt, t, flowerSpots, heightFn) {
     const f = Math.sin(t * b.flapSpeed + b.flapPhase + phaseOff);
     w.pivot.rotation.z = w.side * (0.35 + f * 0.95);
   }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Bee swarms — small fast fliers that orbit a shared flower target.
+// A "swarm" is a shared object { target, retargetAt }; each bee references
+// it so they all migrate together when the swarm picks a new flower.
+// ─────────────────────────────────────────────────────────────────────────────
+const BEE_TRAIL_POINTS = 14;
+
+export function makeSwarm() {
+  return {
+    target: null,                         // current shared flower Vector3
+    retargetIn: 0,                        // seconds remaining until we pick a new flower
+    members: [],
+  };
+}
+
+export function makeBee(swarm, biome) {
+  const group = new THREE.Group();
+  // tiny dark body (slightly smaller than a butterfly)
+  const body = new THREE.Mesh(
+    new THREE.IcosahedronGeometry(0.035, 0),
+    new THREE.MeshStandardMaterial({
+      color: 0x141414,
+      flatShading: true,
+      roughness: 0.5,
+    })
+  );
+  body.scale.set(0.85, 0.85, 1.6);
+  body.castShadow = true;
+  group.add(body);
+
+  // a single yellow stripe band — small flat ring around the body
+  const stripe = new THREE.Mesh(
+    new THREE.IcosahedronGeometry(0.034, 0),
+    new THREE.MeshStandardMaterial({
+      color: 0xffd13b,
+      flatShading: true,
+      roughness: 0.45,
+    })
+  );
+  stripe.scale.set(0.92, 0.92, 0.45);
+  stripe.position.z = -0.005;
+  group.add(stripe);
+
+  // two tiny clear-ish wings — single pair, no fore/hind split
+  const wingMat = new THREE.MeshStandardMaterial({
+    color: 0xffffff,
+    transparent: true,
+    opacity: 0.55,
+    flatShading: true,
+    roughness: 0.2,
+    side: THREE.DoubleSide,
+  });
+  const wingGeo = new THREE.IcosahedronGeometry(0.07, 1);
+  wingGeo.scale(1.0, 0.04, 0.55);
+  const wings = [];
+  for (const side of [-1, 1]) {
+    const pivot = new THREE.Group();
+    pivot.position.set(0, 0.02, 0.01);
+    group.add(pivot);
+    const w = new THREE.Mesh(wingGeo, wingMat);
+    w.position.set(side * 0.06, 0, 0);
+    pivot.add(w);
+    wings.push({ pivot, side });
+  }
+
+  group.scale.setScalar(0.6);
+
+  // thin trail — a Line that draws the last N positions of this bee.
+  const trailPositions = new Float32Array(BEE_TRAIL_POINTS * 3);
+  const trailGeo = new THREE.BufferGeometry();
+  trailGeo.setAttribute("position", new THREE.BufferAttribute(trailPositions, 3));
+  trailGeo.setDrawRange(0, 0);
+  const trailMat = new THREE.LineBasicMaterial({
+    color: new THREE.Color(biome.accent).lerp(new THREE.Color("#ffd13b"), 0.55),
+    transparent: true,
+    opacity: 0.45,
+    depthWrite: false,
+  });
+  const trail = new THREE.Line(trailGeo, trailMat);
+  // the trail lives on the world group (sibling, not parented to group)
+  // so its segments stay in world space.
+
+  const bee = {
+    group,
+    body,
+    wings,
+    swarm,
+    trail,
+    trailPositions,
+    trailLen: 0,
+    // per-bee personality so they don't all overlap on the same point
+    orbitPhase: Math.random() * Math.PI * 2,
+    orbitSpeed: 1.6 + Math.random() * 1.3,
+    orbitRadius: 0.35 + Math.random() * 0.4,
+    flapPhase: Math.random() * Math.PI * 2,
+    flapSpeed: 55 + Math.random() * 18,
+    velocity: new THREE.Vector3(
+      (Math.random() - 0.5) * 1.5,
+      (Math.random() - 0.5) * 0.4,
+      (Math.random() - 0.5) * 1.5
+    ),
+  };
+  swarm.members.push(bee);
+  return bee;
+}
+
+function pickBeeFlower(flowerSpots) {
+  if (!flowerSpots.length) return null;
+  const f = flowerSpots[Math.floor(Math.random() * flowerSpots.length)];
+  return new THREE.Vector3(f.x, f.y + 0.35, f.z);
+}
+
+const _beeTarget = new THREE.Vector3();
+const _beeOffset = new THREE.Vector3();
+export function stepBee(b, dt, t, flowerSpots, heightFn) {
+  // shared swarm target — countdown shared across the swarm, so it's only
+  // decremented by the first bee each frame.
+  if (b === b.swarm.members[0]) b.swarm.retargetIn -= dt;
+  if (!b.swarm.target || b.swarm.retargetIn <= 0) {
+    const next = pickBeeFlower(flowerSpots);
+    if (next) {
+      b.swarm.target = next;
+      b.swarm.retargetIn = 4 + Math.random() * 5;
+    }
+  }
+
+  const pos = b.group.position;
+  const target = b.swarm.target;
+
+  // personal orbit offset — small circle in XZ around the shared target
+  const op = b.orbitPhase + t * b.orbitSpeed;
+  _beeOffset.set(
+    Math.cos(op) * b.orbitRadius,
+    Math.sin(op * 0.7) * 0.18,
+    Math.sin(op) * b.orbitRadius
+  );
+
+  if (target) {
+    _beeTarget.copy(target).add(_beeOffset);
+    const dx = _beeTarget.x - pos.x;
+    const dy = _beeTarget.y - pos.y;
+    const dz = _beeTarget.z - pos.z;
+    const d = Math.sqrt(dx * dx + dy * dy + dz * dz);
+    if (d > 0.001) {
+      // tight pursuit — much harder than butterflies
+      const accel = 8.0;
+      b.velocity.x += (dx / d) * accel * dt;
+      b.velocity.y += (dy / d) * accel * dt;
+      b.velocity.z += (dz / d) * accel * dt;
+    }
+  }
+
+  // small jitter so straight lines feel buzzy
+  b.velocity.x += (Math.random() - 0.5) * 1.0 * dt;
+  b.velocity.y += (Math.random() - 0.5) * 0.7 * dt;
+  b.velocity.z += (Math.random() - 0.5) * 1.0 * dt;
+
+  // damping (bees are tighter / less drifty than butterflies)
+  const damp = Math.pow(0.7, dt * 60);
+  b.velocity.x *= damp;
+  b.velocity.y *= damp;
+  b.velocity.z *= damp;
+
+  // cap speed — faster top end than butterflies
+  const sp = b.velocity.length();
+  const maxSp = 4.5;
+  if (sp > maxSp) b.velocity.multiplyScalar(maxSp / sp);
+
+  pos.x += b.velocity.x * dt;
+  pos.y += b.velocity.y * dt;
+  pos.z += b.velocity.z * dt;
+
+  const ground = heightFn(pos.x, pos.z);
+  const minY = ground + 0.18;
+  if (pos.y < minY) {
+    pos.y = minY;
+    if (b.velocity.y < 0) b.velocity.y = 0.3;
+  }
+
+  // orient — same trick as butterflies: lookAt(pos + velocity)
+  if (b.velocity.lengthSq() > 0.05) {
+    _beeTarget.copy(pos).add(b.velocity);
+    b.group.lookAt(_beeTarget);
+  }
+
+  // very fast wing buzz
+  for (const w of b.wings) {
+    const f = Math.sin(t * b.flapSpeed + b.flapPhase);
+    w.pivot.rotation.z = w.side * (0.5 + f * 0.85);
+  }
+
+  // trail — push current world-space pos to a small ring buffer, draw line
+  const arr = b.trailPositions;
+  // shift back by one slot (could be replaced by an index but N is tiny)
+  for (let i = (BEE_TRAIL_POINTS - 1) * 3; i >= 3; i--) arr[i] = arr[i - 3];
+  arr[0] = pos.x; arr[1] = pos.y; arr[2] = pos.z;
+  if (b.trailLen < BEE_TRAIL_POINTS) b.trailLen++;
+  b.trail.geometry.setDrawRange(0, b.trailLen);
+  b.trail.geometry.attributes.position.needsUpdate = true;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

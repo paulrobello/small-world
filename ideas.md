@@ -6,15 +6,6 @@ Remove completed items from this list, commit and push so its live on github pag
 
 ---
 
-## Creatures & Wildlife
-
-- **Family groups** (M) — let `makeCreature` occasionally spawn a "parent + 1-2 smaller copies" cluster. Smaller copies have a flocking term toward the parent. Touches `generateWorld` and `stepCreature`.
-- **Sleepers** (S) — some creatures spawn with `state: "sleeping"` — curled, slow-breathing, eyes closed (swap eye scale ~0). On click/hover they wake and wander off.
-- **Burrowers** (M) — small creatures that periodically dip below terrain and re-emerge at a nearby point. Needs a `state: "burrowed"` branch in `stepCreature` plus a small dirt-puff particle burst.
-- **Snail** (S) — slow caterpillar variant with a shell (icosphere parented to the body). Reuse caterpillar trail logic with a much smaller speed.
-- **Bee swarms** (S) — like butterflies but tight-flocking around `flowerSpots`, smaller, slightly faster, with a thin trail.
-- **Friendly fish** — see "Coral atoll" biome above.
-
 ## Particles
 
 - **`bubble`** — for water-adjacent biomes (marsh, coral). Slow upward drift with slight wobble.
