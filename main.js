@@ -50,7 +50,7 @@ const camera = new THREE.PerspectiveCamera(
   0.1,
   400
 );
-camera.position.set(26, 19, 26);
+camera.position.set(34, 25, 34);
 
 const controls = new OrbitControls(camera, canvas);
 controls.enableDamping = true;
@@ -58,7 +58,7 @@ controls.dampingFactor = 0.06;
 controls.autoRotate = true;
 controls.autoRotateSpeed = 0.22;
 controls.minDistance = 14;
-controls.maxDistance = 55;
+controls.maxDistance = 72;
 controls.maxPolarAngle = Math.PI / 2.15;
 controls.minPolarAngle = Math.PI / 6;
 controls.target.set(0, 1.5, 0);

@@ -7,6 +7,7 @@ import {
   NIGHT_SUN,
   NIGHT_HEMI_GROUND,
   DAY_NIGHT_PERIOD_S,
+  DENSITY_BASE,
   disposeGroup,
 } from "./state.js";
 import { BIOMES, WILDFLOWER_PALETTES, FLOWER_DENSITY } from "./biomes.js";
@@ -264,9 +265,13 @@ export function generateWorld(seed) {
   let attempts = 0;
   let crystalCount = 0;
   const CRYSTAL_CAP = 4;
+  // Density compensation: biome counts were tuned against a 38-unit base; the
+  // current ISLAND_SIZE may be larger. Scale linearly with width so a bigger
+  // world still feels populated rather than empty.
+  const densityScale = state.ISLAND_SIZE / DENSITY_BASE;
   const floraTarget = LOWFX
-    ? Math.max(8, Math.round(biome.floraCount * LOWFX_DENSITY))
-    : biome.floraCount;
+    ? Math.max(8, Math.round(biome.floraCount * densityScale * LOWFX_DENSITY))
+    : Math.round(biome.floraCount * densityScale);
   while (placed < floraTarget && attempts < floraTarget * 6) {
     attempts++;
     const p = pickGroundPoint(0.88);
@@ -302,7 +307,7 @@ export function generateWorld(seed) {
   // creatures — fish biomes don't get sleepers/burrowers (they float).
   // We treat ncreatures as a budget; family parents consume +1 per kid,
   // so the actual headcount can be slightly higher than the configured range.
-  const ncreatures = randInt(...biome.creatureCount);
+  const ncreatures = Math.max(1, Math.round(randInt(...biome.creatureCount) * densityScale));
   const allowGroundVariants = biome.creatureKind !== "fish";
   let spawned = 0;
   let budget = ncreatures;
