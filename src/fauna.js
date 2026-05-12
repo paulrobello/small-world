@@ -1005,12 +1005,18 @@ export function makeCaterpillar(biome, opts = {}) {
   });
   const eyeGeo = new THREE.SphereGeometry(0.09, 10, 8);
   const pupilGeo = new THREE.SphereGeometry(0.04, 8, 8);
+  // Eye depth follows segRadius so the eye sits inside the head sphere
+  // and only the pupil protrudes — the old hardcoded z=0.24 was sized for
+  // caterpillars (segRadius 0.28) and put snail eyes (segRadius 0.24) right
+  // at the head's surface, floating out in front.
+  const eyeZ = segRadius - 0.05;
+  const pupilZ = segRadius + 0.04;
   for (const sign of [-1, 1]) {
     const eye = new THREE.Mesh(eyeGeo, eyeMat);
-    eye.position.set(sign * 0.13, 0.12, 0.24);
+    eye.position.set(sign * 0.13, 0.12, eyeZ);
     head.add(eye);
     const pupil = new THREE.Mesh(pupilGeo, pupilMat);
-    pupil.position.set(sign * 0.13, 0.12, 0.31);
+    pupil.position.set(sign * 0.13, 0.12, pupilZ);
     head.add(pupil);
   }
 
