@@ -184,6 +184,19 @@ export function stepFlock(flock, dt, t) {
     pos.y += b.velocity.y * dt;
     pos.z += b.velocity.z * dt;
 
+    // Ground avoidance — keep birds well clear of the terrain. heightFn drops
+    // to large negatives in the void beyond the islands, so we also clamp to
+    // an absolute minimum altitude so flocks can't dive off the edge into the
+    // abyss and visually disappear.
+    const groundY = state.heightFn(pos.x, pos.z);
+    const floor = Math.max(groundY + 2.5, 3.5);
+    if (pos.y < floor) {
+      pos.y = floor;
+      if (b.velocity.y < 0) b.velocity.y *= -0.25;
+      // nudge upward so they don't graze the ground next frame either
+      b.velocity.y += 1.2 * dt;
+    }
+
     _flockTarget.copy(pos).add(b.velocity);
     b.group.lookAt(_flockTarget);
 

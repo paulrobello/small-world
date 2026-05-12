@@ -85,6 +85,44 @@
     <span class="settings-glyph">✦</span>
   </button>
 
+  <button class="help-toggle" id="help-toggle" aria-label="help" title="help">
+    <span class="help-glyph">?</span>
+  </button>
+
+  <aside class="help-panel" id="help-panel" aria-hidden="true">
+    <div class="settings-head">
+      <span class="settings-title">help &amp; controls</span>
+      <button class="settings-close" id="help-close" aria-label="close">×</button>
+    </div>
+
+    <section class="settings-section">
+      <div class="settings-section-label">modes</div>
+      <dl class="help-list">
+        <dt>regenerate</dt>
+        <dd>bottom-right button rolls a new world seed.</dd>
+        <dt>click-to-focus</dt>
+        <dd>tap any creature for a few seconds of close camera focus.</dd>
+        <dt>follow</dt>
+        <dd>settings → follow → tap a creature to track it indefinitely.</dd>
+        <dt>first-person stroll</dt>
+        <dd>settings → first-person stroll. wasd to walk · mouse to look · esc to exit.</dd>
+        <dt>photo mode</dt>
+        <dd>press <kbd>p</kbd> to hide the ui and freeze every animation for a clean screenshot.</dd>
+      </dl>
+    </section>
+
+    <section class="settings-section">
+      <div class="settings-section-label">controls</div>
+      <dl class="help-list">
+        <dt>drag</dt><dd>rotate the camera.</dd>
+        <dt>scroll · pinch</dt><dd>zoom in / out.</dd>
+        <dt>hover a sleeper</dt><dd>gently wakes drowsing creatures.</dd>
+        <dt><kbd>p</kbd></dt><dd>toggle photo mode.</dd>
+        <dt><kbd>esc</kbd></dt><dd>cancel focus · exit any mode · close panels.</dd>
+      </dl>
+    </section>
+  </aside>
+
   <aside class="settings-panel" id="settings-panel" aria-hidden="true">
     <div class="settings-head">
       <span class="settings-title">settings</span>
@@ -131,9 +169,20 @@
         <span class="setting-button-hint">click to select</span>
       </button>
 
+      <button class="setting-button" id="setting-stroll">
+        <span class="setting-button-label">first-person stroll</span>
+        <span class="setting-button-hint">wasd · mouse-look · esc to exit</span>
+      </button>
+
       <button class="setting-button" id="setting-reset-camera">
         <span class="setting-button-label">reset camera</span>
       </button>
+
+      <label class="setting">
+        <span class="setting-label">world size</span>
+        <input type="range" id="setting-scale" min="50" max="200" step="1" value="100" />
+        <span class="setting-value" id="setting-scale-value">100%</span>
+      </label>
     </section>
 
     <section class="settings-section">
@@ -167,6 +216,8 @@
   <div class="follow-banner" id="follow-banner" aria-hidden="true">
     click a creature to follow it · press <kbd>esc</kbd> to cancel
   </div>
+
+  <div class="photo-seed" id="photo-seed" aria-hidden="true">0x0000</div>
 
   <script type="module" src="main.js"></script>
 </body>

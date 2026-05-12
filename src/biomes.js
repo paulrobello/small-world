@@ -16,6 +16,8 @@ export const BIOMES = [
     particle: "leaf",
     creatureColors: ["#e9c46a", "#f4a261", "#e76f51", "#fff8e0"],
     creatureCount: [10, 16],
+    dusk: { sky: "#e6a070", fog: "#c98a64", sun: "#ffb070", ground: "#5d4530" },
+    night: { sky: "#0d1a22", fog: "#0a1418", sun: "#7090a8", ground: "#0a1810" },
   },
   {
     id: "desert",
@@ -34,6 +36,8 @@ export const BIOMES = [
     particle: "dust",
     creatureColors: ["#fefae0", "#dda15e", "#bc6c25", "#3d405b"],
     creatureCount: [6, 11],
+    dusk: { sky: "#e07a4c", fog: "#b85a3a", sun: "#ff8050", ground: "#5e2828" },
+    night: { sky: "#160a18", fog: "#0d0716", sun: "#7068a8", ground: "#1a0a0e" },
   },
   {
     id: "frozen",
@@ -52,6 +56,8 @@ export const BIOMES = [
     particle: "snow",
     creatureColors: ["#1d3557", "#457b9d", "#a8dadc", "#f1faee"],
     creatureCount: [8, 13],
+    dusk: { sky: "#a6b0d0", fog: "#8a98b6", sun: "#d8c8e8", ground: "#3a4258" },
+    night: { sky: "#0a1024", fog: "#070b1e", sun: "#a0b0d8", ground: "#0a0e1a" },
   },
   {
     id: "marsh",
@@ -71,6 +77,8 @@ export const BIOMES = [
     particle: "rain",
     creatureColors: ["#ffba08", "#faa307", "#f48c06", "#ffd166"],
     creatureCount: [12, 18],
+    dusk: { sky: "#2a1a48", fog: "#3a2058", sun: "#e09abf", ground: "#3d2c5a" },
+    night: { sky: "#06031a", fog: "#040214", sun: "#8a6ed8", ground: "#0a0518" },
   },
   {
     id: "ashen",
@@ -89,6 +97,8 @@ export const BIOMES = [
     particle: "ember",
     creatureColors: ["#e63946", "#f77f00", "#fcbf49", "#ffd166"],
     creatureCount: [6, 10],
+    dusk: { sky: "#2a1820", fog: "#3a2028", sun: "#ff6840", ground: "#2a1820" },
+    night: { sky: "#080610", fog: "#050308", sun: "#a04030", ground: "#050308" },
   },
   {
     id: "golden",
@@ -107,6 +117,8 @@ export const BIOMES = [
     particle: "pollen",
     creatureColors: ["#283618", "#606c38", "#bc6c25", "#fefae0"],
     creatureCount: [10, 15],
+    dusk: { sky: "#e89a5a", fog: "#c0824c", sun: "#ffc070", ground: "#5a3a18" },
+    night: { sky: "#0a0a1c", fog: "#06061a", sun: "#a08a70", ground: "#100805" },
   },
   {
     id: "mossy",
@@ -125,6 +137,8 @@ export const BIOMES = [
     particle: "lichenmote",
     creatureColors: ["#a3b18a", "#cdef8f", "#7bb074", "#f6ffe0"],
     creatureCount: [8, 13],
+    dusk: { sky: "#7a8488", fog: "#6a7a6e", sun: "#d8e0a0", ground: "#2a3624" },
+    night: { sky: "#070d10", fog: "#040608", sun: "#88a098", ground: "#080e08" },
   },
   {
     id: "twilight",
@@ -144,6 +158,8 @@ export const BIOMES = [
     creatureColors: ["#ffd97a", "#ffb070", "#c9a8e8", "#fff2b3"],
     creatureCount: [10, 15],
     glowFlowers: true,
+    dusk: { sky: "#3a3470", fog: "#2c285a", sun: "#ffb070", ground: "#1a204a" },
+    night: { sky: "#08081a", fog: "#040414", sun: "#a890d8", ground: "#06081a" },
   },
   {
     id: "coral",
@@ -164,6 +180,8 @@ export const BIOMES = [
     creatureColors: ["#ff7a8c", "#ffb88a", "#7ad6e0", "#fff2b3"],
     creatureCount: [9, 14],
     creatureKind: "fish",
+    dusk: { sky: "#e8a8c0", fog: "#c890a0", sun: "#ff8090", ground: "#7a4a4a" },
+    night: { sky: "#04102a", fog: "#021024", sun: "#a8b8d0", ground: "#102028" },
   },
   {
     id: "cloud",
@@ -183,6 +201,8 @@ export const BIOMES = [
     creatureColors: ["#ffffff", "#cdd8f0", "#9ec0ff", "#fff2b3"],
     creatureCount: [9, 14],
     cloudlike: true,
+    dusk: { sky: "#e8c8d8", fog: "#d0b4cc", sun: "#ffd8d0", ground: "#a098b0" },
+    night: { sky: "#101830", fog: "#0a1228", sun: "#b8c0d8", ground: "#16203a" },
   },
   {
     id: "grove",
@@ -201,6 +221,8 @@ export const BIOMES = [
     particle: "pollen",
     creatureColors: ["#ff90c0", "#fff2b3", "#9c84d4", "#ffd1a3"],
     creatureCount: [10, 15],
+    dusk: { sky: "#9a7ab0", fog: "#7a5e90", sun: "#ffb0e0", ground: "#2a253a" },
+    night: { sky: "#08081e", fog: "#04041a", sun: "#c890d8", ground: "#08060e" },
   },
   {
     id: "obsidian",
@@ -220,6 +242,8 @@ export const BIOMES = [
     creatureColors: ["#1a1018", "#3a2018", "#ff7a2a", "#ffb060"],
     creatureCount: [7, 11],
     glowEyes: true,
+    dusk: { sky: "#2a1018", fog: "#1a0810", sun: "#ff6020", ground: "#1a0e0a" },
+    night: { sky: "#04020a", fog: "#020108", sun: "#ff5020", ground: "#02010a" },
   },
 ];
 

@@ -51,8 +51,20 @@ export function setFollowReleaseCallback(fn) {
 }
 
 // Slow day/night cycle. Lerps a handful of scene values between the biome's
-// daytime palette and a generic deep-night palette using a cosine curve.
+// day, dusk, and night palettes using a cosine curve. dusk is optional — when
+// absent, the blend is a simple day→night two-stop.
 const AMBIENT_LIFT = new THREE.Color("#a8b4c8");
+
+// Three-stop color blend: f=1 day, f=0.5 dusk, f=0 night. If dusk is null,
+// falls back to a two-stop day→night lerp (linear in f).
+function blendPalette(out, day, dusk, night, f) {
+  if (!dusk) return out.copy(day).lerp(night, 1 - f);
+  if (f >= 0.5) {
+    return out.copy(dusk).lerp(day, (f - 0.5) * 2);
+  }
+  return out.copy(night).lerp(dusk, f * 2);
+}
+
 export function updateDayNight(t) {
   if (!state.dayNight || !state.sunLight || !state.hemiLight || !_scene) return;
   let dayFactor;
@@ -66,11 +78,13 @@ export function updateDayNight(t) {
   }
   const ab = state.userSettings.ambientBoost ?? 0;
   // ambient boost reduces night-darkening so dark biomes don't swallow the lift
-  const nightAmt = (1 - dayFactor) * (1 - ab * 0.7);
+  const liftedDay = dayFactor + (1 - dayFactor) * ab * 0.7;
+  const nightAmt = 1 - liftedDay;
+  const dn = state.dayNight;
 
-  _scene.background.copy(state.dayNight.sky).lerp(NIGHT_SKY, nightAmt);
+  blendPalette(_scene.background, dn.sky, dn.duskSky, dn.nightSky, liftedDay);
   if (ab > 0) _scene.background.lerp(AMBIENT_LIFT, ab * 0.55);
-  _scene.fog.color.copy(state.dayNight.fog).lerp(NIGHT_FOG, nightAmt);
+  blendPalette(_scene.fog.color, dn.fog, dn.duskFog, dn.nightFog, liftedDay);
   if (ab > 0) _scene.fog.color.lerp(AMBIENT_LIFT, ab * 0.6);
   // reveal animation — fog starts thick, eases back to biome default over ~1.5s
   let revealMul = 1;
@@ -88,7 +102,7 @@ export function updateDayNight(t) {
     (1 - ab * 0.5) * // thinner fog at high ambient
     revealMul;
 
-  state.sunLight.color.copy(state.dayNight.sun).lerp(NIGHT_SUN, nightAmt);
+  blendPalette(state.sunLight.color, dn.sun, dn.duskSun, dn.nightSun, liftedDay);
   state.sunLight.intensity = 0.45 + dayFactor * 0.95 + ab * 1.6;
   const sunAngle = phase + Math.PI;
   const sunR = 26;
@@ -98,17 +112,23 @@ export function updateDayNight(t) {
     Math.sin(sunAngle * 0.5) * 12 + 4
   );
 
-  state.hemiLight.color.copy(state.dayNight.skyForHemi).lerp(NIGHT_SKY, nightAmt);
+  blendPalette(state.hemiLight.color, dn.skyForHemi, dn.duskSky, dn.nightSky, liftedDay);
   if (ab > 0) state.hemiLight.color.lerp(AMBIENT_LIFT, ab * 0.7);
-  state.hemiLight.groundColor.copy(state.dayNight.ground).lerp(NIGHT_HEMI_GROUND, nightAmt);
+  blendPalette(
+    state.hemiLight.groundColor,
+    dn.ground,
+    dn.duskGround,
+    dn.nightGround,
+    liftedDay
+  );
   if (ab > 0) state.hemiLight.groundColor.lerp(AMBIENT_LIFT, ab * 0.5);
   // hemi fill scales hard with ambient so dark biomes actually brighten
   state.hemiLight.intensity = 0.32 + dayFactor * 0.45 + ab * 4.5;
 
   if (state.parallaxRingMesh) {
     state.parallaxRingMesh.material.color
-      .copy(state.dayNight.ringTint)
-      .lerp(NIGHT_FOG, nightAmt * 0.7);
+      .copy(dn.ringTint)
+      .lerp(dn.nightFog, nightAmt * 0.7);
   }
 }
 
@@ -134,6 +154,7 @@ export function generateWorld(seed) {
   disposeGroup(state.world);
   _scene.remove(state.world);
   state.world = new THREE.Group();
+  state.world.scale.setScalar(state.userSettings.worldScale ?? 1);
   _scene.add(state.world);
   state.creatures = [];
   state.flocks = [];
@@ -193,12 +214,22 @@ export function generateWorld(seed) {
   state.world.add(ring);
   state.parallaxRingMesh = ring;
 
+  const nightP = biome.night ?? {};
+  const duskP = biome.dusk ?? null;
   state.dayNight = {
     sky: new THREE.Color(biome.sky),
     skyForHemi: new THREE.Color(biome.sky),
     fog: new THREE.Color(biome.fog),
     sun: new THREE.Color(biome.sun),
     ground: new THREE.Color(biome.ground[0]),
+    nightSky: new THREE.Color(nightP.sky ?? NIGHT_SKY),
+    nightFog: new THREE.Color(nightP.fog ?? NIGHT_FOG),
+    nightSun: new THREE.Color(nightP.sun ?? NIGHT_SUN),
+    nightGround: new THREE.Color(nightP.ground ?? NIGHT_HEMI_GROUND),
+    duskSky: duskP ? new THREE.Color(duskP.sky) : null,
+    duskFog: duskP ? new THREE.Color(duskP.fog) : null,
+    duskSun: duskP ? new THREE.Color(duskP.sun) : null,
+    duskGround: duskP ? new THREE.Color(duskP.ground) : null,
     ringTint: ring.material.color.clone(),
     fogDensity: biome.fogDensity,
   };

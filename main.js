@@ -11,7 +11,14 @@ import {
 import { stepCreature, stepCaterpillar, stepButterfly, stepBee } from "./src/fauna.js";
 import { stepFlock } from "./src/birds.js";
 import { stepParticles, stepWater, stepDirtPuffs } from "./src/environment.js";
-import { initUi, getFollowTarget, setFollowTarget } from "./src/ui.js";
+import {
+  initUi,
+  getFollowTarget,
+  setFollowTarget,
+  isStrolling,
+  stepStroll,
+  isPhotoMode,
+} from "./src/ui.js";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Renderer / scene / camera
@@ -66,12 +73,22 @@ setControlsRef(controls);
 const clock = new THREE.Clock();
 function animate() {
   requestAnimationFrame(animate);
-  const dt = Math.min(clock.getDelta(), 0.05);
-  const t = clock.elapsedTime;
+  const rawDt = Math.min(clock.getDelta(), 0.05);
+  const rawT = clock.elapsedTime;
+  // Photo mode freezes the simulation so users can capture a still frame.
+  // We hold dt at 0 AND freeze `t` (step funcs use sin(t*speed) for idle
+  // bobbing, which would still drift if t kept advancing). Camera input
+  // and rendering keep running on the frozen state.
+  const paused = isPhotoMode();
+  if (!paused) state.lastSimT = rawT;
+  const dt = paused ? 0 : rawDt;
+  const t = paused ? (state.lastSimT ?? rawT) : rawT;
 
-  // shared wind shader time
-  state.windUniforms.uTime.value = t;
-  updateDayNight(t);
+  if (!paused) {
+    // shared wind shader time
+    state.windUniforms.uTime.value = t;
+    updateDayNight(t);
+  }
 
   for (const c of state.creatures) stepCreature(c, dt, t, state.heightFn);
   for (const c of state.caterpillars) stepCaterpillar(c, dt, t, state.heightFn);
@@ -84,19 +101,22 @@ function animate() {
   stepWater(state.waterMesh, dt, t);
   stepDirtPuffs(state.dirtPuffs, dt);
 
-  // Smoothly track a followed creature, if any.
-  const ft = getFollowTarget();
-  if (ft && ft.group && ft.group.parent) {
-    const p = ft.group.position;
-    const k = Math.min(1, dt * 4);
-    controls.target.x += (p.x - controls.target.x) * k;
-    controls.target.y += (p.y + 0.6 - controls.target.y) * k;
-    controls.target.z += (p.z - controls.target.z) * k;
-  } else if (ft) {
-    setFollowTarget(null);
+  if (isStrolling()) {
+    stepStroll(dt);
+  } else {
+    // Smoothly track a followed creature, if any.
+    const ft = getFollowTarget();
+    if (ft && ft.group && ft.group.parent) {
+      const p = ft.group.position;
+      const k = Math.min(1, dt * 4);
+      controls.target.x += (p.x - controls.target.x) * k;
+      controls.target.y += (p.y + 0.6 - controls.target.y) * k;
+      controls.target.z += (p.z - controls.target.z) * k;
+    } else if (ft) {
+      setFollowTarget(null);
+    }
+    controls.update();
   }
-
-  controls.update();
   renderer.render(scene, camera);
 }
 

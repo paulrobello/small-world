@@ -10,14 +10,6 @@ Remove completed items from this list, commit and push so its live on github pag
 
 - **Caves / arches** (L) — carve negative-space holes through the island using a third noise field with a CSG-style threshold. Probably needs a marching-cubes pass instead of `PlaneGeometry` — large change, save for later.
 
-## Camera & Interaction
-
-- **Click-to-focus** (S) — clicking a creature smoothly pans the OrbitControls target to it and follows for a few seconds before releasing. Raycaster on the creatures array.
-- **Photo mode** (S) — `P` hides HUD, freezes auto-rotate, prints the seed at the bottom of the canvas. Useful for shareable screenshots.
-- **Time-of-day slider** (M) — manipulate sun color/position + fog density. Each biome defines `sun.day` / `sun.dusk` / `sun.night` palettes. Auto-cycle option.
-- **First-person stroll** (M) — a "ground-walk" camera mode that hovers at creature height and uses `heightFn` to follow terrain. Mouse-look only, no physics.
-- **Pinch-to-shrink / -grow** (S) — gentle scale knob on the whole `world` group so the terrarium can fit different layouts.
-
 ## Audio
 
 - **Ambient bed per biome** (S) — soft loop chosen by biome id (wind, rustle, drips, crackle). One `<audio>` element, crossfade on regenerate. Mute toggle in HUD.

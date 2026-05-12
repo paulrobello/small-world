@@ -7,12 +7,21 @@ import { BIOMES } from "./biomes.js";
 
 let followTarget = null;
 let selectingCreature = false;
+// Auto-release timestamp for transient focus (click-to-focus). performance.now()
+// in ms; 0 means "follow indefinitely until manually released".
+let _transientUntil = 0;
+const TRANSIENT_FOCUS_MS = 5000;
+
+// First-person stroll state — populated when enabled, null otherwise.
+let _stroll = null;
+// Bound exit function for the Escape handler; set inside initUi().
+let _exitStroll = () => {};
 
 // Persisted settings ----------------------------------------------------------
 // Only fields explicitly listed here are read/written; unknown keys in
 // localStorage are ignored so we can change the schema later without breaking.
 const SETTINGS_KEY = "smallworld:settings:v1";
-const PERSISTED_KEYS = ["fogMultiplier", "autoCycle", "manualDayFactor", "autoRotate", "ambientBoost"];
+const PERSISTED_KEYS = ["fogMultiplier", "autoCycle", "manualDayFactor", "autoRotate", "ambientBoost", "worldScale"];
 const BOOKMARKS_KEY = "smallworld:bookmarks:v1";
 const BIOME_FILTER_KEY = "smallworld:biomefilter:v1";
 
@@ -81,7 +90,65 @@ function saveBiomeFilter(set) {
 }
 
 export function getFollowTarget() {
+  if (followTarget && _transientUntil && performance.now() > _transientUntil) {
+    setFollowTarget(null);
+  }
   return followTarget;
+}
+
+export function isStrolling() {
+  return _stroll !== null;
+}
+
+export function isPhotoMode() {
+  return document.body.classList.contains("photo-mode");
+}
+
+// Advance the first-person camera using accumulated WASD keys and current
+// yaw/pitch. Caller (main.js) calls this in lieu of controls.update() each
+// frame while stroll mode is active.
+export function stepStroll(dt) {
+  if (!_stroll) return;
+  const { camera, keys, savedTarget } = _stroll;
+  const speed = (keys.shift ? 12 : 6) * dt;
+  let fx = 0;
+  let fz = 0;
+  if (keys.w) fz -= 1;
+  if (keys.s) fz += 1;
+  if (keys.a) fx -= 1;
+  if (keys.d) fx += 1;
+  if (fx !== 0 || fz !== 0) {
+    const len = Math.hypot(fx, fz);
+    fx /= len;
+    fz /= len;
+    // Move along the heading: forward is -Z rotated by yaw, strafe is +X rotated.
+    const cy = Math.cos(_stroll.yaw);
+    const sy = Math.sin(_stroll.yaw);
+    const dx = (fx * cy - fz * sy) * speed;
+    const dz = (fx * sy + fz * cy) * speed;
+    camera.position.x += dx;
+    camera.position.z += dz;
+  }
+  // Lock camera to terrain height + eye offset, but never sink below the
+  // base plane so walking off an island just hovers at minimum height.
+  const groundY = Math.max(0, state.heightFn(camera.position.x, camera.position.z));
+  const targetY = groundY + 1.5;
+  // smooth Y so cresting bumps doesn't jolt
+  camera.position.y += (targetY - camera.position.y) * Math.min(1, dt * 8);
+
+  // Apply yaw / pitch as a quaternion so the camera doesn't roll.
+  camera.rotation.order = "YXZ";
+  camera.rotation.y = _stroll.yaw;
+  camera.rotation.x = _stroll.pitch;
+  camera.rotation.z = 0;
+
+  // Keep OrbitControls' target far ahead so when we exit, the orbit
+  // anchor lands somewhere sensible (avoids snapping the camera back).
+  savedTarget.set(
+    camera.position.x - Math.sin(_stroll.yaw) * 8,
+    camera.position.y - Math.sin(_stroll.pitch) * 8,
+    camera.position.z - Math.cos(_stroll.yaw) * 8
+  );
 }
 
 let _settingsPanel = null;
@@ -89,16 +156,21 @@ let _followButton = null;
 let _followBanner = null;
 let _canvas = null;
 
-export function setFollowTarget(creatureOrNull) {
+export function setFollowTarget(creatureOrNull, opts = {}) {
   followTarget = creatureOrNull;
+  _transientUntil = creatureOrNull && opts.transient
+    ? performance.now() + TRANSIENT_FOCUS_MS
+    : 0;
   if (!_followButton) return;
   _followButton.classList.toggle("active", !!followTarget);
-  _followButton.querySelector(".setting-button-label").textContent = followTarget
-    ? "release follow"
+  const label = followTarget
+    ? (opts.transient ? "focusing…" : "release follow")
     : "follow a creature";
-  _followButton.querySelector(".setting-button-hint").textContent = followTarget
-    ? "tracking · click to release"
+  const hint = followTarget
+    ? (opts.transient ? "auto-release shortly · esc to cancel" : "tracking · click to release")
     : "click to select";
+  _followButton.querySelector(".setting-button-label").textContent = label;
+  _followButton.querySelector(".setting-button-hint").textContent = hint;
 }
 
 function setSettingsOpen(open) {
@@ -134,6 +206,18 @@ export function initUi({ camera, canvas, controls, renderer }) {
   );
   settingsClose.addEventListener("click", () => setSettingsOpen(false));
 
+  const helpPanel = document.getElementById("help-panel");
+  const helpToggle = document.getElementById("help-toggle");
+  const helpClose = document.getElementById("help-close");
+  function setHelpOpen(open) {
+    helpPanel.classList.toggle("open", open);
+    helpPanel.setAttribute("aria-hidden", open ? "false" : "true");
+  }
+  helpToggle.addEventListener("click", () =>
+    setHelpOpen(!helpPanel.classList.contains("open"))
+  );
+  helpClose.addEventListener("click", () => setHelpOpen(false));
+
   _followButton.addEventListener("click", () => {
     if (followTarget) {
       setFollowTarget(null);
@@ -146,6 +230,124 @@ export function initUi({ camera, canvas, controls, renderer }) {
     setFollowTarget(null);
     setSelectingCreature(false);
     controls.target.set(0, 1.5, 0);
+  });
+
+  // First-person stroll ----------------------------------------------------
+  const strollBtn = document.getElementById("setting-stroll");
+  function syncStrollButton() {
+    const on = isStrolling();
+    strollBtn.classList.toggle("active", on);
+    strollBtn.querySelector(".setting-button-label").textContent = on
+      ? "exit stroll mode"
+      : "first-person stroll";
+    strollBtn.querySelector(".setting-button-hint").textContent = on
+      ? "wasd · mouse-look · esc to exit"
+      : "wasd · mouse-look · esc to exit";
+  }
+  function enterStroll() {
+    if (_stroll) return;
+    // Release any other active camera mode so they don't fight.
+    setFollowTarget(null);
+    setSelectingCreature(false);
+    const savedAutoRotate = controls.autoRotate;
+    controls.autoRotate = false;
+    controls.enabled = false;
+    // Initial yaw/pitch from current camera facing toward controls target.
+    const dx = controls.target.x - camera.position.x;
+    const dz = controls.target.z - camera.position.z;
+    const dy = controls.target.y - camera.position.y;
+    const yaw = Math.atan2(-dx, -dz);
+    const horiz = Math.hypot(dx, dz);
+    const pitch = Math.atan2(dy, horiz);
+    // Drop the camera to creature-eye height on the terrain at its current XZ.
+    const groundY = Math.max(0, state.heightFn(camera.position.x, camera.position.z));
+    _stroll = {
+      camera,
+      keys: { w: false, a: false, s: false, d: false, shift: false },
+      yaw,
+      pitch,
+      savedCam: {
+        pos: camera.position.clone(),
+        target: controls.target.clone(),
+        autoRotate: savedAutoRotate,
+      },
+      savedTarget: controls.target,
+      handlers: {},
+    };
+    camera.position.y = groundY + 1.5;
+
+    // Pointer lock so the mouse can move infinitely without leaving the
+    // canvas. Browsers require this from a user gesture (button click).
+    canvas.requestPointerLock?.();
+
+    const onMove = (e) => {
+      if (!_stroll) return;
+      const sens = 0.0022;
+      _stroll.yaw -= e.movementX * sens;
+      _stroll.pitch -= e.movementY * sens;
+      const lim = Math.PI / 2 - 0.05;
+      if (_stroll.pitch > lim) _stroll.pitch = lim;
+      if (_stroll.pitch < -lim) _stroll.pitch = -lim;
+    };
+    const onKey = (down) => (e) => {
+      if (!_stroll) return;
+      const k = e.key.toLowerCase();
+      if (k === "w") _stroll.keys.w = down;
+      else if (k === "a") _stroll.keys.a = down;
+      else if (k === "s") _stroll.keys.s = down;
+      else if (k === "d") _stroll.keys.d = down;
+      else if (k === "shift") _stroll.keys.shift = down;
+      else return;
+      e.preventDefault();
+    };
+    const onKeyDown = onKey(true);
+    const onKeyUp = onKey(false);
+    const onLockChange = () => {
+      if (document.pointerLockElement !== canvas) exitStroll();
+    };
+    document.addEventListener("mousemove", onMove);
+    window.addEventListener("keydown", onKeyDown);
+    window.addEventListener("keyup", onKeyUp);
+    document.addEventListener("pointerlockchange", onLockChange);
+    _stroll.handlers = { onMove, onKeyDown, onKeyUp, onLockChange };
+    syncStrollButton();
+  }
+  function exitStroll() {
+    if (!_stroll) return;
+    const { handlers, savedCam } = _stroll;
+    document.removeEventListener("mousemove", handlers.onMove);
+    window.removeEventListener("keydown", handlers.onKeyDown);
+    window.removeEventListener("keyup", handlers.onKeyUp);
+    document.removeEventListener("pointerlockchange", handlers.onLockChange);
+    if (document.pointerLockElement === canvas) document.exitPointerLock?.();
+    // Restore the orbit anchor and camera. Re-enable orbit controls so the
+    // user can rotate again from where they left off.
+    camera.position.copy(savedCam.pos);
+    controls.target.copy(savedCam.target);
+    controls.autoRotate = savedCam.autoRotate && state.userSettings.autoRotate;
+    controls.enabled = true;
+    _stroll = null;
+    syncStrollButton();
+  }
+  strollBtn.addEventListener("click", () => {
+    if (_stroll) exitStroll();
+    else enterStroll();
+  });
+  syncStrollButton();
+  // Expose for the Escape handler below
+  _exitStroll = exitStroll;
+
+  const scaleSlider = document.getElementById("setting-scale");
+  const scaleValue = document.getElementById("setting-scale-value");
+  scaleSlider.value = String(Math.round((state.userSettings.worldScale ?? 1) * 100));
+  scaleValue.textContent = scaleSlider.value + "%";
+  state.world.scale.setScalar(state.userSettings.worldScale ?? 1);
+  scaleSlider.addEventListener("input", () => {
+    const v = Number(scaleSlider.value);
+    state.userSettings.worldScale = v / 100;
+    state.world.scale.setScalar(state.userSettings.worldScale);
+    scaleValue.textContent = v + "%";
+    saveSettings();
   });
 
   const autoRotateInput = document.getElementById("setting-auto-rotate");
@@ -390,13 +592,32 @@ export function initUi({ camera, canvas, controls, renderer }) {
   // Refresh the button label whenever the world changes (regen via button,
   // popstate, or bookmark click). The simplest hook is a polling watcher on
   // state.currentSeed — it changes rarely and the cost is trivial.
+  const photoSeedEl = document.getElementById("photo-seed");
   let _lastSeenSeed = state.currentSeed;
   setInterval(() => {
     if (state.currentSeed !== _lastSeenSeed) {
       _lastSeenSeed = state.currentSeed;
       syncBookmarkButton();
+      photoSeedEl.textContent = formatSeed(state.currentSeed);
     }
   }, 250);
+  photoSeedEl.textContent = formatSeed(state.currentSeed);
+
+  // Photo mode — toggled with P. Hides every overlay, freezes auto-rotate,
+  // and shows the seed at the bottom of the canvas for clean screenshots.
+  let _photoSavedAutoRotate = controls.autoRotate;
+  function setPhotoMode(on) {
+    if (on) {
+      _photoSavedAutoRotate = controls.autoRotate;
+      controls.autoRotate = false;
+      document.body.classList.add("photo-mode");
+      photoSeedEl.setAttribute("aria-hidden", "false");
+    } else {
+      controls.autoRotate = _photoSavedAutoRotate;
+      document.body.classList.remove("photo-mode");
+      photoSeedEl.setAttribute("aria-hidden", "true");
+    }
+  }
 
   renderBookmarks();
   syncBookmarkButton();
@@ -416,11 +637,25 @@ export function initUi({ camera, canvas, controls, renderer }) {
   window.addEventListener("resize", handleResize);
   window.addEventListener("orientationchange", handleResize);
 
-  // Click-to-pick a creature when in selection mode.
+  // Click-to-pick a creature. In selection mode, a hit promotes to permanent
+  // follow. Outside selection mode, a hit triggers a transient focus that
+  // auto-releases after a few seconds (so casual clicks linger but don't trap
+  // the camera). Drags are distinguished from clicks by motion threshold so
+  // OrbitControls can still rotate freely.
   const _raycaster = new THREE.Raycaster();
   const _ndc = new THREE.Vector2();
-  canvas.addEventListener("click", (e) => {
-    if (!selectingCreature) return;
+  let _downX = 0;
+  let _downY = 0;
+  let _downT = 0;
+  canvas.addEventListener("pointerdown", (e) => {
+    _downX = e.clientX;
+    _downY = e.clientY;
+    _downT = performance.now();
+  });
+  canvas.addEventListener("pointerup", (e) => {
+    const moved = Math.hypot(e.clientX - _downX, e.clientY - _downY);
+    const dur = performance.now() - _downT;
+    if (moved > 6 || dur > 400) return; // a drag, not a click
     const rect = canvas.getBoundingClientRect();
     _ndc.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
     _ndc.y = -(((e.clientY - rect.top) / rect.height) * 2 - 1);
@@ -430,16 +665,23 @@ export function initUi({ camera, canvas, controls, renderer }) {
       ...state.caterpillars.map((c) => c.group),
     ];
     const hits = _raycaster.intersectObjects(targets, true);
-    if (hits.length === 0) return;
+    if (hits.length === 0) {
+      // empty-space click cancels selection mode (existing UX)
+      if (selectingCreature) setSelectingCreature(false);
+      return;
+    }
     let hitRoot = hits[0].object;
     while (hitRoot && !targets.includes(hitRoot)) hitRoot = hitRoot.parent;
     if (!hitRoot) return;
     const creature =
       state.creatures.find((c) => c.group === hitRoot) ||
       state.caterpillars.find((c) => c.group === hitRoot);
-    if (creature) {
+    if (!creature) return;
+    if (selectingCreature) {
       setFollowTarget(creature);
       setSelectingCreature(false);
+    } else {
+      setFollowTarget(creature, { transient: true });
     }
   });
 
@@ -468,10 +710,19 @@ export function initUi({ camera, canvas, controls, renderer }) {
   });
 
   window.addEventListener("keydown", (e) => {
+    // Ignore keys when an input/textarea has focus (e.g., dev tools, browser
+    // address bar overlays aren't relevant — but a user-typed range is).
+    const tag = e.target?.tagName;
+    if (tag === "INPUT" || tag === "TEXTAREA") return;
     if (e.key === "Escape") {
-      if (selectingCreature) setSelectingCreature(false);
+      if (_stroll) _exitStroll();
+      else if (document.body.classList.contains("photo-mode")) setPhotoMode(false);
+      else if (selectingCreature) setSelectingCreature(false);
       else if (followTarget) setFollowTarget(null);
+      else if (helpPanel.classList.contains("open")) setHelpOpen(false);
       else if (_settingsPanel.classList.contains("open")) setSettingsOpen(false);
+    } else if (e.key === "p" || e.key === "P") {
+      setPhotoMode(!document.body.classList.contains("photo-mode"));
     }
   });
 }
