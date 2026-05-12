@@ -14,6 +14,7 @@ import { stepParticles, stepWater, stepDirtPuffs, stepDustKicks } from "./src/en
 import { stepShadowDisks } from "./src/shadows.js";
 import { stepClouds } from "./src/sky.js";
 import { LOWFX } from "./src/lowfx.js";
+import { sharedFurUniforms } from "./src/fur.js";
 import {
   initUi,
   getFollowTarget,
@@ -96,6 +97,13 @@ function animate() {
     // shared wind shader time
     state.windUniforms.uTime.value = t;
     updateDayNight(t);
+    // Fur shells read these once per frame — shared across all fur instances.
+    if (state.sunLight) {
+      sharedFurUniforms.uLightDir.value
+        .copy(state.sunLight.position)
+        .normalize();
+      sharedFurUniforms.uLightIntensity.value = state.sunLight.intensity;
+    }
   }
 
   for (const c of state.creatures) stepCreature(c, dt, t, state.heightFn);

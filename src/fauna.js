@@ -3,6 +3,7 @@ import { state } from "./state.js";
 import { jitterGeo } from "./util.js";
 import { pickGroundPoint, nearestCenter } from "./terrain.js";
 import { makeDirtPuff, makeDustKick } from "./environment.js";
+import { applyShellFur } from "./fur.js";
 
 // Terrain Y below which ground creatures are considered underwater. The water
 // plane sits a touch below 0 and oscillates ~±0.08; clamping walkers to
@@ -101,6 +102,15 @@ export function makeCreature(biome, opts = {}) {
   body.scale.set(bodyBaseX, bodyBaseY, bodyBaseZ);
   body.castShadow = true;
   group.add(body);
+
+  let furShells = null;
+  // Fuzzy biomes give walkers (and only walkers — fliers/fish read aquatic
+  // or airborne) a shell-fur layer. Burrowers + sleepers count as walkers.
+  if (biome.fuzzy && !flies) {
+    furShells = applyShellFur(body, biome, {
+      baseColor: bodyCol.clone().offsetHSL(0, -0.05, -0.05),
+    });
+  }
 
   // belly highlight
   const belly = new THREE.Mesh(
@@ -343,6 +353,7 @@ export function makeCreature(biome, opts = {}) {
     bodyBaseX,
     bodyBaseZ,
     bodyColor: bodyCol.clone(),
+    furShells,
     nextThink: Math.random() * 2.5,
     pauseUntil: 0,
     age: Math.random() * 100,
