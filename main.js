@@ -101,10 +101,22 @@ window.addEventListener("resize", () => {
 // Animation loop
 // ─────────────────────────────────────────────────────────────────────────────
 const clock = new THREE.Clock();
+// FPS counter — exponential moving average so the readout doesn't jitter.
+const _fpsEl = document.getElementById("fps-value");
+let _fpsEma = 60;
+let _fpsLastUpdate = 0;
 function animate() {
   requestAnimationFrame(animate);
   const rawDt = Math.min(clock.getDelta(), 0.05);
   const rawT = clock.elapsedTime;
+  if (rawDt > 0 && _fpsEl) {
+    const instFps = 1 / rawDt;
+    _fpsEma += (instFps - _fpsEma) * 0.08;
+    if (rawT - _fpsLastUpdate > 0.25) {
+      _fpsEl.textContent = _fpsEma.toFixed(0);
+      _fpsLastUpdate = rawT;
+    }
+  }
   // Photo mode freezes the simulation so users can capture a still frame.
   // We hold dt at 0 AND freeze `t` (step funcs use sin(t*speed) for idle
   // bobbing, which would still drift if t kept advancing). Camera input

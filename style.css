@@ -1003,3 +1003,29 @@ body.photo-mode .grain {
   letter-spacing: 0.16em;
   font-size: 10px;
 }
+
+.fps-counter {
+  position: fixed;
+  top: 12px;
+  right: 12px;
+  padding: 4px 10px;
+  background: rgba(20, 20, 24, 0.55);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 999px;
+  font-family: "DM Mono", monospace;
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.55);
+  letter-spacing: 0.12em;
+  pointer-events: none;
+  z-index: 60;
+}
+.fps-counter #fps-value {
+  color: #fff;
+  margin-left: 4px;
+  display: inline-block;
+  min-width: 2.5em;
+  text-align: right;
+}
+.photo-mode .fps-counter {
+  display: none;
+}
