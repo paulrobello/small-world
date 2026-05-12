@@ -166,6 +166,119 @@ const BIOMES = [
     creatureColors: ["#283618", "#606c38", "#bc6c25", "#fefae0"],
     creatureCount: [10, 15],
   },
+  {
+    id: "mossy",
+    name: "mossy ruins",
+    sub: "older than memory, gentler than stone.",
+    ground: ["#3b5a3a", "#5e7c4a", "#9bb87c"],
+    cliff: "#2a3624",
+    underside: "#141d12",
+    sky: "#cfe0bd",
+    fog: "#9bb091",
+    fogDensity: 0.014,
+    accent: "#cdef8f",
+    sun: "#f6ffe0",
+    flora: ["pillar", "pillar", "archstone", "archstone", "fern", "fern", "mushroom", "rock", "rock", "tree"],
+    floraCount: 80,
+    particle: "lichenmote",
+    creatureColors: ["#a3b18a", "#cdef8f", "#7bb074", "#f6ffe0"],
+    creatureCount: [8, 13],
+  },
+  {
+    id: "twilight",
+    name: "twilight meadow",
+    sub: "dusk lingers, the flowers remember light.",
+    ground: ["#2a3470", "#4a5598", "#8088c0"],
+    cliff: "#1a204a",
+    underside: "#0c0e26",
+    sky: "#3a3470",
+    fog: "#2c285a",
+    fogDensity: 0.013,
+    accent: "#ffd97a",
+    sun: "#ffb070",
+    flora: ["grass", "grass", "tree", "fern", "rock", "berrybush"],
+    floraCount: 95,
+    particle: "firefly",
+    creatureColors: ["#ffd97a", "#ffb070", "#c9a8e8", "#fff2b3"],
+    creatureCount: [10, 15],
+    glowFlowers: true,
+  },
+  {
+    id: "coral",
+    name: "coral atoll",
+    sub: "tides held in stillness.",
+    ground: ["#f8e6c2", "#f3d9a4", "#f0c98a"],
+    cliff: "#9b6f4a",
+    underside: "#3aa8b8",
+    sky: "#cdeef2",
+    fog: "#a8d6dc",
+    fogDensity: 0.012,
+    accent: "#ff7a8c",
+    sun: "#fffaef",
+    water: "#5fc6cf",
+    flora: ["coral", "coral", "coral", "rock", "reed", "fern"],
+    floraCount: 70,
+    particle: "pollen",
+    creatureColors: ["#ff7a8c", "#ffb88a", "#7ad6e0", "#fff2b3"],
+    creatureCount: [9, 14],
+    creatureKind: "fish",
+  },
+  {
+    id: "cloud",
+    name: "cloud island",
+    sub: "the world without weight.",
+    ground: ["#f5f7ff", "#e3eaff", "#cdd8f0"],
+    cliff: "#c0c8e0",
+    underside: "#dde4f6",
+    sky: "#f4f6fa",
+    fog: "#eef1f7",
+    fogDensity: 0.022,
+    accent: "#9ec0ff",
+    sun: "#ffffff",
+    flora: ["balloontree", "balloontree", "balloontree", "rock", "fern"],
+    floraCount: 60,
+    particle: "feather",
+    creatureColors: ["#ffffff", "#cdd8f0", "#9ec0ff", "#fff2b3"],
+    creatureCount: [9, 14],
+    cloudlike: true,
+  },
+  {
+    id: "grove",
+    name: "mushroom grove",
+    sub: "spore-soft and dim.",
+    ground: ["#3d3a52", "#5d557a", "#9888a8"],
+    cliff: "#2a253a",
+    underside: "#15101e",
+    sky: "#cdb8d8",
+    fog: "#a08bb8",
+    fogDensity: 0.016,
+    accent: "#ff90c0",
+    sun: "#ffe0f0",
+    flora: ["bigmushroom", "bigmushroom", "mushroom", "mushroom", "mushroom", "fern", "rock"],
+    floraCount: 95,
+    particle: "pollen",
+    creatureColors: ["#ff90c0", "#fff2b3", "#9c84d4", "#ffd1a3"],
+    creatureCount: [10, 15],
+  },
+  {
+    id: "obsidian",
+    name: "volcanic glass",
+    sub: "the cracks remember the fire.",
+    ground: ["#0e0c14", "#1d1820", "#3a2828"],
+    cliff: "#08060c",
+    underside: "#000000",
+    sky: "#1a0f10",
+    fog: "#1a0e10",
+    fogDensity: 0.026,
+    accent: "#ff7a2a",
+    sun: "#ff9050",
+    flora: ["obsidianshard", "obsidianshard", "rock", "rock", "skull", "deadtree"],
+    floraCount: 50,
+    particle: "ember",
+    creatureColors: ["#1a1018", "#3a2018", "#ff7a2a", "#ffb060"],
+    creatureCount: [7, 11],
+    glowEyes: true,
+  },
 ];
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -439,7 +552,9 @@ function makeIslandUnderside(biome, center) {
   // smaller islands get shorter, less craggy cones
   const sizeFrac = r / ISLAND_RADIUS_BASE;
   const coneH = 9 * Math.max(0.55, Math.min(1.2, sizeFrac));
-  const jitter = 0.8 * Math.max(0.6, sizeFrac);
+  // cloud-island biomes get a puffier, more amplitude-rich underside so the
+  // island reads like a hovering blob rather than a craggy chunk.
+  const jitter = (biome.cloudlike ? 2.4 : 0.8) * Math.max(0.6, sizeFrac);
   const geo = new THREE.ConeGeometry(r * 1.06, coneH, 24, 1, true);
   const mat = new THREE.MeshStandardMaterial({
     color: new THREE.Color(biome.underside),
@@ -449,11 +564,16 @@ function makeIslandUnderside(biome, center) {
   });
   // perturb cone vertices for craggy bottom
   const pos = geo.attributes.position;
+  // cloud underside perturbs across more of the cone for a puffball look
+  const yThreshold = biome.cloudlike ? coneH * 0.85 : coneH * 0.49;
   for (let i = 0; i < pos.count; i++) {
     const y = pos.getY(i);
-    if (y < coneH * 0.49) {
+    if (y < yThreshold) {
       pos.setX(i, pos.getX(i) + (Math.random() - 0.5) * jitter);
       pos.setZ(i, pos.getZ(i) + (Math.random() - 0.5) * jitter);
+      if (biome.cloudlike) {
+        pos.setY(i, y + (Math.random() - 0.5) * jitter * 0.4);
+      }
     }
   }
   geo.computeVertexNormals();
@@ -1092,13 +1212,183 @@ const FLORA_BUILDERS = {
     g.add(halo);
     return g;
   },
+
+  coral(biome) {
+    const g = new THREE.Group();
+    const baseCol = new THREE.Color(biome.accent);
+    const altCol = baseCol.clone().offsetHSL(0.04, -0.05, 0.1);
+    const trunkMat = new THREE.MeshStandardMaterial({
+      color: baseCol.clone().offsetHSL(0, 0, -0.1),
+      flatShading: true,
+      roughness: 0.55,
+    });
+    // squat base bulb
+    const base = new THREE.Mesh(
+      new THREE.SphereGeometry(0.18, 8, 6),
+      trunkMat
+    );
+    base.position.y = 0.12;
+    base.scale.set(1.1, 0.55, 1.1);
+    base.castShadow = true;
+    g.add(base);
+    // 3–5 fan branches arching upward
+    const branches = 3 + Math.floor(Math.random() * 3);
+    for (let i = 0; i < branches; i++) {
+      const a = (i / branches) * Math.PI * 2 + Math.random() * 0.4;
+      const len = 0.7 + Math.random() * 0.4;
+      const branchMat = new THREE.MeshStandardMaterial({
+        color: i % 2 === 0 ? baseCol : altCol,
+        flatShading: true,
+        roughness: 0.5,
+      });
+      const stalk = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.04, 0.07, len, 5),
+        branchMat
+      );
+      stalk.position.set(Math.cos(a) * 0.05, 0.15 + len / 2, Math.sin(a) * 0.05);
+      // tilt outward and arch a bit
+      stalk.rotation.z = Math.cos(a) * 0.55;
+      stalk.rotation.x = -Math.sin(a) * 0.55;
+      stalk.castShadow = true;
+      g.add(stalk);
+      // little blob at the tip — coral polyp
+      const tip = new THREE.Mesh(
+        jitterGeo(new THREE.IcosahedronGeometry(0.11, 0), 0.04),
+        branchMat
+      );
+      tip.position.set(
+        Math.cos(a) * (0.05 + Math.sin(0.55) * len),
+        0.18 + len * 0.95,
+        Math.sin(a) * (0.05 + Math.sin(0.55) * len)
+      );
+      tip.scale.set(1.2, 0.7, 1.2);
+      tip.castShadow = true;
+      g.add(tip);
+      // 2 tiny side blobs along the branch
+      for (let k = 0; k < 2; k++) {
+        const u = 0.4 + k * 0.3;
+        const knob = new THREE.Mesh(
+          new THREE.SphereGeometry(0.05 + Math.random() * 0.025, 6, 5),
+          branchMat
+        );
+        knob.position.set(
+          Math.cos(a) * (0.05 + Math.sin(0.55) * len * u) + (Math.random() - 0.5) * 0.08,
+          0.18 + len * u,
+          Math.sin(a) * (0.05 + Math.sin(0.55) * len * u) + (Math.random() - 0.5) * 0.08
+        );
+        g.add(knob);
+      }
+    }
+    return g;
+  },
+
+  balloontree(biome) {
+    const g = new THREE.Group();
+    const trunkH = 1.1 + Math.random() * 0.5;
+    const trunk = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.07, 0.1, trunkH, 6),
+      new THREE.MeshStandardMaterial({
+        color: new THREE.Color(biome.cliff).offsetHSL(0, 0, 0.15),
+        flatShading: true,
+        roughness: 1,
+      })
+    );
+    trunk.position.y = trunkH / 2;
+    trunk.castShadow = true;
+    g.add(trunk);
+    // puffy white canopy — overlapping spheres
+    const tint = new THREE.Color(biome.ground[2]).lerp(new THREE.Color("#ffffff"), 0.6);
+    const puffMat = applyWindSway(
+      new THREE.MeshStandardMaterial({
+        color: tint,
+        flatShading: true,
+        roughness: 0.95,
+      }),
+      0.3
+    );
+    const puffs = 4 + Math.floor(Math.random() * 3);
+    for (let i = 0; i < puffs; i++) {
+      const r = 0.32 + Math.random() * 0.18;
+      const puff = new THREE.Mesh(
+        jitterGeo(new THREE.IcosahedronGeometry(r, 0), r * 0.18),
+        puffMat
+      );
+      const a = (i / puffs) * Math.PI * 2;
+      const ring = 0.2 + Math.random() * 0.15;
+      puff.position.set(
+        Math.cos(a) * ring,
+        trunkH + 0.1 + Math.random() * 0.25,
+        Math.sin(a) * ring
+      );
+      puff.castShadow = true;
+      g.add(puff);
+    }
+    // crowning puff
+    const crown = new THREE.Mesh(
+      jitterGeo(new THREE.IcosahedronGeometry(0.45, 0), 0.08),
+      puffMat
+    );
+    crown.position.y = trunkH + 0.5;
+    crown.castShadow = true;
+    g.add(crown);
+    return g;
+  },
+
+  obsidianshard(biome) {
+    const g = new THREE.Group();
+    const dark = new THREE.Color("#0d0a14");
+    const ember = new THREE.Color(biome.accent);
+    const glassMat = new THREE.MeshStandardMaterial({
+      color: dark,
+      emissive: ember.clone().multiplyScalar(0.18),
+      flatShading: true,
+      roughness: 0.25,
+      metalness: 0.35,
+    });
+    const shards = 3 + Math.floor(Math.random() * 3); // 3–5
+    for (let i = 0; i < shards; i++) {
+      const r = 0.1 + Math.random() * 0.13;
+      const shard = new THREE.Mesh(
+        new THREE.IcosahedronGeometry(r, 0),
+        glassMat
+      );
+      const a = (i / shards) * Math.PI * 2 + Math.random() * 0.4;
+      const off = 0.04 + Math.random() * 0.1;
+      shard.position.set(
+        Math.cos(a) * off,
+        r * (0.85 + Math.random() * 1.5),
+        Math.sin(a) * off
+      );
+      shard.scale.set(0.5, 1.6 + Math.random() * 0.8, 0.5);
+      shard.rotation.y = Math.random() * Math.PI * 2;
+      shard.rotation.z = (Math.random() - 0.5) * 0.4;
+      shard.castShadow = true;
+      g.add(shard);
+    }
+    // warm halo near the base — small additive sphere reading as crack-light
+    const halo = new THREE.Mesh(
+      new THREE.IcosahedronGeometry(0.18, 1),
+      new THREE.MeshBasicMaterial({
+        color: ember,
+        transparent: true,
+        opacity: 0.22,
+        blending: THREE.AdditiveBlending,
+        depthWrite: false,
+      })
+    );
+    halo.position.y = 0.05;
+    halo.scale.set(1.2, 0.4, 1.2);
+    g.add(halo);
+    return g;
+  },
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Creature — wandering blob with eyes
 // ─────────────────────────────────────────────────────────────────────────────
 function makeCreature(biome) {
-  const flies = Math.random() < 0.3;
+  const isFish = biome.creatureKind === "fish";
+  const flies = isFish ? true : Math.random() < 0.3;
 
   const group = new THREE.Group();
   const palette = biome.creatureColors;
@@ -1141,10 +1431,17 @@ function makeCreature(biome) {
     color: 0xfafaf2,
     roughness: 0.15,
   });
-  const pupilMat = new THREE.MeshStandardMaterial({
-    color: 0x0a0a0a,
-    roughness: 0.05,
-  });
+  const pupilMat = biome.glowEyes
+    ? new THREE.MeshStandardMaterial({
+        color: new THREE.Color(biome.accent),
+        emissive: new THREE.Color(biome.accent),
+        emissiveIntensity: 1.4,
+        roughness: 0.3,
+      })
+    : new THREE.MeshStandardMaterial({
+        color: 0x0a0a0a,
+        roughness: 0.05,
+      });
   const eyeGeo = new THREE.SphereGeometry(0.11, 10, 8);
   const pupilGeo = new THREE.SphereGeometry(0.05, 8, 8);
   for (const sign of [-1, 1]) {
@@ -1186,43 +1483,75 @@ function makeCreature(biome) {
   const wings = [];
 
   if (flies) {
-    // wings — flattened ellipsoid icospheres on hinge groups
-    const wingMat = new THREE.MeshStandardMaterial({
-      color: bodyCol.clone().offsetHSL(0, -0.15, 0.12),
-      flatShading: true,
-      roughness: 0.45,
-      side: THREE.DoubleSide,
-    });
-    for (const side of [-1, 1]) {
-      const pivot = new THREE.Group();
-      pivot.position.set(side * 0.12, 0.18, -0.02);
-      group.add(pivot);
+    if (isFish) {
+      // fin-like ears — small flattened pivots on the upper sides
+      const finMat = new THREE.MeshStandardMaterial({
+        color: bodyCol.clone().offsetHSL(0, -0.05, 0.14),
+        flatShading: true,
+        roughness: 0.5,
+        side: THREE.DoubleSide,
+      });
+      for (const side of [-1, 1]) {
+        const pivot = new THREE.Group();
+        pivot.position.set(side * 0.18, 0.22, 0.05);
+        group.add(pivot);
+        const finGeo = jitterGeo(
+          new THREE.IcosahedronGeometry(0.13, 0),
+          0.03
+        );
+        finGeo.scale(1.4, 0.12, 1.0);
+        const fin = new THREE.Mesh(finGeo, finMat);
+        fin.position.set(side * 0.13, 0.04, 0);
+        fin.castShadow = true;
+        pivot.add(fin);
+        wings.push(pivot);
+      }
+      // little tail fin on the back
+      const tailGeo = jitterGeo(new THREE.IcosahedronGeometry(0.13, 0), 0.03);
+      tailGeo.scale(0.3, 0.85, 1.1);
+      const tail = new THREE.Mesh(tailGeo, finMat);
+      tail.position.set(0, 0.05, -0.45);
+      tail.castShadow = true;
+      group.add(tail);
+    } else {
+      // wings — flattened ellipsoid icospheres on hinge groups
+      const wingMat = new THREE.MeshStandardMaterial({
+        color: bodyCol.clone().offsetHSL(0, -0.15, 0.12),
+        flatShading: true,
+        roughness: 0.45,
+        side: THREE.DoubleSide,
+      });
+      for (const side of [-1, 1]) {
+        const pivot = new THREE.Group();
+        pivot.position.set(side * 0.12, 0.18, -0.02);
+        group.add(pivot);
 
-      const wingGeo = jitterGeo(
-        new THREE.IcosahedronGeometry(0.18, 0),
-        0.04
-      );
-      wingGeo.scale(2.4, 0.18, 1.1);
-      const wing = new THREE.Mesh(wingGeo, wingMat);
-      wing.position.set(side * 0.38, 0, 0);
-      wing.castShadow = true;
-      pivot.add(wing);
-      wings.push(pivot);
-    }
+        const wingGeo = jitterGeo(
+          new THREE.IcosahedronGeometry(0.18, 0),
+          0.04
+        );
+        wingGeo.scale(2.4, 0.18, 1.1);
+        const wing = new THREE.Mesh(wingGeo, wingMat);
+        wing.position.set(side * 0.38, 0, 0);
+        wing.castShadow = true;
+        pivot.add(wing);
+        wings.push(pivot);
+      }
 
-    // two dangling feet for charm (no legs, just little nubs hanging)
-    const dangleMat = new THREE.MeshStandardMaterial({
-      color: bodyCol.clone().offsetHSL(0, 0, -0.25),
-      flatShading: true,
-    });
-    for (const sign of [-1, 1]) {
-      const dangle = new THREE.Mesh(
-        new THREE.CylinderGeometry(0.025, 0.04, 0.16, 5),
-        dangleMat
-      );
-      dangle.position.set(sign * 0.11, -0.36, 0.02);
-      dangle.castShadow = true;
-      group.add(dangle);
+      // two dangling feet for charm (no legs, just little nubs hanging)
+      const dangleMat = new THREE.MeshStandardMaterial({
+        color: bodyCol.clone().offsetHSL(0, 0, -0.25),
+        flatShading: true,
+      });
+      for (const sign of [-1, 1]) {
+        const dangle = new THREE.Mesh(
+          new THREE.CylinderGeometry(0.025, 0.04, 0.16, 5),
+          dangleMat
+        );
+        dangle.position.set(sign * 0.11, -0.36, 0.02);
+        dangle.castShadow = true;
+        group.add(dangle);
+      }
     }
   } else {
     // walkers: visible legs + feet
@@ -1278,6 +1607,7 @@ function makeCreature(biome) {
     legs,
     wings,
     flies,
+    isFish,
     scale,
     heading: Math.random() * Math.PI * 2,
     speed: flies ? 1.1 + Math.random() * 0.9 : 0.6 + Math.random() * 0.7,
@@ -1303,7 +1633,8 @@ function stepCreature(c, dt, t, heightFn) {
   c.nextThink -= dt;
 
   // ── flier landing state machine ────────────────────────────────────────
-  if (c.flies) {
+  // Fish never land — they always float.
+  if (c.flies && !c.isFish) {
     c.landTimer -= dt;
     const restH = 0.35 * c.scale;
 
@@ -1401,7 +1732,17 @@ function stepCreature(c, dt, t, heightFn) {
   c.body.scale.x = c.bodyBaseX / Math.sqrt(squash);
 
   if (c.flies) {
-    if (grounded) {
+    if (c.isFish) {
+      // gentle fin sway — slow, low amplitude
+      const phase = t * 2.2 + c.flapPhase;
+      const wave = Math.sin(phase);
+      for (let i = 0; i < c.wings.length; i++) {
+        const sign = i === 0 ? -1 : 1;
+        c.wings[i].rotation.z = sign * (0.15 + wave * 0.25);
+        c.wings[i].rotation.y = Math.cos(phase * 0.7) * 0.18;
+      }
+      c.body.rotation.z = wave * 0.05;
+    } else if (grounded) {
       // wings folded — slowly settle into rest pose, no oscillation
       const k = Math.min(1, dt * 5);
       for (let i = 0; i < c.wings.length; i++) {
@@ -1823,6 +2164,8 @@ function makeParticles(biome) {
     snow: 500,
     firefly: 90,
     ember: 180,
+    lichenmote: 140,
+    feather: 120,
   }[kind] || 200;
 
   const positions = new Float32Array(count * 3);
@@ -1850,15 +2193,29 @@ function makeParticles(biome) {
     snow: "#ffffff",
     firefly: biome.accent,
     ember: biome.accent,
+    lichenmote: biome.accent,
+    feather: "#ffffff",
   };
+
+  const sizeMap = {
+    firefly: 0.16,
+    snow: 0.1,
+    lichenmote: 0.12,
+    feather: 0.18,
+  };
+  const opacityMap = {
+    dust: 0.35,
+    feather: 0.7,
+  };
+  const additive = new Set(["firefly", "ember", "lichenmote"]);
 
   const mat = new THREE.PointsMaterial({
     color: new THREE.Color(colorMap[kind]),
-    size: kind === "firefly" ? 0.16 : kind === "snow" ? 0.1 : 0.07,
+    size: sizeMap[kind] ?? 0.07,
     transparent: true,
-    opacity: kind === "dust" ? 0.35 : 0.85,
+    opacity: opacityMap[kind] ?? 0.85,
     depthWrite: false,
-    blending: kind === "firefly" || kind === "ember"
+    blending: additive.has(kind)
       ? THREE.AdditiveBlending
       : THREE.NormalBlending,
     sizeAttenuation: true,
@@ -1907,6 +2264,28 @@ function stepParticles(points, dt, t) {
       }
       if (y < 0.5) y = 0.5 + Math.random();
       if (y > 6) y = 6;
+    } else if (kind === "lichenmote") {
+      // ground-hugging motes — drift slowly, occasionally rise then sink
+      x += Math.sin(t * 0.5 + s * 1.3) * 0.25 * dt;
+      y += Math.sin(t * 0.8 + s) * 0.15 * dt;
+      z += Math.cos(t * 0.45 + s * 1.1) * 0.25 * dt;
+      // keep them low — between 0.2 and 1.6
+      if (y < 0.2) y = 0.2 + Math.random() * 0.2;
+      if (y > 1.6) y = 1.6;
+      const rr = Math.sqrt(x * x + z * z);
+      if (rr > ISLAND_RADIUS) { x *= 0.95; z *= 0.95; }
+    } else if (kind === "feather") {
+      // slow downward drift with horizontal wobble — like a stray puff
+      y -= (0.18 + (s % 1) * 0.12) * dt;
+      x += Math.sin(t * 0.45 + s * 1.7) * 0.45 * dt;
+      z += Math.cos(t * 0.35 + s * 1.3) * 0.45 * dt;
+      if (y < -1) {
+        y = 14;
+        const r = Math.sqrt(Math.random()) * ISLAND_RADIUS * 1.1;
+        const a = Math.random() * Math.PI * 2;
+        x = Math.cos(a) * r;
+        z = Math.sin(a) * r;
+      }
     } else if (kind === "dust") {
       x += Math.sin(t * 0.3 + s) * 0.4 * dt + 0.3 * dt;
       y += Math.sin(t * 0.4 + s * 2) * 0.1 * dt;
@@ -1936,6 +2315,8 @@ function stepParticles(points, dt, t) {
   // firefly twinkle
   if (kind === "firefly") {
     points.material.opacity = 0.6 + Math.sin(t * 2) * 0.25;
+  } else if (kind === "lichenmote") {
+    points.material.opacity = 0.45 + Math.sin(t * 1.4) * 0.2;
   }
 
   points.geometry.attributes.position.needsUpdate = true;
@@ -1951,19 +2332,31 @@ const WILDFLOWER_PALETTES = {
   marsh:   ["#ffba08", "#ff6d6d", "#c9a8e8", "#ffd166"],
   ashen:   ["#e63946", "#f77f00", "#fcbf49"],
   golden:  ["#fefae0", "#dda15e", "#f1c890", "#a3b18a"],
+  mossy:   ["#cdef8f", "#fff2b3", "#a8d8a3"],
+  twilight:["#ffd97a", "#ffb070", "#c9a8e8", "#fff2b3"],
+  coral:   ["#ff7a8c", "#ffb88a", "#fff2b3", "#7ad6e0"],
+  cloud:   ["#ffffff", "#e3eaff", "#fff2b3"],
+  grove:   ["#ff90c0", "#fff2b3", "#9c84d4"],
+  obsidian:["#ff7a2a", "#ffb060", "#fcbf49"],
 };
 
 const GRASS_DENSITY = {
   verdant: 600, desert: 140, frozen: 240,
   marsh:   500, ashen:  110, golden: 750,
+  mossy:   650, twilight: 540, coral: 200,
+  cloud:   180, grove:   400, obsidian: 80,
 };
 const FLOWER_DENSITY = {
   verdant: 180, desert: 60, frozen: 90,
   marsh:   220, ashen:  50, golden: 200,
+  mossy:   140, twilight: 240, coral: 110,
+  cloud:   80,  grove:   170, obsidian: 60,
 };
 const PEBBLE_DENSITY = {
   verdant: 80, desert: 130, frozen: 100,
   marsh:   70, ashen:  140, golden: 90,
+  mossy:  120, twilight: 70, coral: 80,
+  cloud:  40, grove:    80, obsidian: 160,
 };
 
 function placeInstanced(geo, mat, count, heightFn, opts = {}) {
@@ -2063,9 +2456,12 @@ function makeWildflowerField(biome, heightFn) {
   for (const color of palette) {
     const g = new THREE.IcosahedronGeometry(0.05, 0);
     g.scale(1, 0.7, 1);
+    const baseCol = new THREE.Color(color);
     const m = applyWindSway(
       new THREE.MeshStandardMaterial({
-        color: new THREE.Color(color),
+        color: baseCol,
+        emissive: biome.glowFlowers ? baseCol.clone() : 0x000000,
+        emissiveIntensity: biome.glowFlowers ? 1.1 : 0,
         flatShading: true,
         roughness: 0.4,
       }),

@@ -6,15 +6,6 @@ Remove completed items from this list, commit and push so its live on github pag
 
 ---
 
-## New Biomes
-
-- **Mossy ruins** (M) — verdant palette with broken stone arches, lichen-tinted columns, and tiny firefly motes near the ground. New flora: `pillar`, `archstone`. Particle: existing `pollen` or new `lichenmote`.
-- **Twilight meadow** (S) — dusk-blue sky, low warm sun, dim-glowing wildflowers. Reuse existing flora; add an emissive material variant for `wildflower`.
-- **Coral atoll** (M) — pale sand top, turquoise underside, fan-coral flora and a few floating "fish creatures" (creatures that bob in the air with fin-like ears). Needs a new `coral` flora kind and a `fish` creature variant of `makeCreature`.
-- **Cloud island** (M) — pure-white puffball terrain (raise `jitterGeo` amplitude on the underside), sparse balloon-trees, particle `feather`. Sky almost white, fog inverted to brighten distance.
-- **Mushroom grove** (S) — recolor of verdant with `mushroom` dominating and a new `bigmushroom` flora kind that creatures can stand under.
-- **Volcanic glass** (M) — black-glass terrain with cracks lit warm orange, smoldering ember particles already exist; add `obsidianshard` flora and creatures with warm-glow eyes.
-
 ## Creatures & Wildlife
 
 - **Family groups** (M) — let `makeCreature` occasionally spawn a "parent + 1-2 smaller copies" cluster. Smaller copies have a flocking term toward the parent. Touches `generateWorld` and `stepCreature`.
