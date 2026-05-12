@@ -10,7 +10,7 @@ import {
 } from "./src/world.js";
 import { stepCreature, stepCaterpillar, stepButterfly, stepBee } from "./src/fauna.js";
 import { stepFlock } from "./src/birds.js";
-import { stepParticles, stepWater, stepDirtPuffs } from "./src/environment.js";
+import { stepParticles, stepWater, stepDirtPuffs, stepDustKicks } from "./src/environment.js";
 import { stepShadowDisks } from "./src/shadows.js";
 import { stepClouds } from "./src/sky.js";
 import { LOWFX } from "./src/lowfx.js";
@@ -108,6 +108,7 @@ function animate() {
   stepParticles(state.particles, dt, t);
   stepWater(state.waterMesh, dt, t);
   stepDirtPuffs(state.dirtPuffs, dt);
+  stepDustKicks(state.dustKicks, dt);
   stepShadowDisks(state.shadowDisks, state.heightFn);
   stepClouds(state.clouds, dt);
 

@@ -2,7 +2,7 @@ import * as THREE from "three";
 import { state } from "./state.js";
 import { jitterGeo } from "./util.js";
 import { pickGroundPoint, nearestCenter } from "./terrain.js";
-import { makeDirtPuff } from "./environment.js";
+import { makeDirtPuff, makeDustKick } from "./environment.js";
 
 // Terrain Y below which ground creatures are considered underwater. The water
 // plane sits a touch below 0 and oscillates ~±0.08; clamping walkers to
@@ -375,6 +375,12 @@ export function makeCreature(biome, opts = {}) {
     // personality.nightThresh. zSprite lazily attached when first drowsy.
     sleepiness: 0,
     zSprite: null,
+    // Footstep dust — per-foot last sin sample for rising-edge detection,
+    // and a global per-creature cooldown so multiple feet don't all kick
+    // at once. Allocated for fliers/fish too (cheap) since the walker
+    // animation block is never entered for them.
+    lastFootSin: [0, 0, 0, 0],
+    lastDustAt: 0,
   };
 }
 
@@ -839,10 +845,26 @@ export function stepCreature(c, dt, t, heightFn) {
     // diagonal trot pattern: FL+BR phase, FR+BL counter-phase
     const phases = [0, Math.PI, Math.PI, 0];
     for (let i = 0; i < c.feet.length; i++) {
-      const footY = -0.32 + Math.sin(c.bob + phases[i]) * 0.09;
+      const sVal = Math.sin(c.bob + phases[i]);
+      const footY = -0.32 + sVal * 0.09;
       c.feet[i].position.y = footY;
-      // leg top is at -0.1 in body space; scale.y = distance to foot
       c.legs[i].scale.y = -0.1 - footY;
+      // Rising-edge footstep detection — fires once when sVal crosses 0.85
+      // upward. Emit a small dust kick on dry ground. Cooldown gates
+      // multiple kicks per stride.
+      const prev = c.lastFootSin[i] ?? 0;
+      if (sVal > 0.85 && prev <= 0.85 && t - c.lastDustAt > 0.18) {
+        const fx = c.group.position.x;
+        const fz = c.group.position.z;
+        const fy = heightFn(fx, fz);
+        if (fy > 0.1) {
+          const kick = makeDustKick(fx, fy, fz, c.dirtColor);
+          state.world.add(kick);
+          state.dustKicks.push(kick);
+          c.lastDustAt = t;
+        }
+      }
+      c.lastFootSin[i] = sVal;
     }
   }
 }

@@ -376,6 +376,65 @@ export function stepDirtPuffs(puffs, dt) {
   }
 }
 
+// ─── footstep dust kicks ───
+const KICK_PARTICLES = 4;
+const KICK_LIFE = 0.5;
+export function makeDustKick(x, y, z, baseColor) {
+  const positions = new Float32Array(KICK_PARTICLES * 3);
+  const velocities = new Float32Array(KICK_PARTICLES * 3);
+  for (let i = 0; i < KICK_PARTICLES; i++) {
+    positions[i * 3 + 0] = x;
+    positions[i * 3 + 1] = y + 0.02;
+    positions[i * 3 + 2] = z;
+    const ang = Math.random() * Math.PI * 2;
+    const sp = 0.4 + Math.random() * 0.5;
+    velocities[i * 3 + 0] = Math.cos(ang) * sp;
+    velocities[i * 3 + 1] = 0.5 + Math.random() * 0.4;
+    velocities[i * 3 + 2] = Math.sin(ang) * sp;
+  }
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute("position", new THREE.BufferAttribute(positions, 3));
+  const mat = new THREE.PointsMaterial({
+    color: new THREE.Color(baseColor).offsetHSL(0, -0.1, 0.12),
+    size: 0.08,
+    transparent: true,
+    opacity: 0.7,
+    depthWrite: false,
+    sizeAttenuation: true,
+  });
+  const points = new THREE.Points(geo, mat);
+  points.userData = { velocities, age: 0 };
+  return points;
+}
+
+export function stepDustKicks(kicks, dt) {
+  if (!kicks || !kicks.length) return;
+  for (let p = kicks.length - 1; p >= 0; p--) {
+    const kick = kicks[p];
+    const d = kick.userData;
+    d.age += dt;
+    const pos = kick.geometry.attributes.position.array;
+    const v = d.velocities;
+    for (let i = 0; i < KICK_PARTICLES; i++) {
+      const ix = i * 3;
+      pos[ix + 0] += v[ix + 0] * dt;
+      pos[ix + 1] += v[ix + 1] * dt;
+      pos[ix + 2] += v[ix + 2] * dt;
+      v[ix + 1] -= 3.5 * dt;
+      v[ix + 0] *= 0.9;
+      v[ix + 2] *= 0.9;
+    }
+    kick.geometry.attributes.position.needsUpdate = true;
+    kick.material.opacity = Math.max(0, 0.7 * (1 - d.age / KICK_LIFE));
+    if (d.age >= KICK_LIFE) {
+      if (kick.parent) kick.parent.remove(kick);
+      kick.geometry.dispose();
+      kick.material.dispose();
+      kicks.splice(p, 1);
+    }
+  }
+}
+
 // ─── ground cover + water ───
 export function placeInstanced(geo, mat, count, heightFn, opts = {}) {
   const {

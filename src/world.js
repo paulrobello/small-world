@@ -188,6 +188,7 @@ export function generateWorld(seed) {
   state.butterflies = [];
   state.bees = [];
   state.dirtPuffs = [];
+  state.dustKicks = [];
   state.flowerSpots = [];
   state.particles = null;
   state.waterMesh = null;
