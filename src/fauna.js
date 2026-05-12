@@ -516,21 +516,25 @@ export function stepCreature(c, dt, t, heightFn) {
 
   if (c.flies) {
     if (c.isFish) {
-      // gentle fin sway — slow, low amplitude
-      const phase = t * 2.2 + c.flapPhase;
+      // Visible fin flap — fast enough to read at a glance. Old values (rate
+      // 2.2 / amp 0.25-0.18) felt nearly static; bumped to ~1.4 Hz with a
+      // bigger amplitude so the small fins are clearly working.
+      const phase = t * 5.5 + c.flapPhase;
       const wave = Math.sin(phase);
       for (let i = 0; i < c.wings.length; i++) {
         const sign = i === 0 ? -1 : 1;
-        c.wings[i].rotation.z = sign * (0.15 + wave * 0.25);
-        c.wings[i].rotation.y = Math.cos(phase * 0.7) * 0.18;
+        c.wings[i].rotation.z = sign * (0.18 + wave * 0.55);
+        c.wings[i].rotation.y = Math.cos(phase * 0.85) * 0.32;
       }
-      c.body.rotation.z = wave * 0.05;
+      c.body.rotation.z = wave * 0.06;
     } else if (grounded) {
-      // wings folded — slowly settle into rest pose, no oscillation
+      // Wings mostly tucked, but with a small idle twitch so the bird never
+      // looks completely lifeless. Period ~2s, amplitude small.
       const k = Math.min(1, dt * 5);
+      const twitch = Math.sin(t * 3.0 + c.flapPhase) * 0.06;
       for (let i = 0; i < c.wings.length; i++) {
         const sign = i === 0 ? -1 : 1;
-        const restRot = sign * 0.55; // wings tucked slightly up
+        const restRot = sign * (0.55 + twitch);
         c.wings[i].rotation.z += (restRot - c.wings[i].rotation.z) * k;
         c.wings[i].rotation.x += (0 - c.wings[i].rotation.x) * k;
       }
