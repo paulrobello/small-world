@@ -157,6 +157,7 @@ export function makeCreature(biome, opts = {}) {
   }
 
   // antennae for some
+  const antennae = [];
   if (Math.random() > 0.55) {
     const antMat = new THREE.MeshStandardMaterial({
       color: bodyCol.clone().offsetHSL(0, 0, -0.2),
@@ -183,6 +184,7 @@ export function makeCreature(biome, opts = {}) {
       // through any rotation. Local +Y on the cylinder is the stalk's top.
       tip.position.set(0, 0.16, 0);
       stalk.add(tip);
+      antennae.push(stalk);
     }
   }
 
@@ -316,8 +318,8 @@ export function makeCreature(biome, opts = {}) {
   const isBurrower = !!opts.burrower && !flies;
 
   // Sleepers spawn already curled (eyes scaled to 0, body squashed, legs
-  // tucked under the body, belly collapsed). stepCreature animates the
-  // wake-up in reverse.
+  // tucked under the body, belly collapsed, antennae retracted).
+  // stepCreature animates the wake-up in reverse.
   let wakeProgress = isSleeper ? 0 : 1;
   if (isSleeper) {
     for (const e of eyeParts) e.scale.setScalar(0);
@@ -327,6 +329,7 @@ export function makeCreature(biome, opts = {}) {
       feet[i].position.y = -0.15;
     }
     belly.scale.set(0, 0, 0);
+    for (const a of antennae) a.scale.y = 0;
   }
 
   // Personality stamp — pulled from the deterministic RNG during world-gen,
@@ -343,6 +346,7 @@ export function makeCreature(biome, opts = {}) {
     group,
     body,
     belly,
+    antennae,
     feet,
     legs,
     wings,
@@ -558,6 +562,8 @@ export function stepCreature(c, dt, t, heightFn) {
     }
     // belly hidden — sphere would poke out below the squashed body
     if (c.belly) c.belly.scale.set(0, 0, 0);
+    // antennae retracted so they don't float disconnected above the body
+    if (c.antennae) for (const a of c.antennae) a.scale.y = 0;
     // keep planted at ground height
     const ground = heightFn(c.group.position.x, c.group.position.z);
     c.group.position.y = ground + 0.28 * c.scale;
@@ -583,6 +589,8 @@ export function stepCreature(c, dt, t, heightFn) {
       const bs = c.belly.userData.baseScale;
       c.belly.scale.set(bs.x * w, bs.y * w, bs.z * w);
     }
+    // antennae grow back to full length
+    if (c.antennae) for (const a of c.antennae) a.scale.y = w;
     if (w >= 1) c._waking = false;
   }
 
@@ -609,6 +617,8 @@ export function stepCreature(c, dt, t, heightFn) {
       const open = 1 - curl;
       c.belly.scale.set(bs.x * open, bs.y * open, bs.z * open);
     }
+    // Antennae fold down toward the body
+    if (c.antennae) for (const a of c.antennae) a.scale.y = 1 - curl;
     if (s > 0.6) {
       // fully curled — slow breath, no motion, planted on the ground
       const breath = Math.sin(t * 1.1 + c.flapPhase) * 0.03;
