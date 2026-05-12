@@ -2,7 +2,7 @@
 
 A running list of enhancement ideas for the Three.js terrarium. Each idea is tagged with rough scope (S/M/L) and notes about which parts of `main.js` it would touch. All ideas should respect the project's **cute / rounded / painterly / soft-motion** vibe — see `CLAUDE.md` § Vibe.
 
-Remove compelted items from this list, commit and push so its live on github pages
+Remove completed items from this list, commit and push so its live on github pages
 
 ---
 
@@ -14,14 +14,6 @@ Remove compelted items from this list, commit and push so its live on github pag
 - **Cloud island** (M) — pure-white puffball terrain (raise `jitterGeo` amplitude on the underside), sparse balloon-trees, particle `feather`. Sky almost white, fog inverted to brighten distance.
 - **Mushroom grove** (S) — recolor of verdant with `mushroom` dominating and a new `bigmushroom` flora kind that creatures can stand under.
 - **Volcanic glass** (M) — black-glass terrain with cracks lit warm orange, smoldering ember particles already exist; add `obsidianshard` flora and creatures with warm-glow eyes.
-
-## New Flora Builders
-
-- **`pillar` / `archstone`** — for ruins biomes.
-- **`crystal`** — clustered icospheres with emissive tinting; biome-tinted accent prop.
-- **`bigmushroom`** — tall, walkable-under cap; pairs with creature pathing tweaks so they can wander beneath.
-- **`berrybush`** — small jittered sphere with a handful of tiny accent-colored "berries" parented on top; butterflies could optionally target these too.
-- **`lantern`** — floating soft-glow orb tethered to ground by a thin line; emissive accent that complements existing `firefly` particles.
 
 ## Creatures & Wildlife
 

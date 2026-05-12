@@ -66,10 +66,10 @@ const BIOMES = [
     underside: "#1a2820",
     sky: "#d8e2c6",
     fog: "#b6c9a3",
-    fogDensity: 0.022,
+    fogDensity: 0.011,
     accent: "#f4a261",
     sun: "#fff8e0",
-    flora: ["tree", "tree", "mushroom", "fern", "fern", "rock"],
+    flora: ["tree", "tree", "mushroom", "bigmushroom", "berrybush", "fern", "fern", "rock"],
     floraCount: 90,
     particle: "pollen",
     creatureColors: ["#e9c46a", "#f4a261", "#e76f51", "#fff8e0"],
@@ -84,10 +84,10 @@ const BIOMES = [
     underside: "#3a1414",
     sky: "#f6d4a8",
     fog: "#d8a779",
-    fogDensity: 0.018,
+    fogDensity: 0.009,
     accent: "#3d405b",
     sun: "#ffe5b0",
-    flora: ["cactus", "cactus", "rock", "rock", "skull"],
+    flora: ["cactus", "cactus", "rock", "rock", "skull", "pillar"],
     floraCount: 50,
     particle: "dust",
     creatureColors: ["#fefae0", "#dda15e", "#bc6c25", "#3d405b"],
@@ -102,10 +102,10 @@ const BIOMES = [
     underside: "#1f2530",
     sky: "#cad2c5",
     fog: "#b6c5d4",
-    fogDensity: 0.030,
+    fogDensity: 0.015,
     accent: "#457b9d",
     sun: "#e0eaff",
-    flora: ["pine", "pine", "pine", "rock", "rock"],
+    flora: ["pine", "pine", "pine", "rock", "rock", "crystal"],
     floraCount: 70,
     particle: "snow",
     creatureColors: ["#1d3557", "#457b9d", "#a8dadc", "#f1faee"],
@@ -120,10 +120,10 @@ const BIOMES = [
     underside: "#0e0820",
     sky: "#1a1033",
     fog: "#3a1f5a",
-    fogDensity: 0.042,
+    fogDensity: 0.021,
     accent: "#ffba08",
     sun: "#d4b3ff",
-    flora: ["reed", "reed", "reed", "mushroom", "mushroom", "rock"],
+    flora: ["reed", "reed", "reed", "mushroom", "mushroom", "rock", "lantern", "lantern", "archstone"],
     floraCount: 100,
     particle: "firefly",
     creatureColors: ["#ffba08", "#faa307", "#f48c06", "#ffd166"],
@@ -138,10 +138,10 @@ const BIOMES = [
     underside: "#0a0a14",
     sky: "#1c1a26",
     fog: "#2b2538",
-    fogDensity: 0.048,
+    fogDensity: 0.024,
     accent: "#e63946",
     sun: "#ff8866",
-    flora: ["deadtree", "deadtree", "rock", "rock", "skull"],
+    flora: ["deadtree", "deadtree", "rock", "rock", "skull", "crystal"],
     floraCount: 42,
     particle: "ember",
     creatureColors: ["#e63946", "#f77f00", "#fcbf49", "#ffd166"],
@@ -156,10 +156,10 @@ const BIOMES = [
     underside: "#2a1c08",
     sky: "#fbe9c0",
     fog: "#e7c08a",
-    fogDensity: 0.020,
+    fogDensity: 0.010,
     accent: "#606c38",
     sun: "#fff4d0",
-    flora: ["grass", "grass", "grass", "rock", "tree", "tree"],
+    flora: ["grass", "grass", "grass", "rock", "tree", "tree", "berrybush"],
     floraCount: 115,
     particle: "pollen",
     creatureColors: ["#283618", "#606c38", "#bc6c25", "#fefae0"],
@@ -674,6 +674,286 @@ const FLORA_BUILDERS = {
       eye.position.set(x, 0.2, 0.15);
       g.add(eye);
     });
+    return g;
+  },
+
+  pillar(biome) {
+    const g = new THREE.Group();
+    const stoneCol = new THREE.Color(biome.cliff).offsetHSL(
+      0,
+      -0.1,
+      0.12 + Math.random() * 0.08
+    );
+    const lichenCol = new THREE.Color(biome.ground[0]).offsetHSL(0, 0.05, 0.1);
+    const stoneMat = new THREE.MeshStandardMaterial({
+      color: stoneCol,
+      flatShading: true,
+      roughness: 1,
+    });
+    const lichenMat = new THREE.MeshStandardMaterial({
+      color: lichenCol,
+      flatShading: true,
+      roughness: 1,
+    });
+    const segments = 2 + Math.floor(Math.random() * 3); // 2–4 stacked drums
+    let y = 0;
+    for (let i = 0; i < segments; i++) {
+      const h = 0.45 + Math.random() * 0.25;
+      const r = 0.22 - i * 0.015;
+      // lichen-tinted on the first segment ~half the time
+      const useLichen = i === 0 && Math.random() < 0.5;
+      const drum = new THREE.Mesh(
+        new THREE.CylinderGeometry(r, r * 1.05, h, 7),
+        useLichen ? lichenMat : stoneMat
+      );
+      drum.position.y = y + h / 2;
+      drum.rotation.y = Math.random() * Math.PI * 2;
+      drum.rotation.z = (Math.random() - 0.5) * 0.08;
+      drum.castShadow = true;
+      g.add(drum);
+      y += h - 0.02;
+    }
+    // broken cap — jittered chunk
+    if (Math.random() < 0.7) {
+      const cap = new THREE.Mesh(
+        jitterGeo(new THREE.IcosahedronGeometry(0.22, 0), 0.08),
+        stoneMat
+      );
+      cap.position.y = y + 0.1;
+      cap.scale.set(1.1, 0.5, 1.1);
+      cap.rotation.y = Math.random() * Math.PI * 2;
+      cap.castShadow = true;
+      g.add(cap);
+    }
+    return g;
+  },
+
+  archstone(biome) {
+    const g = new THREE.Group();
+    const stoneCol = new THREE.Color(biome.cliff).offsetHSL(
+      0,
+      -0.1,
+      0.12 + Math.random() * 0.06
+    );
+    const mat = new THREE.MeshStandardMaterial({
+      color: stoneCol,
+      flatShading: true,
+      roughness: 1,
+    });
+    // two short pillars
+    const pillarH = 0.7 + Math.random() * 0.2;
+    const gap = 0.55;
+    for (const sign of [-1, 1]) {
+      const p = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.14, 0.16, pillarH, 7),
+        mat
+      );
+      p.position.set(sign * gap, pillarH / 2, 0);
+      p.castShadow = true;
+      g.add(p);
+    }
+    // curved arch — partial torus
+    const arc = new THREE.Mesh(
+      new THREE.TorusGeometry(gap, 0.11, 5, 10, Math.PI),
+      mat
+    );
+    arc.position.y = pillarH;
+    arc.rotation.z = 0;
+    arc.castShadow = true;
+    g.add(arc);
+    // crumbled keystone or missing chunk — break the arch occasionally
+    if (Math.random() < 0.5) {
+      const fragment = new THREE.Mesh(
+        jitterGeo(new THREE.IcosahedronGeometry(0.18, 0), 0.06),
+        mat
+      );
+      fragment.position.set(
+        (Math.random() - 0.5) * 0.4,
+        0.05,
+        (Math.random() - 0.5) * 0.3
+      );
+      fragment.scale.y = 0.5;
+      fragment.castShadow = true;
+      g.add(fragment);
+    }
+    return g;
+  },
+
+  crystal(biome) {
+    const g = new THREE.Group();
+    const tint = new THREE.Color(biome.accent);
+    const mat = new THREE.MeshStandardMaterial({
+      color: tint,
+      emissive: tint.clone().multiplyScalar(0.4),
+      flatShading: true,
+      roughness: 0.35,
+      metalness: 0.1,
+    });
+    const shards = 3 + Math.floor(Math.random() * 3); // 3–5
+    for (let i = 0; i < shards; i++) {
+      const r = 0.1 + Math.random() * 0.12;
+      const shard = new THREE.Mesh(
+        new THREE.IcosahedronGeometry(r, 0),
+        mat
+      );
+      const a = (i / shards) * Math.PI * 2 + Math.random() * 0.5;
+      const off = 0.05 + Math.random() * 0.1;
+      shard.position.set(
+        Math.cos(a) * off,
+        r * (0.9 + Math.random() * 1.4),
+        Math.sin(a) * off
+      );
+      // stretch upward — shard-like silhouette
+      shard.scale.set(0.55, 1.5 + Math.random() * 0.8, 0.55);
+      shard.rotation.y = Math.random() * Math.PI * 2;
+      shard.rotation.z = (Math.random() - 0.5) * 0.35;
+      shard.castShadow = true;
+      g.add(shard);
+    }
+    return g;
+  },
+
+  bigmushroom(biome) {
+    const g = new THREE.Group();
+    // tall stem — creatures could pass beneath the cap
+    const stemH = 1.4 + Math.random() * 0.5;
+    const stem = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.13, 0.18, stemH, 7),
+      new THREE.MeshStandardMaterial({
+        color: "#f1e8d8",
+        flatShading: true,
+        roughness: 0.95,
+      })
+    );
+    stem.position.y = stemH / 2;
+    stem.rotation.z = (Math.random() - 0.5) * 0.1;
+    stem.castShadow = true;
+    g.add(stem);
+    // wide hemisphere cap
+    const capCol = new THREE.Color(biome.accent);
+    const cap = new THREE.Mesh(
+      new THREE.SphereGeometry(0.8, 12, 8, 0, Math.PI * 2, 0, Math.PI / 2),
+      applyWindSway(
+        new THREE.MeshStandardMaterial({
+          color: capCol,
+          flatShading: true,
+          roughness: 0.55,
+        }),
+        0.35
+      )
+    );
+    cap.position.y = stemH;
+    cap.scale.set(1, 0.55, 1);
+    cap.castShadow = true;
+    g.add(cap);
+    // a few pale spots on the cap
+    const spotMat = new THREE.MeshStandardMaterial({
+      color: "#fbf3df",
+      flatShading: true,
+      roughness: 0.9,
+    });
+    const spots = 3 + Math.floor(Math.random() * 3);
+    for (let i = 0; i < spots; i++) {
+      const a = Math.random() * Math.PI * 2;
+      const r = 0.25 + Math.random() * 0.4;
+      const spot = new THREE.Mesh(
+        new THREE.SphereGeometry(0.08 + Math.random() * 0.05, 6, 5),
+        spotMat
+      );
+      spot.position.set(
+        Math.cos(a) * r,
+        stemH + Math.sqrt(Math.max(0, 0.64 - r * r)) * 0.55 - 0.02,
+        Math.sin(a) * r
+      );
+      spot.scale.y = 0.35;
+      g.add(spot);
+    }
+    return g;
+  },
+
+  berrybush(biome) {
+    const g = new THREE.Group();
+    const leafCol = new THREE.Color(biome.ground[0]).offsetHSL(0, 0.08, 0.05);
+    const body = new THREE.Mesh(
+      jitterGeo(new THREE.IcosahedronGeometry(0.32, 0), 0.08),
+      applyWindSway(
+        new THREE.MeshStandardMaterial({
+          color: leafCol,
+          flatShading: true,
+          roughness: 0.85,
+        }),
+        0.7
+      )
+    );
+    body.position.y = 0.28;
+    body.scale.set(1, 0.85, 1);
+    body.castShadow = true;
+    g.add(body);
+    // berries — small accent-colored spheres parented on top
+    const berryCol = new THREE.Color(biome.accent);
+    const berryMat = new THREE.MeshStandardMaterial({
+      color: berryCol,
+      flatShading: true,
+      roughness: 0.55,
+    });
+    const berries = 4 + Math.floor(Math.random() * 4);
+    for (let i = 0; i < berries; i++) {
+      const a = Math.random() * Math.PI * 2;
+      const r = 0.15 + Math.random() * 0.15;
+      const berry = new THREE.Mesh(
+        new THREE.SphereGeometry(0.05, 6, 5),
+        berryMat
+      );
+      berry.position.set(
+        Math.cos(a) * r,
+        0.4 + Math.random() * 0.1,
+        Math.sin(a) * r
+      );
+      g.add(berry);
+    }
+    return g;
+  },
+
+  lantern(biome) {
+    const g = new THREE.Group();
+    const glowCol = new THREE.Color(biome.accent);
+    // thin tether line from ground up to the orb
+    const tetherH = 1.3 + Math.random() * 0.4;
+    const tether = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.012, 0.012, tetherH, 4),
+      new THREE.MeshStandardMaterial({
+        color: new THREE.Color(biome.cliff).offsetHSL(0, 0, 0.1),
+        flatShading: true,
+        roughness: 1,
+      })
+    );
+    tether.position.y = tetherH / 2;
+    g.add(tether);
+    // soft glow orb at the top
+    const orb = new THREE.Mesh(
+      new THREE.IcosahedronGeometry(0.12, 1),
+      new THREE.MeshStandardMaterial({
+        color: glowCol,
+        emissive: glowCol.clone().multiplyScalar(0.9),
+        flatShading: true,
+        roughness: 0.4,
+      })
+    );
+    orb.position.y = tetherH + 0.05;
+    g.add(orb);
+    // faint outer halo (slightly larger, additive-blended sphere)
+    const halo = new THREE.Mesh(
+      new THREE.IcosahedronGeometry(0.2, 1),
+      new THREE.MeshBasicMaterial({
+        color: glowCol,
+        transparent: true,
+        opacity: 0.18,
+        blending: THREE.AdditiveBlending,
+        depthWrite: false,
+      })
+    );
+    halo.position.copy(orb.position);
+    g.add(halo);
     return g;
   },
 };
@@ -1289,8 +1569,8 @@ function makeButterfly(palette, biome) {
     wings.push({ pivot, side, isBack: true });
   }
 
-  // 25% smaller overall
-  group.scale.setScalar(0.75);
+  // 25% smaller overall (then another 25% smaller per user request)
+  group.scale.setScalar(0.5625);
 
   return {
     group,
@@ -1381,9 +1661,10 @@ function stepButterfly(b, dt, t, flowerSpots, heightFn) {
     if (b.velocity.y < 0) b.velocity.y = 0.2;
   }
 
-  // orient toward velocity
+  // orient toward velocity — body's head is on +Z, so look "back" from motion
+  // direction so lookAt's -Z forward convention puts head leading.
   if (b.velocity.lengthSq() > 0.08) {
-    _bflyTarget.copy(pos).add(b.velocity);
+    _bflyTarget.copy(pos).sub(b.velocity);
     b.group.lookAt(_bflyTarget);
   }
 
