@@ -123,6 +123,7 @@ export function makeCreature(biome, opts = {}) {
   );
   belly.position.set(0, -0.12, 0.05);
   belly.scale.set(0.85, 0.55, 1);
+  belly.userData.baseScale = belly.scale.clone();
   group.add(belly);
 
   // eyes
@@ -315,7 +316,8 @@ export function makeCreature(biome, opts = {}) {
   const isBurrower = !!opts.burrower && !flies;
 
   // Sleepers spawn already curled (eyes scaled to 0, body squashed, legs
-  // tucked under the body). stepCreature animates the wake-up in reverse.
+  // tucked under the body, belly collapsed). stepCreature animates the
+  // wake-up in reverse.
   let wakeProgress = isSleeper ? 0 : 1;
   if (isSleeper) {
     for (const e of eyeParts) e.scale.setScalar(0);
@@ -324,6 +326,7 @@ export function makeCreature(biome, opts = {}) {
       legs[i].scale.y = 0.02;
       feet[i].position.y = -0.15;
     }
+    belly.scale.set(0, 0, 0);
   }
 
   // Personality stamp — pulled from the deterministic RNG during world-gen,
@@ -339,6 +342,7 @@ export function makeCreature(biome, opts = {}) {
   return {
     group,
     body,
+    belly,
     feet,
     legs,
     wings,
@@ -552,6 +556,8 @@ export function stepCreature(c, dt, t, heightFn) {
       c.legs[i].scale.y = 0.02;
       c.feet[i].position.y = -0.15;
     }
+    // belly hidden — sphere would poke out below the squashed body
+    if (c.belly) c.belly.scale.set(0, 0, 0);
     // keep planted at ground height
     const ground = heightFn(c.group.position.x, c.group.position.z);
     c.group.position.y = ground + 0.28 * c.scale;
@@ -572,6 +578,11 @@ export function stepCreature(c, dt, t, heightFn) {
       c.legs[i].scale.y = 0.02 + (0.22 - 0.02) * w;
       c.feet[i].position.y = -0.15 + (-0.32 - -0.15) * w;
     }
+    // belly inflates back to its base scale
+    if (c.belly) {
+      const bs = c.belly.userData.baseScale;
+      c.belly.scale.set(bs.x * w, bs.y * w, bs.z * w);
+    }
     if (w >= 1) c._waking = false;
   }
 
@@ -591,6 +602,12 @@ export function stepCreature(c, dt, t, heightFn) {
     for (let i = 0; i < c.legs.length; i++) {
       c.legs[i].scale.y = 0.22 + (0.02 - 0.22) * curl;
       c.feet[i].position.y = -0.32 + (-0.15 - -0.32) * curl;
+    }
+    // Belly shrinks toward zero as the body squashes flat over it
+    if (c.belly) {
+      const bs = c.belly.userData.baseScale;
+      const open = 1 - curl;
+      c.belly.scale.set(bs.x * open, bs.y * open, bs.z * open);
     }
     if (s > 0.6) {
       // fully curled — slow breath, no motion, planted on the ground
