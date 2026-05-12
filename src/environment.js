@@ -15,6 +15,10 @@ export function makeParticles(biome) {
     ember: 180,
     lichenmote: 140,
     feather: 120,
+    bubble: 140,
+    leaf: 120,
+    spark: 240,
+    rain: 520,
   }[kind] || 200;
 
   const positions = new Float32Array(count * 3);
@@ -44,6 +48,10 @@ export function makeParticles(biome) {
     ember: biome.accent,
     lichenmote: biome.accent,
     feather: "#ffffff",
+    bubble: biome.water || biome.sky,
+    leaf: biome.accent,
+    spark: biome.sun,
+    rain: biome.sun,
   };
 
   const sizeMap = {
@@ -51,12 +59,20 @@ export function makeParticles(biome) {
     snow: 0.1,
     lichenmote: 0.12,
     feather: 0.18,
+    bubble: 0.13,
+    leaf: 0.16,
+    spark: 0.08,
+    rain: 0.06,
   };
   const opacityMap = {
     dust: 0.35,
     feather: 0.7,
+    bubble: 0.55,
+    leaf: 0.85,
+    spark: 0.95,
+    rain: 0.55,
   };
-  const additive = new Set(["firefly", "ember", "lichenmote"]);
+  const additive = new Set(["firefly", "ember", "lichenmote", "spark"]);
 
   const mat = new THREE.PointsMaterial({
     color: new THREE.Color(colorMap[kind]),
@@ -146,6 +162,54 @@ export function stepParticles(points, dt, t) {
         x = Math.cos(a) * nr;
         z = Math.sin(a) * nr;
       }
+    } else if (kind === "bubble") {
+      // slow upward drift with a soft wobble — pops at the top
+      y += (0.35 + (s % 1) * 0.25) * dt;
+      x += Math.sin(t * 1.1 + s * 1.4) * 0.18 * dt;
+      z += Math.cos(t * 0.95 + s * 1.2) * 0.18 * dt;
+      if (y > 8) {
+        y = -0.2;
+        const r = Math.sqrt(Math.random()) * state.ISLAND_RADIUS * 1.05;
+        const a = Math.random() * Math.PI * 2;
+        x = Math.cos(a) * r;
+        z = Math.sin(a) * r;
+      }
+    } else if (kind === "leaf") {
+      // drifting fall, slower than dust, with horizontal flutter that emulates tumbling
+      y -= (0.32 + (s % 1) * 0.18) * dt;
+      x += Math.sin(t * 1.6 + s * 2.1) * 0.55 * dt;
+      z += Math.cos(t * 1.3 + s * 1.7) * 0.55 * dt;
+      if (y < -1) {
+        y = 12 + Math.random() * 3;
+        const r = Math.sqrt(Math.random()) * state.ISLAND_RADIUS * 1.05;
+        const a = Math.random() * Math.PI * 2;
+        x = Math.cos(a) * r;
+        z = Math.sin(a) * r;
+      }
+    } else if (kind === "spark") {
+      // hotter, faster-rising, smaller than ember
+      y += (1.1 + (s % 1) * 0.8) * dt;
+      x += Math.sin(t * 2.2 + s) * 0.3 * dt;
+      z += Math.cos(t * 1.9 + s) * 0.3 * dt;
+      if (y > 11) {
+        y = 0;
+        const r = Math.random() * state.ISLAND_RADIUS * 0.85;
+        const a = Math.random() * Math.PI * 2;
+        x = Math.cos(a) * r;
+        z = Math.sin(a) * r;
+      }
+    } else if (kind === "rain") {
+      // near-vertical streaks with a hint of horizontal drift
+      y -= (8.5 + (s % 1) * 2.5) * dt;
+      x += Math.sin(t * 0.4 + s) * 0.06 * dt;
+      z += Math.cos(t * 0.35 + s) * 0.06 * dt;
+      if (y < -1.5) {
+        y = 12 + Math.random() * 4;
+        const r = Math.sqrt(Math.random()) * state.ISLAND_RADIUS * 1.1;
+        const a = Math.random() * Math.PI * 2;
+        x = Math.cos(a) * r;
+        z = Math.sin(a) * r;
+      }
     } else {
       // pollen — gentle float
       x += Math.sin(t * 0.5 + s) * 0.15 * dt;
@@ -166,6 +230,8 @@ export function stepParticles(points, dt, t) {
     points.material.opacity = 0.6 + Math.sin(t * 2) * 0.25;
   } else if (kind === "lichenmote") {
     points.material.opacity = 0.45 + Math.sin(t * 1.4) * 0.2;
+  } else if (kind === "spark") {
+    points.material.opacity = 0.75 + Math.sin(t * 4.5) * 0.2;
   }
 
   points.geometry.attributes.position.needsUpdate = true;

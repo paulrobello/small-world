@@ -6,13 +6,6 @@ Remove completed items from this list, commit and push so its live on github pag
 
 ---
 
-## Particles
-
-- **`bubble`** — for water-adjacent biomes (marsh, coral). Slow upward drift with slight wobble.
-- **`leaf`** — drifting falling leaves in verdant/golden biomes. Slower than dust, with rotation.
-- **`spark`** — for ashen/volcanic; smaller, hotter, faster-rising than `ember`.
-- **`rain`** — vertical streaks in marsh. Could combine with a subtle ground-ripple shader on terrain.
-
 ## World Generation
 
 - **Caves / arches** (L) — carve negative-space holes through the island using a third noise field with a CSG-style threshold. Probably needs a marching-cubes pass instead of `PlaneGeometry` — large change, save for later.
