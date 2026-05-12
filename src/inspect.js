@@ -37,6 +37,9 @@ let _specimen = null;
 let _specimenKind = "creature";
 let _hudEl = null;
 let _stage = null;
+let _paused = false;
+let _stepOnce = false;
+let _frozenT = 0;
 
 function disposeObject(o) {
   o.traverse((child) => {
@@ -164,12 +167,14 @@ function updateHud() {
   if (!_hudEl) return;
   const biome = BIOMES[_biomeIdx];
   const variant = VARIANTS[_variantIdx];
+  const pauseTag = _paused ? `<span class="ihud-paused">PAUSED</span>` : "";
   _hudEl.innerHTML =
     `<span class="ihud-key">INSPECT</span>` +
     `<span class="ihud-val">${biome.name}</span>` +
     `<span class="ihud-sep">·</span>` +
     `<span class="ihud-val">${variant.name}</span>` +
-    `<span class="ihud-keys">[/] biome &nbsp; ,/. variant &nbsp; r reroll</span>`;
+    pauseTag +
+    `<span class="ihud-keys">[/] biome &nbsp; ,/. variant &nbsp; r reroll &nbsp; space pause &nbsp; → step</span>`;
 }
 
 const _flatHeight = () => 0;
@@ -222,6 +227,15 @@ export function setupInspect(scene, renderer, camera, controls) {
       Math.random = mulberry32(Date.now() & 0xffff);
       spawnSpecimen(scene);
       Math.random = r;
+    } else if (e.key === " ") {
+      _paused = !_paused;
+      _stepOnce = false;
+      // Freeze camera auto-rotate too so screenshots compose cleanly
+      controls.autoRotate = !_paused;
+      updateHud();
+      e.preventDefault();
+    } else if (e.key === "ArrowRight" && _paused) {
+      _stepOnce = true;
     }
   });
 
@@ -230,8 +244,26 @@ export function setupInspect(scene, renderer, camera, controls) {
 
 export function stepInspect(dt, t) {
   if (!_specimen) return;
+  // Pause/step: when paused, zero dt and freeze t so all sin-time-driven
+  // animations (bob, flap, breath) stop. ArrowRight while paused advances
+  // exactly one ~16 ms frame.
+  let useDt = dt;
+  let useT = t;
+  if (_paused) {
+    if (_stepOnce) {
+      useDt = 1 / 60;
+      _frozenT += useDt;
+      useT = _frozenT;
+      _stepOnce = false;
+    } else {
+      useDt = 0;
+      useT = _frozenT;
+    }
+  } else {
+    _frozenT = t;
+  }
   if (_specimenKind === "caterpillar") {
-    stepCaterpillar(_specimen, dt, t, _flatHeight);
+    stepCaterpillar(_specimen, useDt, useT, _flatHeight);
     // Caterpillars/snails move their segments in world coords (not via the
     // group transform), so they wander off the turntable. Clamp the head's
     // XZ to a small ring near origin — the body trail follows behind, which
@@ -247,7 +279,7 @@ export function stepInspect(dt, t) {
       }
     }
   } else {
-    stepCreature(_specimen, dt, t, _flatHeight);
+    stepCreature(_specimen, useDt, useT, _flatHeight);
     // Keep the specimen pinned to the turntable center — internal animations
     // (idle bob, breathing, fin sway, walk cycle) still play, but the creature
     // doesn't wander off the disc.

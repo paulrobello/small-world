@@ -992,3 +992,14 @@ body.photo-mode .grain {
   font-size: 10px;
   letter-spacing: 0.04em;
 }
+.inspect-hud .ihud-paused {
+  margin-left: 6px;
+  padding: 2px 8px;
+  background: rgba(244, 162, 97, 0.18);
+  border: 1px solid rgba(244, 162, 97, 0.5);
+  border-radius: 999px;
+  color: #f4a261;
+  font-weight: 500;
+  letter-spacing: 0.16em;
+  font-size: 10px;
+}
