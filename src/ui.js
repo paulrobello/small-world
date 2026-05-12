@@ -2,6 +2,7 @@ import * as THREE from "three";
 import { state } from "./state.js";
 import { readSeedFromUrl, newRandomSeed, formatSeed } from "./seed.js";
 import { generateWorld, setFollowReleaseCallback } from "./world.js";
+import { islandFalloff, nearestCenter } from "./terrain.js";
 import { wakeCreature } from "./fauna.js";
 import { BIOMES } from "./biomes.js";
 import { LOWFX } from "./lowfx.js";
@@ -266,27 +267,52 @@ export function initUi({ camera, canvas, controls, renderer }) {
     const savedAutoRotate = controls.autoRotate;
     controls.autoRotate = false;
     controls.enabled = false;
-    // Initial yaw from current camera facing toward controls target. Pitch
-    // resets to 0 (horizontal) so the player isn't staring at their feet —
-    // the orbit camera is usually angled downward, which makes for an awful
-    // first-person starting view.
-    const dx = controls.target.x - camera.position.x;
-    const dz = controls.target.z - camera.position.z;
-    const yaw = Math.atan2(-dx, -dz);
+    // Remember the look target for yaw — computed AFTER any XZ snap below so
+    // the player still faces what they were looking at, even if we moved them.
+    const lookX = controls.target.x;
+    const lookZ = controls.target.z;
+    // Pitch resets to 0 (horizontal) — the orbit camera is usually angled
+    // downward, which makes for an awful first-person starting view.
     const pitch = 0;
-    // If the camera is currently over the void (off-island), snap its XZ to
-    // the look-target so the player lands on the spot they were looking at
-    // rather than floating where the orbit camera happened to be parked.
-    if (state.heightFn(camera.position.x, camera.position.z) < 0) {
-      let tx = controls.target.x;
-      let tz = controls.target.z;
-      if (state.heightFn(tx, tz) < 0) {
-        tx = 0;
-        tz = 0;
+    // If the camera is currently over the void (off-island), walk it toward
+    // the nearest island center until it hits solid ground — so the player
+    // lands at the edge from their viewing direction rather than dropping
+    // straight down into nothing. heightFn isn't reliable for this check
+    // (it returns negative inside the island wherever noise dips below 0),
+    // so detect off-island via islandFalloff across all layout centers.
+    const onIsland = (x, z) => {
+      for (const c of state.currentLayout.centers) {
+        if (islandFalloff(c, x, z) > 0.15) return true;
+      }
+      return false;
+    };
+    if (!onIsland(camera.position.x, camera.position.z)) {
+      const c = nearestCenter(camera.position.x, camera.position.z);
+      let tx = camera.position.x;
+      let tz = camera.position.z;
+      const ddx = c.cx - tx;
+      const ddz = c.cz - tz;
+      const dist = Math.hypot(ddx, ddz);
+      if (dist > 0.01) {
+        const step = Math.max(0.5, c.radius * 0.05);
+        const ux = ddx / dist;
+        const uz = ddz / dist;
+        for (let i = 0; i < 200 && !onIsland(tx, tz); i++) {
+          tx += ux * step;
+          tz += uz * step;
+        }
+      } else {
+        tx = c.cx;
+        tz = c.cz;
       }
       camera.position.x = tx;
       camera.position.z = tz;
     }
+    // Initial yaw from the (possibly snapped) camera position toward the
+    // original look-target, so the player faces what they were viewing.
+    const dx = lookX - camera.position.x;
+    const dz = lookZ - camera.position.z;
+    const yaw = Math.atan2(-dx, -dz);
     // Drop the camera to creature-eye height on the terrain at its XZ.
     const groundY = Math.max(0, state.heightFn(camera.position.x, camera.position.z));
     _stroll = {
