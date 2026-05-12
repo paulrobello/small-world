@@ -887,9 +887,14 @@ body.photo-mode .photo-seed { opacity: 0.85; pointer-events: auto; }
   display: flex;
   gap: 8px;
   margin-top: 6px;
-  pointer-events: auto;
+  /* Hit area is suppressed outside photo-mode so these invisible buttons don't
+     swallow taps on regen / settings on narrow viewports where they overlap. */
+  pointer-events: none;
 }
+body.photo-mode .photo-actions,
+body.photo-mode .photo-action { pointer-events: auto; }
 .photo-action {
+  pointer-events: none;
   background: rgba(20, 20, 24, 0.55);
   border: 1px solid var(--ink-dim);
   color: var(--ink);
