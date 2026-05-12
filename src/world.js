@@ -220,17 +220,28 @@ export function generateWorld(seed) {
   // flora
   let placed = 0;
   let attempts = 0;
+  let crystalCount = 0;
+  const CRYSTAL_CAP = 4;
   while (placed < biome.floraCount && attempts < biome.floraCount * 6) {
     attempts++;
     const p = pickGroundPoint(0.88);
     const y = state.heightFn(p.x, p.z);
     if (y < -0.3) continue; // skip steep cliffs / void
     const kind = biome.flora[Math.floor(Math.random() * biome.flora.length)];
+    // Hard cap on crystals — they each spawn a point light, and we want at
+    // most 4 in any world to keep the shader cost (and the visual chaos) down.
+    if (kind === "crystal" && crystalCount >= CRYSTAL_CAP) continue;
     const f = FLORA_BUILDERS[kind](biome);
     f.position.set(p.x, y, p.z);
     f.rotation.y = Math.random() * Math.PI * 2;
     const s = 0.7 + Math.random() * 0.7;
     f.scale.setScalar(s);
+    if (kind === "crystal") {
+      const glow = new THREE.PointLight(new THREE.Color(biome.accent), 1.4, 6.5, 1.8);
+      glow.position.set(0, 0.6, 0); // sits inside the cluster
+      f.add(glow);
+      crystalCount++;
+    }
     state.world.add(f);
     placed++;
   }
