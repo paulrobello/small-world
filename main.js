@@ -15,6 +15,7 @@ import { stepShadowDisks } from "./src/shadows.js";
 import { stepClouds } from "./src/sky.js";
 import { LOWFX } from "./src/lowfx.js";
 import { sharedFurUniforms } from "./src/fur.js";
+import { initPostFX } from "./src/postfx.js";
 import {
   initUi,
   getFollowTarget,
@@ -75,6 +76,18 @@ setSceneRef(scene);
 setControlsRef(controls);
 state.camera = camera;
 state.renderer = renderer;
+
+const postfx = initPostFX(renderer, scene, camera);
+state.postfx = postfx;
+
+window.addEventListener("resize", () => {
+  const w = window.innerWidth;
+  const h = window.innerHeight;
+  camera.aspect = w / h;
+  camera.updateProjectionMatrix();
+  renderer.setSize(w, h);
+  postfx.onResize(w, h);
+});
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Animation loop
@@ -158,7 +171,17 @@ function animate() {
     }
     controls.update();
   }
-  renderer.render(scene, camera);
+  // Update tilt-shift focus band: project the island origin to screen-Y so
+  // the sharp band tracks the island as the camera orbits.
+  if (postfx.isActive && postfx.isActive()) {
+    const v = new THREE.Vector3(0, 1.5, 0).project(camera);
+    // v.y is in NDC [-1, 1]; convert to UV [0, 1]. Three's UV origin is at
+    // bottom-left, so (v.y * 0.5 + 0.5) gives the right vertical axis.
+    postfx.updateTiltShiftFocus(v.y * 0.5 + 0.5);
+    postfx.render(scene, camera);
+  } else {
+    renderer.render(scene, camera);
+  }
 }
 
 initUi({ camera, canvas, controls, renderer });
