@@ -122,7 +122,6 @@ function animate() {
       sharedFurUniforms.uLightDir.value
         .copy(state.sunLight.position)
         .normalize();
-      sharedFurUniforms.uLightIntensity.value = state.sunLight.intensity;
     }
   }
 

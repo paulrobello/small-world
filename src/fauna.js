@@ -108,8 +108,8 @@ export function makeCreature(biome, opts = {}) {
   // or airborne) a shell-fur layer. Burrowers + sleepers count as walkers.
   if (biome.fuzzy && !flies) {
     furShells = applyShellFur(body, biome, {
-      baseColor: bodyCol.clone().offsetHSL(0, 0, -0.04),
-      tipColor: bodyCol.clone().offsetHSL(0, -0.15, -0.08),
+      baseColor: bodyCol.clone(),                              // exact body color
+      tipColor: bodyCol.clone().offsetHSL(0, -0.05, 0.10),     // grass-style: slightly desat + lighter tips
     });
   }
 

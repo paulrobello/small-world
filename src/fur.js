@@ -20,7 +20,7 @@ varying vec3 vNormal;
 void main() {
   vLayerT = uShellLayer / uLayers;
   vec3 p = position + normal * uFurLength * vLayerT;
-  vHairUv = position.xy * 140.0 + position.zx * 95.0;
+  vHairUv = position.xy * 75.0 + position.zx * 50.0;
   vNormal = normalMatrix * normal;
   gl_Position = projectionMatrix * modelViewMatrix * vec4(p, 1.0);
 }
@@ -31,7 +31,6 @@ precision highp float;
 uniform vec3 uBaseColor;
 uniform vec3 uTipColor;
 uniform vec3 uLightDir;
-uniform float uLightIntensity;
 varying vec2 vHairUv;
 varying float vLayerT;
 varying vec3 vNormal;
@@ -48,9 +47,9 @@ void main() {
   if (h < threshold) discard;
   vec3 N = normalize(vNormal);
   float lam = max(0.0, dot(N, normalize(uLightDir)));
-  float rim = pow(1.0 - max(0.0, dot(N, vec3(0.0, 0.0, 1.0))), 2.0);
   vec3 c = mix(uBaseColor, uTipColor, vLayerT);
-  c *= 0.55 + 0.35 * lam * uLightIntensity + 0.08 * rim;
+  // flat lambert response — keep colour close to body PBR; avoid blowing out
+  c *= 0.7 + 0.3 * lam;
   gl_FragColor = vec4(c, 1.0 - vLayerT * 0.35);
 }
 `;
@@ -58,7 +57,6 @@ void main() {
 // Shared uniforms (one object reference, mutated each frame).
 export const sharedFurUniforms = {
   uLightDir: { value: new THREE.Vector3(1, 1, 1) },
-  uLightIntensity: { value: 1.0 },
   uLayers: { value: 8 },
 };
 
@@ -79,7 +77,6 @@ function makeFurTemplate(baseColor, tipColor, furLength) {
       uBaseColor: { value: baseColor.clone() },
       uTipColor: { value: tipColor.clone() },
       uLightDir: sharedFurUniforms.uLightDir,
-      uLightIntensity: sharedFurUniforms.uLightIntensity,
     },
   });
 }
@@ -107,7 +104,6 @@ export function applyShellFur(body, biome, opts = {}) {
     // Shared uniforms: re-bind so the clone reads the same object refs.
     mat.uniforms.uLayers = sharedFurUniforms.uLayers;
     mat.uniforms.uLightDir = sharedFurUniforms.uLightDir;
-    mat.uniforms.uLightIntensity = sharedFurUniforms.uLightIntensity;
     const shell = new THREE.Mesh(body.geometry, mat);
     shell.userData.isFurShell = true;
     // Children of body inherit body's animated scale/rotation/squash.
