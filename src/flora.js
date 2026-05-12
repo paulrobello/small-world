@@ -1,33 +1,52 @@
 import * as THREE from "three";
 import { jitterGeo, applyWindSway, TRUNK } from "./util.js";
 
+// Per-world resource pool. Each generateWorld() call resets it via
+// resetFloraPool(), so two trees in the same biome share one trunk
+// CylinderGeometry / MeshStandardMaterial, but rebuilding (which disposes
+// the previous world) starts fresh resources. Only colors that are
+// fully derived from the biome (no per-instance Math.random) are pooled —
+// `rock`, `pillar`, and `archstone` keep their per-instance jitter.
+let _pool = new Map();
+export function resetFloraPool() {
+  _pool = new Map();
+}
+function pooled(key, factory) {
+  let v = _pool.get(key);
+  if (v === undefined) {
+    v = factory();
+    _pool.set(key, v);
+  }
+  return v;
+}
+
 export const FLORA_BUILDERS = {
   tree(biome) {
     const g = new THREE.Group();
-    const leafCol = new THREE.Color(biome.ground[0])
-      .offsetHSL(0, 0.05, 0.08);
-    const trunk = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.13, 0.18, 1.1, 6),
-      new THREE.MeshStandardMaterial({
-        color: TRUNK,
-        flatShading: true,
-        roughness: 1,
-      })
+    const trunkGeo = pooled("tree.trunk.geo", () =>
+      new THREE.CylinderGeometry(0.13, 0.18, 1.1, 6)
     );
+    const trunkMat = pooled("tree.trunk.mat", () =>
+      new THREE.MeshStandardMaterial({ color: TRUNK, flatShading: true, roughness: 1 })
+    );
+    const trunk = new THREE.Mesh(trunkGeo, trunkMat);
     trunk.position.y = 0.55;
     trunk.castShadow = true;
     g.add(trunk);
-    const leaves = new THREE.Mesh(
-      jitterGeo(new THREE.IcosahedronGeometry(0.75, 0), 0.12),
+    const leafGeo = pooled("tree.leaves.geo", () =>
+      jitterGeo(new THREE.IcosahedronGeometry(0.75, 0), 0.12)
+    );
+    const leafMat = pooled("tree.leaves.mat", () =>
       applyWindSway(
         new THREE.MeshStandardMaterial({
-          color: leafCol,
+          color: new THREE.Color(biome.ground[0]).offsetHSL(0, 0.05, 0.08),
           flatShading: true,
           roughness: 0.85,
         }),
         1.0
       )
     );
+    const leaves = new THREE.Mesh(leafGeo, leafMat);
     leaves.position.y = 1.45;
     leaves.scale.set(1, 1.15, 1);
     leaves.castShadow = true;
@@ -37,28 +56,31 @@ export const FLORA_BUILDERS = {
 
   pine(biome) {
     const g = new THREE.Group();
-    const col = new THREE.Color(biome.accent).lerp(
-      new THREE.Color("#0d2c1f"),
-      0.35
+    const trunkGeo = pooled("pine.trunk.geo", () =>
+      new THREE.CylinderGeometry(0.08, 0.12, 0.4, 6)
     );
-    const trunk = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.08, 0.12, 0.4, 6),
+    const trunkMat = pooled("pine.trunk.mat", () =>
       new THREE.MeshStandardMaterial({ color: TRUNK, flatShading: true })
     );
+    const trunk = new THREE.Mesh(trunkGeo, trunkMat);
     trunk.position.y = 0.2;
     trunk.castShadow = true;
     g.add(trunk);
-    // shared cone material — windy
-    const coneMat = applyWindSway(
-      new THREE.MeshStandardMaterial({ color: col, flatShading: true }),
-      0.6
+    const coneMat = pooled("pine.cone.mat", () =>
+      applyWindSway(
+        new THREE.MeshStandardMaterial({
+          color: new THREE.Color(biome.accent).lerp(new THREE.Color("#0d2c1f"), 0.35),
+          flatShading: true,
+        }),
+        0.6
+      )
     );
     const tiers = 3 + Math.floor(Math.random() * 2);
     for (let i = 0; i < tiers; i++) {
-      const cone = new THREE.Mesh(
-        new THREE.ConeGeometry(0.65 - i * 0.13, 0.65, 6),
-        coneMat
+      const coneGeo = pooled("pine.cone.geo." + i, () =>
+        new THREE.ConeGeometry(0.65 - i * 0.13, 0.65, 6)
       );
+      const cone = new THREE.Mesh(coneGeo, coneMat);
       cone.position.y = 0.45 + i * 0.42;
       cone.castShadow = true;
       g.add(cone);
@@ -68,27 +90,25 @@ export const FLORA_BUILDERS = {
 
   cactus() {
     const g = new THREE.Group();
-    const m = new THREE.MeshStandardMaterial({
-      color: "#3d5a2e",
-      flatShading: true,
-      roughness: 0.8,
-    });
-    const body = new THREE.Mesh(
-      new THREE.CapsuleGeometry(0.18, 0.7, 4, 8),
-      m
+    const m = pooled("cactus.mat", () =>
+      new THREE.MeshStandardMaterial({ color: "#3d5a2e", flatShading: true, roughness: 0.8 })
     );
+    const bodyGeo = pooled("cactus.body.geo", () => new THREE.CapsuleGeometry(0.18, 0.7, 4, 8));
+    const body = new THREE.Mesh(bodyGeo, m);
     body.position.y = 0.6;
     body.castShadow = true;
     g.add(body);
     if (Math.random() > 0.4) {
-      const arm = new THREE.Mesh(new THREE.CapsuleGeometry(0.1, 0.4, 4, 8), m);
+      const armGeo = pooled("cactus.arm1.geo", () => new THREE.CapsuleGeometry(0.1, 0.4, 4, 8));
+      const arm = new THREE.Mesh(armGeo, m);
       arm.position.set(0.22, 0.7, 0);
       arm.rotation.z = -Math.PI / 2.5;
       arm.castShadow = true;
       g.add(arm);
     }
     if (Math.random() > 0.5) {
-      const arm = new THREE.Mesh(new THREE.CapsuleGeometry(0.1, 0.35, 4, 8), m);
+      const armGeo = pooled("cactus.arm2.geo", () => new THREE.CapsuleGeometry(0.1, 0.35, 4, 8));
+      const arm = new THREE.Mesh(armGeo, m);
       arm.position.set(-0.22, 0.55, 0);
       arm.rotation.z = Math.PI / 2.5;
       arm.castShadow = true;
@@ -99,28 +119,30 @@ export const FLORA_BUILDERS = {
 
   mushroom(biome) {
     const g = new THREE.Group();
-    const stem = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.07, 0.1, 0.35, 6),
-      new THREE.MeshStandardMaterial({
-        color: "#f1e8d8",
-        flatShading: true,
-      })
+    const stemGeo = pooled("mushroom.stem.geo", () =>
+      new THREE.CylinderGeometry(0.07, 0.1, 0.35, 6)
     );
+    const stemMat = pooled("mushroom.stem.mat", () =>
+      new THREE.MeshStandardMaterial({ color: "#f1e8d8", flatShading: true })
+    );
+    const stem = new THREE.Mesh(stemGeo, stemMat);
     stem.position.y = 0.18;
     stem.castShadow = true;
     g.add(stem);
-    const capCol = new THREE.Color(biome.accent);
-    const cap = new THREE.Mesh(
-      new THREE.SphereGeometry(0.22, 8, 6, 0, Math.PI * 2, 0, Math.PI / 2),
+    const capGeo = pooled("mushroom.cap.geo", () =>
+      new THREE.SphereGeometry(0.22, 8, 6, 0, Math.PI * 2, 0, Math.PI / 2)
+    );
+    const capMat = pooled("mushroom.cap.mat", () =>
       applyWindSway(
         new THREE.MeshStandardMaterial({
-          color: capCol,
+          color: new THREE.Color(biome.accent),
           flatShading: true,
           roughness: 0.6,
         }),
         0.4
       )
     );
+    const cap = new THREE.Mesh(capGeo, capMat);
     cap.position.y = 0.36;
     cap.scale.set(1.4, 0.9, 1.4);
     cap.castShadow = true;
@@ -130,20 +152,19 @@ export const FLORA_BUILDERS = {
 
   fern(biome) {
     const g = new THREE.Group();
-    const col = new THREE.Color(biome.ground[0]).offsetHSL(0, 0, 0.15);
-    const mat = applyWindSway(
-      new THREE.MeshStandardMaterial({
-        color: col,
-        flatShading: true,
-      }),
-      1.4
+    const mat = pooled("fern.mat", () =>
+      applyWindSway(
+        new THREE.MeshStandardMaterial({
+          color: new THREE.Color(biome.ground[0]).offsetHSL(0, 0, 0.15),
+          flatShading: true,
+        }),
+        1.4
+      )
     );
+    const bladeGeo = pooled("fern.blade.geo", () => new THREE.ConeGeometry(0.06, 0.5, 4));
     const blades = 4 + Math.floor(Math.random() * 3);
     for (let i = 0; i < blades; i++) {
-      const blade = new THREE.Mesh(
-        new THREE.ConeGeometry(0.06, 0.5, 4),
-        mat
-      );
+      const blade = new THREE.Mesh(bladeGeo, mat);
       const a = (i / blades) * Math.PI * 2;
       blade.position.set(Math.cos(a) * 0.05, 0.22, Math.sin(a) * 0.05);
       blade.rotation.z = Math.cos(a) * 0.6;
@@ -176,12 +197,11 @@ export const FLORA_BUILDERS = {
 
   reed() {
     const g = new THREE.Group();
-    const mat = applyWindSway(
-      new THREE.MeshStandardMaterial({
-        color: "#6d4f8a",
-        flatShading: true,
-      }),
-      1.6
+    const mat = pooled("reed.mat", () =>
+      applyWindSway(
+        new THREE.MeshStandardMaterial({ color: "#6d4f8a", flatShading: true }),
+        1.6
+      )
     );
     const count = 5 + Math.floor(Math.random() * 4);
     for (let i = 0; i < count; i++) {
@@ -203,13 +223,14 @@ export const FLORA_BUILDERS = {
 
   grass(biome) {
     const g = new THREE.Group();
-    const col = new THREE.Color(biome.ground[2]).offsetHSL(0, 0, -0.1);
-    const mat = applyWindSway(
-      new THREE.MeshStandardMaterial({
-        color: col,
-        flatShading: true,
-      }),
-      1.8
+    const mat = pooled("grass.mat", () =>
+      applyWindSway(
+        new THREE.MeshStandardMaterial({
+          color: new THREE.Color(biome.ground[2]).offsetHSL(0, 0, -0.1),
+          flatShading: true,
+        }),
+        1.8
+      )
     );
     const count = 3 + Math.floor(Math.random() * 4);
     for (let i = 0; i < count; i++) {
@@ -230,24 +251,26 @@ export const FLORA_BUILDERS = {
 
   deadtree(biome) {
     const g = new THREE.Group();
-    const mat = new THREE.MeshStandardMaterial({
-      color: new THREE.Color(biome.cliff).offsetHSL(0, -0.1, 0.05),
-      flatShading: true,
-      roughness: 1,
-    });
-    const trunk = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.06, 0.13, 1.2, 5),
-      mat
+    const mat = pooled("deadtree.mat", () =>
+      new THREE.MeshStandardMaterial({
+        color: new THREE.Color(biome.cliff).offsetHSL(0, -0.1, 0.05),
+        flatShading: true,
+        roughness: 1,
+      })
     );
+    const trunkGeo = pooled("deadtree.trunk.geo", () =>
+      new THREE.CylinderGeometry(0.06, 0.13, 1.2, 5)
+    );
+    const branchGeo = pooled("deadtree.branch.geo", () =>
+      new THREE.CylinderGeometry(0.025, 0.04, 0.45, 4)
+    );
+    const trunk = new THREE.Mesh(trunkGeo, mat);
     trunk.position.y = 0.6;
     trunk.rotation.z = (Math.random() - 0.5) * 0.15;
     trunk.castShadow = true;
     g.add(trunk);
     for (let i = 0; i < 4; i++) {
-      const branch = new THREE.Mesh(
-        new THREE.CylinderGeometry(0.025, 0.04, 0.45, 4),
-        mat
-      );
+      const branch = new THREE.Mesh(branchGeo, mat);
       branch.position.set(0, 0.9 + i * 0.08, 0);
       branch.rotation.z = (Math.random() - 0.5) * 1.6;
       branch.rotation.x = (Math.random() - 0.5) * 1.6;
@@ -259,28 +282,21 @@ export const FLORA_BUILDERS = {
 
   skull() {
     const g = new THREE.Group();
-    const mat = new THREE.MeshStandardMaterial({
-      color: "#f1ead8",
-      flatShading: true,
-      roughness: 0.8,
-    });
-    const skull = new THREE.Mesh(
-      new THREE.SphereGeometry(0.18, 10, 8),
-      mat
+    const mat = pooled("skull.mat", () =>
+      new THREE.MeshStandardMaterial({ color: "#f1ead8", flatShading: true, roughness: 0.8 })
     );
+    const skullGeo = pooled("skull.geo", () => new THREE.SphereGeometry(0.18, 10, 8));
+    const skull = new THREE.Mesh(skullGeo, mat);
     skull.scale.set(1, 0.85, 1.1);
     skull.position.y = 0.18;
     skull.castShadow = true;
     g.add(skull);
-    // eye sockets
-    const eyeMat = new THREE.MeshStandardMaterial({
-      color: "#1a1a1a",
-    });
+    const eyeMat = pooled("skull.eye.mat", () =>
+      new THREE.MeshStandardMaterial({ color: "#1a1a1a" })
+    );
+    const eyeGeo = pooled("skull.eye.geo", () => new THREE.SphereGeometry(0.04, 6, 6));
     [-0.06, 0.06].forEach((x) => {
-      const eye = new THREE.Mesh(
-        new THREE.SphereGeometry(0.04, 6, 6),
-        eyeMat
-      );
+      const eye = new THREE.Mesh(eyeGeo, eyeMat);
       eye.position.set(x, 0.2, 0.15);
       g.add(eye);
     });
@@ -391,13 +407,15 @@ export const FLORA_BUILDERS = {
 
   crystal(biome) {
     const g = new THREE.Group();
-    const tint = new THREE.Color(biome.accent);
-    const mat = new THREE.MeshStandardMaterial({
-      color: tint,
-      emissive: tint.clone().multiplyScalar(0.4),
-      flatShading: true,
-      roughness: 0.35,
-      metalness: 0.1,
+    const mat = pooled("crystal.mat", () => {
+      const tint = new THREE.Color(biome.accent);
+      return new THREE.MeshStandardMaterial({
+        color: tint,
+        emissive: tint.clone().multiplyScalar(0.4),
+        flatShading: true,
+        roughness: 0.35,
+        metalness: 0.1,
+      });
     });
     const shards = 3 + Math.floor(Math.random() * 3); // 3–5
     for (let i = 0; i < shards; i++) {
@@ -427,41 +445,38 @@ export const FLORA_BUILDERS = {
     const g = new THREE.Group();
     // tall stem — creatures could pass beneath the cap
     const stemH = 1.4 + Math.random() * 0.5;
+    const stemMat = pooled("bigmushroom.stem.mat", () =>
+      new THREE.MeshStandardMaterial({ color: "#f1e8d8", flatShading: true, roughness: 0.95 })
+    );
     const stem = new THREE.Mesh(
       new THREE.CylinderGeometry(0.13, 0.18, stemH, 7),
-      new THREE.MeshStandardMaterial({
-        color: "#f1e8d8",
-        flatShading: true,
-        roughness: 0.95,
-      })
+      stemMat
     );
     stem.position.y = stemH / 2;
     stem.rotation.z = (Math.random() - 0.5) * 0.1;
     stem.castShadow = true;
     g.add(stem);
-    // wide hemisphere cap
-    const capCol = new THREE.Color(biome.accent);
-    const cap = new THREE.Mesh(
-      new THREE.SphereGeometry(0.8, 12, 8, 0, Math.PI * 2, 0, Math.PI / 2),
+    const capGeo = pooled("bigmushroom.cap.geo", () =>
+      new THREE.SphereGeometry(0.8, 12, 8, 0, Math.PI * 2, 0, Math.PI / 2)
+    );
+    const capMat = pooled("bigmushroom.cap.mat", () =>
       applyWindSway(
         new THREE.MeshStandardMaterial({
-          color: capCol,
+          color: new THREE.Color(biome.accent),
           flatShading: true,
           roughness: 0.55,
         }),
         0.35
       )
     );
+    const cap = new THREE.Mesh(capGeo, capMat);
     cap.position.y = stemH;
     cap.scale.set(1, 0.55, 1);
     cap.castShadow = true;
     g.add(cap);
-    // a few pale spots on the cap
-    const spotMat = new THREE.MeshStandardMaterial({
-      color: "#fbf3df",
-      flatShading: true,
-      roughness: 0.9,
-    });
+    const spotMat = pooled("bigmushroom.spot.mat", () =>
+      new THREE.MeshStandardMaterial({ color: "#fbf3df", flatShading: true, roughness: 0.9 })
+    );
     const spots = 3 + Math.floor(Math.random() * 3);
     for (let i = 0; i < spots; i++) {
       const a = Math.random() * Math.PI * 2;
@@ -483,37 +498,37 @@ export const FLORA_BUILDERS = {
 
   berrybush(biome) {
     const g = new THREE.Group();
-    const leafCol = new THREE.Color(biome.ground[0]).offsetHSL(0, 0.08, 0.05);
-    const body = new THREE.Mesh(
-      jitterGeo(new THREE.IcosahedronGeometry(0.32, 0), 0.08),
+    const bodyGeo = pooled("berrybush.body.geo", () =>
+      jitterGeo(new THREE.IcosahedronGeometry(0.32, 0), 0.08)
+    );
+    const bodyMat = pooled("berrybush.body.mat", () =>
       applyWindSway(
         new THREE.MeshStandardMaterial({
-          color: leafCol,
+          color: new THREE.Color(biome.ground[0]).offsetHSL(0, 0.08, 0.05),
           flatShading: true,
           roughness: 0.85,
         }),
         0.7
       )
     );
+    const body = new THREE.Mesh(bodyGeo, bodyMat);
     body.position.y = 0.28;
     body.scale.set(1, 0.85, 1);
     body.castShadow = true;
     g.add(body);
-    // berries — small accent-colored spheres parented on top
-    const berryCol = new THREE.Color(biome.accent);
-    const berryMat = new THREE.MeshStandardMaterial({
-      color: berryCol,
-      flatShading: true,
-      roughness: 0.55,
-    });
+    const berryMat = pooled("berrybush.berry.mat", () =>
+      new THREE.MeshStandardMaterial({
+        color: new THREE.Color(biome.accent),
+        flatShading: true,
+        roughness: 0.55,
+      })
+    );
+    const berryGeo = pooled("berrybush.berry.geo", () => new THREE.SphereGeometry(0.05, 6, 5));
     const berries = 4 + Math.floor(Math.random() * 4);
     for (let i = 0; i < berries; i++) {
       const a = Math.random() * Math.PI * 2;
       const r = 0.15 + Math.random() * 0.15;
-      const berry = new THREE.Mesh(
-        new THREE.SphereGeometry(0.05, 6, 5),
-        berryMat
-      );
+      const berry = new THREE.Mesh(berryGeo, berryMat);
       berry.position.set(
         Math.cos(a) * r,
         0.4 + Math.random() * 0.1,
@@ -526,42 +541,44 @@ export const FLORA_BUILDERS = {
 
   lantern(biome) {
     const g = new THREE.Group();
-    const glowCol = new THREE.Color(biome.accent);
-    // thin tether line from ground up to the orb
     const tetherH = 1.3 + Math.random() * 0.4;
-    const tether = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.012, 0.012, tetherH, 4),
+    const tetherMat = pooled("lantern.tether.mat", () =>
       new THREE.MeshStandardMaterial({
         color: new THREE.Color(biome.cliff).offsetHSL(0, 0, 0.1),
         flatShading: true,
         roughness: 1,
       })
     );
+    const tether = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.012, 0.012, tetherH, 4),
+      tetherMat
+    );
     tether.position.y = tetherH / 2;
     g.add(tether);
-    // soft glow orb at the top
-    const orb = new THREE.Mesh(
-      new THREE.IcosahedronGeometry(0.12, 1),
-      new THREE.MeshStandardMaterial({
+    const orbGeo = pooled("lantern.orb.geo", () => new THREE.IcosahedronGeometry(0.12, 1));
+    const orbMat = pooled("lantern.orb.mat", () => {
+      const glowCol = new THREE.Color(biome.accent);
+      return new THREE.MeshStandardMaterial({
         color: glowCol,
         emissive: glowCol.clone().multiplyScalar(0.9),
         flatShading: true,
         roughness: 0.4,
-      })
-    );
+      });
+    });
+    const orb = new THREE.Mesh(orbGeo, orbMat);
     orb.position.y = tetherH + 0.05;
     g.add(orb);
-    // faint outer halo (slightly larger, additive-blended sphere)
-    const halo = new THREE.Mesh(
-      new THREE.IcosahedronGeometry(0.2, 1),
+    const haloGeo = pooled("lantern.halo.geo", () => new THREE.IcosahedronGeometry(0.2, 1));
+    const haloMat = pooled("lantern.halo.mat", () =>
       new THREE.MeshBasicMaterial({
-        color: glowCol,
+        color: new THREE.Color(biome.accent),
         transparent: true,
         opacity: 0.18,
         blending: THREE.AdditiveBlending,
         depthWrite: false,
       })
     );
+    const halo = new THREE.Mesh(haloGeo, haloMat);
     halo.position.copy(orb.position);
     g.add(halo);
     return g;
@@ -571,31 +588,30 @@ export const FLORA_BUILDERS = {
     const g = new THREE.Group();
     const baseCol = new THREE.Color(biome.accent);
     const altCol = baseCol.clone().offsetHSL(0.04, -0.05, 0.1);
-    const trunkMat = new THREE.MeshStandardMaterial({
-      color: baseCol.clone().offsetHSL(0, 0, -0.1),
-      flatShading: true,
-      roughness: 0.55,
-    });
-    // squat base bulb
-    const base = new THREE.Mesh(
-      new THREE.SphereGeometry(0.18, 8, 6),
-      trunkMat
+    const trunkMat = pooled("coral.trunk.mat", () =>
+      new THREE.MeshStandardMaterial({
+        color: baseCol.clone().offsetHSL(0, 0, -0.1),
+        flatShading: true,
+        roughness: 0.55,
+      })
     );
+    const baseGeo = pooled("coral.base.geo", () => new THREE.SphereGeometry(0.18, 8, 6));
+    const base = new THREE.Mesh(baseGeo, trunkMat);
     base.position.y = 0.12;
     base.scale.set(1.1, 0.55, 1.1);
     base.castShadow = true;
     g.add(base);
-    // 3–5 fan branches arching upward. Each branch is its own Group
-    // so the stalk + tip + knobs stay rigidly attached when the branch tilts.
+    const branchMatBase = pooled("coral.branch.mat.base", () =>
+      new THREE.MeshStandardMaterial({ color: baseCol, flatShading: true, roughness: 0.5 })
+    );
+    const branchMatAlt = pooled("coral.branch.mat.alt", () =>
+      new THREE.MeshStandardMaterial({ color: altCol, flatShading: true, roughness: 0.5 })
+    );
     const branches = 3 + Math.floor(Math.random() * 3);
     for (let i = 0; i < branches; i++) {
       const a = (i / branches) * Math.PI * 2 + Math.random() * 0.4;
       const len = 0.7 + Math.random() * 0.4;
-      const branchMat = new THREE.MeshStandardMaterial({
-        color: i % 2 === 0 ? baseCol : altCol,
-        flatShading: true,
-        roughness: 0.5,
-      });
+      const branchMat = i % 2 === 0 ? branchMatBase : branchMatAlt;
 
       const branch = new THREE.Group();
       // anchor the branch group at the base, pointing along the group's local +Y
@@ -645,26 +661,29 @@ export const FLORA_BUILDERS = {
   balloontree(biome) {
     const g = new THREE.Group();
     const trunkH = 1.1 + Math.random() * 0.5;
-    const trunk = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.07, 0.1, trunkH, 6),
+    const trunkMat = pooled("balloontree.trunk.mat", () =>
       new THREE.MeshStandardMaterial({
         color: new THREE.Color(biome.cliff).offsetHSL(0, 0, 0.15),
         flatShading: true,
         roughness: 1,
       })
     );
+    const trunk = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.07, 0.1, trunkH, 6),
+      trunkMat
+    );
     trunk.position.y = trunkH / 2;
     trunk.castShadow = true;
     g.add(trunk);
-    // puffy white canopy — overlapping spheres
-    const tint = new THREE.Color(biome.ground[2]).lerp(new THREE.Color("#ffffff"), 0.6);
-    const puffMat = applyWindSway(
-      new THREE.MeshStandardMaterial({
-        color: tint,
-        flatShading: true,
-        roughness: 0.95,
-      }),
-      0.3
+    const puffMat = pooled("balloontree.puff.mat", () =>
+      applyWindSway(
+        new THREE.MeshStandardMaterial({
+          color: new THREE.Color(biome.ground[2]).lerp(new THREE.Color("#ffffff"), 0.6),
+          flatShading: true,
+          roughness: 0.95,
+        }),
+        0.3
+      )
     );
     const puffs = 4 + Math.floor(Math.random() * 3);
     for (let i = 0; i < puffs; i++) {
@@ -696,15 +715,16 @@ export const FLORA_BUILDERS = {
 
   obsidianshard(biome) {
     const g = new THREE.Group();
-    const dark = new THREE.Color("#0d0a14");
     const ember = new THREE.Color(biome.accent);
-    const glassMat = new THREE.MeshStandardMaterial({
-      color: dark,
-      emissive: ember.clone().multiplyScalar(0.18),
-      flatShading: true,
-      roughness: 0.25,
-      metalness: 0.35,
-    });
+    const glassMat = pooled("obsidianshard.glass.mat", () =>
+      new THREE.MeshStandardMaterial({
+        color: new THREE.Color("#0d0a14"),
+        emissive: ember.clone().multiplyScalar(0.18),
+        flatShading: true,
+        roughness: 0.25,
+        metalness: 0.35,
+      })
+    );
     const shards = 3 + Math.floor(Math.random() * 3); // 3–5
     for (let i = 0; i < shards; i++) {
       const r = 0.1 + Math.random() * 0.13;
@@ -726,8 +746,8 @@ export const FLORA_BUILDERS = {
       g.add(shard);
     }
     // warm halo near the base — small additive sphere reading as crack-light
-    const halo = new THREE.Mesh(
-      new THREE.IcosahedronGeometry(0.18, 1),
+    const haloGeo = pooled("obsidianshard.halo.geo", () => new THREE.IcosahedronGeometry(0.18, 1));
+    const haloMat = pooled("obsidianshard.halo.mat", () =>
       new THREE.MeshBasicMaterial({
         color: ember,
         transparent: true,
@@ -736,6 +756,7 @@ export const FLORA_BUILDERS = {
         depthWrite: false,
       })
     );
+    const halo = new THREE.Mesh(haloGeo, haloMat);
     halo.position.y = 0.05;
     halo.scale.set(1.2, 0.4, 1.2);
     g.add(halo);

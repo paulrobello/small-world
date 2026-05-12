@@ -18,7 +18,7 @@ import {
   pickLayout,
   makeTerrain,
 } from "./terrain.js";
-import { FLORA_BUILDERS } from "./flora.js";
+import { FLORA_BUILDERS, resetFloraPool } from "./flora.js";
 import {
   makeCreature,
   makeCaterpillar,
@@ -35,6 +35,7 @@ import {
   makeWaterPlane,
   makeParallaxRing,
 } from "./environment.js";
+import { LOWFX, LOWFX_DENSITY } from "./lowfx.js";
 
 let _scene = null;
 let _controls = null;
@@ -168,6 +169,10 @@ export function generateWorld(seed) {
   // release any followed creature — the entity it pointed to no longer exists
   _releaseFollow();
 
+  // reset the flora resource pool — previous-world materials/geometries were
+  // just disposed via disposeGroup, so we can't reuse them
+  resetFloraPool();
+
   state.currentBiome = biome;
   state.currentSeed = seed;
 
@@ -259,7 +264,10 @@ export function generateWorld(seed) {
   let attempts = 0;
   let crystalCount = 0;
   const CRYSTAL_CAP = 4;
-  while (placed < biome.floraCount && attempts < biome.floraCount * 6) {
+  const floraTarget = LOWFX
+    ? Math.max(8, Math.round(biome.floraCount * LOWFX_DENSITY))
+    : biome.floraCount;
+  while (placed < floraTarget && attempts < floraTarget * 6) {
     attempts++;
     const p = pickGroundPoint(0.88);
     const y = state.heightFn(p.x, p.z);
@@ -298,10 +306,14 @@ export function generateWorld(seed) {
   const allowGroundVariants = biome.creatureKind !== "fish";
   let spawned = 0;
   let budget = ncreatures;
+  // In water biomes, raise the minimum-Y threshold so creatures don't spawn
+  // submerged. Matches the WATER_AVOID_Y check in fauna.js (slight margin
+  // above the waterline so waves never lap over them).
+  const groundMinY = biome.water ? 0.05 : 0;
   function placeOnGround(c) {
     let p = { x: 0, z: 0 };
     let y = -10;
-    for (let tries = 0; tries < 20 && y < 0; tries++) {
+    for (let tries = 0; tries < 20 && y < groundMinY; tries++) {
       p = pickGroundPoint(0.65);
       y = state.heightFn(p.x, p.z);
     }
@@ -399,7 +411,8 @@ export function generateWorld(seed) {
       const seed = state.flowerSpots[
         Math.floor(Math.random() * state.flowerSpots.length)
       ];
-      swarm.target = new THREE.Vector3(seed.x, seed.y + 0.35, seed.z);
+      swarm.target.set(seed.x, seed.y + 0.35, seed.z);
+      swarm.hasTarget = true;
       swarm.retargetIn = 4 + Math.random() * 5;
       for (let i = 0; i < beesInSwarm; i++) {
         const bee = makeBee(swarm, biome);

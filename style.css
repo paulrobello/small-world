@@ -329,12 +329,19 @@ body {
     gap: 10px;
   }
   .controls .hint { display: none; }
+  .controls-row { flex: 1 1 auto; }
   .regen {
     flex: 1 1 auto;
     justify-content: center;
     padding: 14px 16px;
     font-size: 10px;
     letter-spacing: 0.28em;
+    min-height: 44px;
+  }
+  .settings-toggle,
+  .help-toggle {
+    flex: 0 0 auto;
+    width: 44px;
     min-height: 44px;
   }
   .regen:hover {
@@ -368,44 +375,18 @@ body {
   .regen:hover .regen-glyph { transform: none; }
 }
 
-/* ─── Settings panel ─────────────────────────────────────────────────── */
-.settings-toggle {
-  position: fixed;
-  top: 150px;
-  right: 14px;
-  z-index: 11;
-  width: 36px;
-  height: 36px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  background: rgba(20, 20, 24, 0.35);
-  border: 1px solid var(--ink-dim);
-  color: var(--ink);
-  font-family: "Major Mono Display", monospace;
-  font-size: 16px;
-  cursor: pointer;
-  backdrop-filter: blur(4px);
-  transition: border-color 0.4s ease, background 0.4s ease, transform 0.4s ease;
+/* ─── Inline toggles (live in .controls-row, left of regenerate) ─────── */
+.controls-row {
+  display: flex;
+  align-items: stretch;
+  gap: 8px;
 }
-.settings-toggle:hover {
-  border-color: var(--ink);
-  background: rgba(245, 240, 230, 0.1);
-}
-.settings-glyph {
-  display: inline-block;
-  transition: transform 0.6s cubic-bezier(0.7, 0, 0.3, 1);
-}
-.settings-toggle:hover .settings-glyph { transform: rotate(72deg); }
 
-/* ─── Help toggle + panel ─── */
+.settings-toggle,
 .help-toggle {
-  position: fixed;
-  top: 150px;
-  right: 58px;
   z-index: 11;
-  width: 36px;
-  height: 36px;
+  width: 40px;
+  min-height: 44px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -418,14 +399,20 @@ body {
   backdrop-filter: blur(4px);
   transition: border-color 0.4s ease, background 0.4s ease;
 }
+.settings-toggle:hover,
 .help-toggle:hover {
   border-color: var(--ink);
   background: rgba(245, 240, 230, 0.1);
 }
+.settings-glyph {
+  display: inline-block;
+  transition: transform 0.6s cubic-bezier(0.7, 0, 0.3, 1);
+}
+.settings-toggle:hover .settings-glyph { transform: rotate(72deg); }
 
 .help-panel {
   position: fixed;
-  top: 200px;
+  bottom: 90px;
   right: 14px;
   z-index: 11;
   width: 320px;
@@ -476,27 +463,26 @@ body {
   letter-spacing: 0.1em;
 }
 
-body.photo-mode .help-toggle,
 body.photo-mode .help-panel {
   opacity: 0 !important;
   pointer-events: none;
 }
 
 @media (max-width: 720px) {
-  .help-toggle { top: 180px; right: 56px; }
   .help-panel {
-    top: 230px;
+    bottom: auto;
+    top: 12px;
     left: 12px;
     right: 12px;
     width: auto;
     max-width: none;
-    max-height: calc(100vh - 250px);
+    max-height: 60vh;
   }
 }
 
 .settings-panel {
   position: fixed;
-  top: 200px;
+  bottom: 90px;
   right: 14px;
   z-index: 11;
   width: 280px;
@@ -895,10 +881,38 @@ body.photo-mode .help-panel {
   letter-spacing: 0.1em;
   color: var(--ink-dim);
 }
-body.photo-mode .photo-seed { opacity: 0.85; }
+body.photo-mode .photo-seed { opacity: 0.85; pointer-events: auto; }
+
+.photo-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 6px;
+  pointer-events: auto;
+}
+.photo-action {
+  background: rgba(20, 20, 24, 0.55);
+  border: 1px solid var(--ink-dim);
+  color: var(--ink);
+  font-family: "DM Mono", monospace;
+  font-size: 10px;
+  letter-spacing: 0.22em;
+  text-transform: lowercase;
+  padding: 8px 14px;
+  cursor: pointer;
+  backdrop-filter: blur(4px);
+  transition: border-color 0.3s ease, background 0.3s ease;
+}
+.photo-action:hover {
+  border-color: var(--ink);
+  background: rgba(245, 240, 230, 0.08);
+}
+/* Touch-first devices have no keyboard hints; bigger tap targets. */
+@media (hover: none) {
+  .photo-hint { display: none; }
+  .photo-action { padding: 12px 18px; font-size: 11px; }
+}
 body.photo-mode .hud,
 body.photo-mode .corner,
-body.photo-mode .settings-toggle,
 body.photo-mode .settings-panel,
 body.photo-mode .follow-banner,
 body.photo-mode .vignette,
@@ -913,15 +927,12 @@ body.photo-mode .grain {
 
 @media (max-width: 720px) {
   .settings-panel {
-    top: 230px;
+    bottom: auto;
+    top: 12px;
     left: 12px;
     right: 12px;
     width: auto;
     max-width: none;
-    max-height: calc(100vh - 250px);
-  }
-  .settings-toggle {
-    top: 180px;
-    right: 12px;
+    max-height: 60vh;
   }
 }

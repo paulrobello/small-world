@@ -4,6 +4,11 @@ import { jitterGeo } from "./util.js";
 import { pickGroundPoint, nearestCenter } from "./terrain.js";
 import { makeDirtPuff } from "./environment.js";
 
+// Terrain Y below which ground creatures are considered underwater. The water
+// plane sits a touch below 0 and oscillates ~±0.08; clamping walkers to
+// ground above 0 keeps them clear of waves and out of the shallow draft.
+const WATER_AVOID_Y = 0.0;
+
 // opts:
 //   role         — "parent" | "kid"   (for family groups)
 //   parent       — reference to the parent creature (for kids)
@@ -446,6 +451,8 @@ export function stepCreature(c, dt, t, heightFn) {
     //    so they don't wander down the slope onto the flat base plane)
     //  - fliers may range out over the slope but turn back inside the base
     //    plane so they never disappear off-world
+    //  - in water biomes, walkers also turn back if their next step would
+    //    submerge them below the waterline
     let wouldStray;
     let target;
     if (c.flies && c.landState === "flying") {
@@ -457,6 +464,9 @@ export function stepCreature(c, dt, t, heightFn) {
       const dx = nx - near.cx;
       const dz = nz - near.cz;
       wouldStray = Math.sqrt(dx * dx + dz * dz) > near.radius * 0.94;
+      if (!wouldStray && state.waterMesh && heightFn(nx, nz) < WATER_AVOID_Y) {
+        wouldStray = true;
+      }
       target = near;
     }
 
@@ -711,8 +721,14 @@ export function makeCaterpillar(biome, opts = {}) {
     segments[segments.length - 1].add(shell);
   }
 
-  // initial placement — anywhere on solid ground
-  const sp = pickGroundPoint(0.55);
+  // initial placement — anywhere on solid ground (avoid water in water biomes)
+  let sp = pickGroundPoint(0.55);
+  if (state.waterMesh && state.heightFn) {
+    for (let tries = 0; tries < 15; tries++) {
+      if (state.heightFn(sp.x, sp.z) >= WATER_AVOID_Y) break;
+      sp = pickGroundPoint(0.55);
+    }
+  }
   const startX = sp.x;
   const startZ = sp.z;
   const startHeading = Math.random() * Math.PI * 2;
@@ -763,11 +779,12 @@ export function stepCaterpillar(c, dt, t, heightFn) {
   let nz = head.position.z + Math.sin(c.heading) * step;
 
   // edge avoidance — stay on the island plateau, turn back before reaching
-  // the sloped rim
+  // the sloped rim. Also turn back from water in water biomes.
   const near = nearestCenter(nx, nz);
   const ndx = nx - near.cx;
   const ndz = nz - near.cz;
-  if (Math.sqrt(ndx * ndx + ndz * ndz) > near.radius * 0.94) {
+  const wetAhead = state.waterMesh && heightFn(nx, nz) < WATER_AVOID_Y;
+  if (Math.sqrt(ndx * ndx + ndz * ndz) > near.radius * 0.94 || wetAhead) {
     c.heading =
       Math.atan2(near.cz - head.position.z, near.cx - head.position.x) +
       (Math.random() - 0.5) * 0.4;
@@ -872,7 +889,8 @@ export function makeButterfly(palette, biome) {
   return {
     group,
     wings,
-    target: null,
+    target: new THREE.Vector3(),
+    hasTarget: false,
     state: "cruising", // "cruising" → flying to flower, "hovering" → near it
     holdUntil: 0,
     velocity: new THREE.Vector3(
@@ -887,10 +905,15 @@ export function makeButterfly(palette, biome) {
   };
 }
 
-function pickFlower(flowerSpots) {
-  if (!flowerSpots.length) return null;
+// Mutates b.target in place — pre-allocated to avoid per-retarget Vector3 churn.
+function pickFlower(b, flowerSpots) {
+  if (!flowerSpots.length) {
+    b.hasTarget = false;
+    return;
+  }
   const f = flowerSpots[Math.floor(Math.random() * flowerSpots.length)];
-  return new THREE.Vector3(f.x, f.y + 0.22, f.z);
+  b.target.set(f.x, f.y + 0.22, f.z);
+  b.hasTarget = true;
 }
 
 const _bflyTarget = new THREE.Vector3();
@@ -900,12 +923,12 @@ export function stepButterfly(b, dt, t, flowerSpots, heightFn) {
   // state machine — pick flower → fly → hover → pick another
   if (b.state === "hovering" && t > b.holdUntil) {
     b.state = "cruising";
-    b.target = pickFlower(flowerSpots);
+    pickFlower(b, flowerSpots);
   }
-  if (b.state === "cruising" && !b.target) {
-    b.target = pickFlower(flowerSpots);
+  if (b.state === "cruising" && !b.hasTarget) {
+    pickFlower(b, flowerSpots);
   }
-  if (b.state === "cruising" && b.target) {
+  if (b.state === "cruising" && b.hasTarget) {
     const dx = pos.x - b.target.x;
     const dy = pos.y - b.target.y;
     const dz = pos.z - b.target.z;
@@ -916,7 +939,7 @@ export function stepButterfly(b, dt, t, flowerSpots, heightFn) {
   }
 
   // steer toward target
-  if (b.target) {
+  if (b.hasTarget) {
     const dx = b.target.x - pos.x;
     const dy = b.target.y - pos.y;
     const dz = b.target.z - pos.z;
@@ -980,7 +1003,8 @@ export function stepButterfly(b, dt, t, flowerSpots, heightFn) {
 // ─────────────────────────────────────────────────────────────────────────────
 export function makeSwarm() {
   return {
-    target: null,                         // current shared flower Vector3
+    target: new THREE.Vector3(),          // pre-allocated; values overwritten on retarget
+    hasTarget: false,
     retargetIn: 0,                        // seconds remaining until we pick a new flower
     members: [],
   };
@@ -1059,10 +1083,13 @@ export function makeBee(swarm, biome) {
   return bee;
 }
 
-function pickBeeFlower(flowerSpots) {
-  if (!flowerSpots.length) return null;
+// Mutates swarm.target in place. Returns true when a flower was picked.
+function pickBeeFlower(swarm, flowerSpots) {
+  if (!flowerSpots.length) return false;
   const f = flowerSpots[Math.floor(Math.random() * flowerSpots.length)];
-  return new THREE.Vector3(f.x, f.y + 0.35, f.z);
+  swarm.target.set(f.x, f.y + 0.35, f.z);
+  swarm.hasTarget = true;
+  return true;
 }
 
 const _beeTarget = new THREE.Vector3();
@@ -1071,16 +1098,14 @@ export function stepBee(b, dt, t, flowerSpots, heightFn) {
   // shared swarm target — countdown shared across the swarm, so it's only
   // decremented by the first bee each frame.
   if (b === b.swarm.members[0]) b.swarm.retargetIn -= dt;
-  if (!b.swarm.target || b.swarm.retargetIn <= 0) {
-    const next = pickBeeFlower(flowerSpots);
-    if (next) {
-      b.swarm.target = next;
+  if (!b.swarm.hasTarget || b.swarm.retargetIn <= 0) {
+    if (pickBeeFlower(b.swarm, flowerSpots)) {
       b.swarm.retargetIn = 4 + Math.random() * 5;
     }
   }
 
   const pos = b.group.position;
-  const target = b.swarm.target;
+  const target = b.swarm.hasTarget ? b.swarm.target : null;
 
   // personal orbit offset — small circle in XZ around the shared target
   const op = b.orbitPhase + t * b.orbitSpeed;

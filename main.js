@@ -11,6 +11,7 @@ import {
 import { stepCreature, stepCaterpillar, stepButterfly, stepBee } from "./src/fauna.js";
 import { stepFlock } from "./src/birds.js";
 import { stepParticles, stepWater, stepDirtPuffs } from "./src/environment.js";
+import { LOWFX } from "./src/lowfx.js";
 import {
   initUi,
   getFollowTarget,
@@ -32,7 +33,7 @@ const renderer = new THREE.WebGLRenderer({
   // for photo-mode capture. Negligible perf cost for this scene.
   preserveDrawingBuffer: true,
 });
-renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, LOWFX ? 1 : 2));
 renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;

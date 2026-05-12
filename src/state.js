@@ -40,6 +40,8 @@ export const state = {
     autoRotate: true,
     ambientBoost: 0,
     worldScale: 1,
+    autoRegen: false,
+    autoRegenMinutes: 2,
   },
 };
 

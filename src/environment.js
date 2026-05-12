@@ -3,11 +3,14 @@ import { state } from "./state.js";
 import { jitterGeo, applyWindSway } from "./util.js";
 import { pickGroundPoint } from "./terrain.js";
 import { WILDFLOWER_PALETTES, GRASS_DENSITY, FLOWER_DENSITY, PEBBLE_DENSITY } from "./biomes.js";
+import { LOWFX, LOWFX_DENSITY } from "./lowfx.js";
+
+const _lowfxScale = (n) => (LOWFX ? Math.max(1, Math.round(n * LOWFX_DENSITY)) : n);
 
 // ─── particles ───
 export function makeParticles(biome) {
   const kind = biome.particle;
-  const count = {
+  const baseCount = {
     pollen: 240,
     dust: 320,
     snow: 500,
@@ -20,6 +23,7 @@ export function makeParticles(biome) {
     spark: 240,
     rain: 520,
   }[kind] || 200;
+  const count = _lowfxScale(baseCount);
 
   const positions = new Float32Array(count * 3);
   const velocities = new Float32Array(count * 3);
@@ -355,7 +359,7 @@ export function placeInstanced(geo, mat, count, heightFn, opts = {}) {
 }
 
 export function makeGrassField(biome, heightFn) {
-  const count = GRASS_DENSITY[biome.id] ?? 300;
+  const count = _lowfxScale(GRASS_DENSITY[biome.id] ?? 300);
   // Short ribbon — a tall thin plane with extra height segments so the wind
   // shader can curve the blade smoothly. Slightly tapered toward the tip
   // by hand-warping the top vertices.
@@ -391,7 +395,7 @@ export function makeGrassField(biome, heightFn) {
 
 export function makeWildflowerField(biome, heightFn) {
   const palette = WILDFLOWER_PALETTES[biome.id] ?? ["#ffffff"];
-  const total = FLOWER_DENSITY[biome.id] ?? 100;
+  const total = _lowfxScale(FLOWER_DENSITY[biome.id] ?? 100);
   const perColor = Math.max(8, Math.floor(total / palette.length));
   const meshes = [];
 
@@ -422,7 +426,7 @@ export function makeWildflowerField(biome, heightFn) {
 }
 
 export function makePebbleField(biome, heightFn) {
-  const count = PEBBLE_DENSITY[biome.id] ?? 80;
+  const count = _lowfxScale(PEBBLE_DENSITY[biome.id] ?? 80);
   const g = jitterGeo(new THREE.IcosahedronGeometry(0.08, 0), 0.025);
   g.scale(1.3, 0.45, 1.3);
   const col = new THREE.Color(biome.cliff).offsetHSL(

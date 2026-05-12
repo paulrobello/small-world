@@ -15,13 +15,6 @@ Remove completed items from this list, commit and push so its live on github pag
 - **Ambient bed per biome** (S) — soft loop chosen by biome id (wind, rustle, drips, crackle). One `<audio>` element, crossfade on regenerate. Mute toggle in HUD.
 - **Creature chirps** (S) — occasional very-soft pitched blip when a creature transitions states. Web Audio API, tiny `OscillatorNode` envelope, no samples needed.
 
-## Performance & Code Health
-
-- **Pool geometries/materials** (S) — flora builders currently create fresh geometries each call; biomes have many duplicates. Cache by `(kind, biomeId)` key.
-- **Reduce per-frame allocations** (S) — audit `stepCreature` / `stepButterfly` for `new THREE.Vector3()` in the loop; reuse scratch vectors.
-- **Lazy world rebuild** (S) — debounce regeneration when the user clicks repeatedly.
-- **Optional `?lowfx=1` URL param** (S) — drop particle count, instance counts, and pixel ratio for slow devices.
-
 ## Stretch / Big Swings
 
 - **Seasonal overlay** (L) — each biome has a `spring/summer/autumn/winter` palette delta; URL `?season=` (or auto from real-world date) tints flora and ground.

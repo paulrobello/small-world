@@ -4,6 +4,7 @@ import { readSeedFromUrl, newRandomSeed, formatSeed } from "./seed.js";
 import { generateWorld, setFollowReleaseCallback } from "./world.js";
 import { wakeCreature } from "./fauna.js";
 import { BIOMES } from "./biomes.js";
+import { LOWFX } from "./lowfx.js";
 
 let followTarget = null;
 let selectingCreature = false;
@@ -21,7 +22,16 @@ let _exitStroll = () => {};
 // Only fields explicitly listed here are read/written; unknown keys in
 // localStorage are ignored so we can change the schema later without breaking.
 const SETTINGS_KEY = "smallworld:settings:v1";
-const PERSISTED_KEYS = ["fogMultiplier", "autoCycle", "manualDayFactor", "autoRotate", "ambientBoost", "worldScale"];
+const PERSISTED_KEYS = [
+  "fogMultiplier",
+  "autoCycle",
+  "manualDayFactor",
+  "autoRotate",
+  "ambientBoost",
+  "worldScale",
+  "autoRegen",
+  "autoRegenMinutes",
+];
 const BOOKMARKS_KEY = "smallworld:bookmarks:v1";
 const BIOME_FILTER_KEY = "smallworld:biomefilter:v1";
 
@@ -121,11 +131,13 @@ export function stepStroll(dt) {
     const len = Math.hypot(fx, fz);
     fx /= len;
     fz /= len;
-    // Move along the heading: forward is -Z rotated by yaw, strafe is +X rotated.
+    // World-space movement: forward at yaw y is (-sin y, 0, -cos y); right
+    // is (cos y, 0, -sin y). With fz=-1 for W (forward) and fx=+1 for D
+    // (right), Δp = fx·right + (-fz)·forward, which simplifies to:
     const cy = Math.cos(_stroll.yaw);
     const sy = Math.sin(_stroll.yaw);
-    const dx = (fx * cy - fz * sy) * speed;
-    const dz = (fx * sy + fz * cy) * speed;
+    const dx = (fx * cy + fz * sy) * speed;
+    const dz = (-fx * sy + fz * cy) * speed;
     camera.position.x += dx;
     camera.position.z += dz;
   }
@@ -249,17 +261,33 @@ export function initUi({ camera, canvas, controls, renderer }) {
     // Release any other active camera mode so they don't fight.
     setFollowTarget(null);
     setSelectingCreature(false);
+    // Get the settings panel out of the way so the player can actually see.
+    setSettingsOpen(false);
     const savedAutoRotate = controls.autoRotate;
     controls.autoRotate = false;
     controls.enabled = false;
-    // Initial yaw/pitch from current camera facing toward controls target.
+    // Initial yaw from current camera facing toward controls target. Pitch
+    // resets to 0 (horizontal) so the player isn't staring at their feet —
+    // the orbit camera is usually angled downward, which makes for an awful
+    // first-person starting view.
     const dx = controls.target.x - camera.position.x;
     const dz = controls.target.z - camera.position.z;
-    const dy = controls.target.y - camera.position.y;
     const yaw = Math.atan2(-dx, -dz);
-    const horiz = Math.hypot(dx, dz);
-    const pitch = Math.atan2(dy, horiz);
-    // Drop the camera to creature-eye height on the terrain at its current XZ.
+    const pitch = 0;
+    // If the camera is currently over the void (off-island), snap its XZ to
+    // the look-target so the player lands on the spot they were looking at
+    // rather than floating where the orbit camera happened to be parked.
+    if (state.heightFn(camera.position.x, camera.position.z) < 0) {
+      let tx = controls.target.x;
+      let tz = controls.target.z;
+      if (state.heightFn(tx, tz) < 0) {
+        tx = 0;
+        tz = 0;
+      }
+      camera.position.x = tx;
+      camera.position.z = tz;
+    }
+    // Drop the camera to creature-eye height on the terrain at its XZ.
     const groundY = Math.max(0, state.heightFn(camera.position.x, camera.position.z));
     _stroll = {
       camera,
@@ -411,6 +439,40 @@ export function initUi({ camera, canvas, controls, renderer }) {
 
   syncTimeUi();
 
+  // Auto-regenerate timer — fires the regen button on an interval so the
+  // world cycles itself without user input. Persisted via userSettings.
+  const autoRegenInput = document.getElementById("setting-auto-regen");
+  const autoRegenMins = document.getElementById("setting-auto-regen-mins");
+  const autoRegenMinsValue = document.getElementById("setting-auto-regen-mins-value");
+  autoRegenInput.checked = !!state.userSettings.autoRegen;
+  autoRegenMins.value = String(state.userSettings.autoRegenMinutes ?? 2);
+  autoRegenMinsValue.textContent = autoRegenMins.value + " min";
+  let _autoRegenAt = performance.now() + (state.userSettings.autoRegenMinutes ?? 2) * 60000;
+  function resetAutoRegenClock() {
+    _autoRegenAt =
+      performance.now() + (state.userSettings.autoRegenMinutes ?? 2) * 60000;
+  }
+  autoRegenInput.addEventListener("change", () => {
+    state.userSettings.autoRegen = autoRegenInput.checked;
+    resetAutoRegenClock();
+    saveSettings();
+  });
+  autoRegenMins.addEventListener("input", () => {
+    const v = Math.max(1, Number(autoRegenMins.value));
+    state.userSettings.autoRegenMinutes = v;
+    autoRegenMinsValue.textContent = v + " min";
+    resetAutoRegenClock();
+    saveSettings();
+  });
+  // poll every 5s — cheap, no need to thread the timer through animate()
+  setInterval(() => {
+    if (!state.userSettings.autoRegen) return;
+    if (document.body.classList.contains("photo-mode")) return;
+    if (performance.now() < _autoRegenAt) return;
+    resetAutoRegenClock();
+    document.getElementById("regen").click();
+  }, 5000);
+
   // Biome filter — restore from storage, build the chip row, and use it
   // to constrain regen below.
   const biomeFilter = loadBiomeFilter();
@@ -455,8 +517,12 @@ export function initUi({ camera, canvas, controls, renderer }) {
     });
   }
 
-  // Regenerate world button
+  // Regenerate world button — guarded so a rapid double-click can't queue a
+  // second rebuild while the fade-out + generateWorld pass is still in flight.
+  let _regenInFlight = false;
   document.getElementById("regen").addEventListener("click", () => {
+    if (_regenInFlight) return;
+    _regenInFlight = true;
     const overlay = document.createElement("div");
     overlay.style.cssText = `
       position:fixed; inset:0; background:#000; z-index:50; pointer-events:none;
@@ -466,7 +532,10 @@ export function initUi({ camera, canvas, controls, renderer }) {
     setTimeout(() => {
       generateWorld(pickRegenSeed());
       overlay.style.opacity = "0";
-      setTimeout(() => overlay.remove(), 400);
+      setTimeout(() => {
+        overlay.remove();
+        _regenInFlight = false;
+      }, 400);
     }, 360);
   });
 
@@ -629,6 +698,13 @@ export function initUi({ camera, canvas, controls, renderer }) {
     requestAnimationFrame(() => (flash.style.opacity = "0"));
     setTimeout(() => flash.remove(), 400);
   }
+  const photoModeBtn = document.getElementById("setting-photo");
+  const photoModeLabel = document.getElementById("setting-photo-label");
+  function syncPhotoModeButton() {
+    const on = document.body.classList.contains("photo-mode");
+    photoModeBtn.classList.toggle("active", on);
+    photoModeLabel.textContent = on ? "exit photo mode" : "photo mode";
+  }
   function setPhotoMode(on) {
     if (on) {
       _photoSavedAutoRotate = controls.autoRotate;
@@ -640,7 +716,14 @@ export function initUi({ camera, canvas, controls, renderer }) {
       document.body.classList.remove("photo-mode");
       photoSeedEl.setAttribute("aria-hidden", "true");
     }
+    syncPhotoModeButton();
   }
+  photoModeBtn.addEventListener("click", () => {
+    setPhotoMode(!document.body.classList.contains("photo-mode"));
+  });
+  document.getElementById("photo-save").addEventListener("click", capturePhoto);
+  document.getElementById("photo-exit").addEventListener("click", () => setPhotoMode(false));
+  syncPhotoModeButton();
 
   renderBookmarks();
   syncBookmarkButton();
@@ -654,7 +737,7 @@ export function initUi({ camera, canvas, controls, renderer }) {
   function handleResize() {
     camera.aspect = window.innerWidth / window.innerHeight;
     camera.updateProjectionMatrix();
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, LOWFX ? 1 : 2));
     renderer.setSize(window.innerWidth, window.innerHeight);
   }
   window.addEventListener("resize", handleResize);
@@ -749,6 +832,10 @@ export function initUi({ camera, canvas, controls, renderer }) {
     } else if ((e.key === "s" || e.key === "S") && document.body.classList.contains("photo-mode")) {
       e.preventDefault();
       capturePhoto();
+    } else if (e.key === "f" || e.key === "F") {
+      e.preventDefault();
+      if (_stroll) exitStroll();
+      else enterStroll();
     }
   });
 }

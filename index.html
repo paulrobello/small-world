@@ -69,10 +69,18 @@
 
     <div class="controls">
       <div class="hint">drag · zoom · observe</div>
-      <button class="regen" id="regen">
-        <span class="regen-glyph">↻</span>
-        <span class="regen-label">regenerate world</span>
-      </button>
+      <div class="controls-row">
+        <button class="help-toggle" id="help-toggle" aria-label="help" title="help">
+          <span class="help-glyph">?</span>
+        </button>
+        <button class="settings-toggle" id="settings-toggle" aria-label="settings" title="settings">
+          <span class="settings-glyph">✦</span>
+        </button>
+        <button class="regen" id="regen">
+          <span class="regen-glyph">↻</span>
+          <span class="regen-label">regenerate world</span>
+        </button>
+      </div>
     </div>
   </footer>
 
@@ -80,14 +88,6 @@
   <div class="corner corner-tr">+</div>
   <div class="corner corner-bl">+</div>
   <div class="corner corner-br">+</div>
-
-  <button class="settings-toggle" id="settings-toggle" aria-label="settings" title="settings">
-    <span class="settings-glyph">✦</span>
-  </button>
-
-  <button class="help-toggle" id="help-toggle" aria-label="help" title="help">
-    <span class="help-glyph">?</span>
-  </button>
 
   <aside class="help-panel" id="help-panel" aria-hidden="true">
     <div class="settings-head">
@@ -105,7 +105,7 @@
         <dt>follow</dt>
         <dd>settings → follow → tap a creature to track it indefinitely.</dd>
         <dt>first-person stroll</dt>
-        <dd>settings → first-person stroll. wasd to walk · mouse to look · esc to exit.</dd>
+        <dd>press <kbd>f</kbd> (or settings → first-person stroll). wasd to walk · mouse to look · <kbd>f</kbd> or <kbd>esc</kbd> to exit.</dd>
         <dt>photo mode</dt>
         <dd>press <kbd>p</kbd> to hide the ui and freeze every animation. press <kbd>s</kbd> while in photo mode to save a png to your downloads. <kbd>p</kbd> or <kbd>esc</kbd> to exit.</dd>
       </dl>
@@ -119,6 +119,7 @@
         <dt>hover a sleeper</dt><dd>gently wakes drowsing creatures.</dd>
         <dt><kbd>p</kbd></dt><dd>toggle photo mode.</dd>
         <dt><kbd>s</kbd></dt><dd>save the current frame as a png (photo mode only).</dd>
+        <dt><kbd>f</kbd></dt><dd>enter or exit first-person stroll.</dd>
         <dt><kbd>esc</kbd></dt><dd>cancel focus · exit any mode · close panels.</dd>
       </dl>
     </section>
@@ -172,7 +173,7 @@
 
       <button class="setting-button" id="setting-stroll">
         <span class="setting-button-label">first-person stroll</span>
-        <span class="setting-button-hint">wasd · mouse-look · esc to exit</span>
+        <span class="setting-button-hint">f · wasd · mouse-look · esc to exit</span>
       </button>
 
       <button class="setting-button" id="setting-reset-camera">
@@ -192,6 +193,30 @@
       <button class="setting-button" id="setting-copy-link">
         <span class="setting-button-label">copy link to this world</span>
         <span class="setting-button-hint" id="setting-copy-hint">click to copy seed url</span>
+      </button>
+    </section>
+
+    <section class="settings-section">
+      <div class="settings-section-label">auto-regenerate</div>
+
+      <label class="setting setting-checkbox">
+        <input type="checkbox" id="setting-auto-regen" />
+        <span class="setting-label">auto-regenerate worlds</span>
+      </label>
+
+      <label class="setting">
+        <span class="setting-label">interval</span>
+        <input type="range" id="setting-auto-regen-mins" min="1" max="20" step="1" value="2" />
+        <span class="setting-value" id="setting-auto-regen-mins-value">2 min</span>
+      </label>
+    </section>
+
+    <section class="settings-section">
+      <div class="settings-section-label">photo</div>
+
+      <button class="setting-button" id="setting-photo">
+        <span class="setting-button-label" id="setting-photo-label">photo mode</span>
+        <span class="setting-button-hint">hide hud · freeze sim</span>
       </button>
     </section>
 
@@ -221,6 +246,10 @@
   <div class="photo-seed" id="photo-seed" aria-hidden="true">
     <span id="photo-seed-value">0x0000</span>
     <span class="photo-hint">press <kbd>s</kbd> to save · <kbd>p</kbd> to exit</span>
+    <div class="photo-actions">
+      <button class="photo-action" id="photo-save" type="button">save</button>
+      <button class="photo-action" id="photo-exit" type="button">exit</button>
+    </div>
   </div>
 
   <script type="module" src="main.js"></script>
