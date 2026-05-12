@@ -97,37 +97,10 @@ export function nearestCenter(x, z) {
 
 // Pick a layout for a freshly seeded world. Called inside `generateWorld`
 // while `Math.random` is the seeded PRNG so the choice is deterministic.
+//
+// Always a single island. (Archipelagos were tried but the creature roaming
+// + visual silhouette didn't read well across multiple disconnected chunks.)
 export function pickLayout() {
-  // ~18% of worlds are tiny archipelagos of 2–3 small islands.
-  if (Math.random() < 0.18) {
-    const n = 2 + Math.floor(Math.random() * 2);
-    const centers = [];
-    const spread = n === 2 ? 8.5 : 10;
-    const startAngle = Math.random() * Math.PI * 2;
-    for (let i = 0; i < n; i++) {
-      const ang = startAngle + (i / n) * Math.PI * 2 + (Math.random() - 0.5) * 0.3;
-      const dist = spread + (Math.random() - 0.5) * 1.6;
-      const radius = 4.4 + Math.random() * 2.0;
-      centers.push({
-        cx: Math.cos(ang) * dist,
-        cz: Math.sin(ang) * dist,
-        radius,
-        shape: { kind: "round" },
-      });
-    }
-    const bound = centers.reduce((m, c) => {
-      const d = Math.sqrt(c.cx * c.cx + c.cz * c.cz);
-      return Math.max(m, d + c.radius);
-    }, 0);
-    return {
-      centers,
-      planeSize: Math.max(ISLAND_SIZE_BASE, bound * 2.4),
-      boundRadius: bound,
-      kind: "archipelago",
-    };
-  }
-
-  // Single island — size + shape variations.
   const sizeRoll = Math.random();
   const sizeMult = sizeRoll < 0.27 ? 0.78 : sizeRoll < 0.78 ? 1.0 : 1.15;
   const radius = ISLAND_RADIUS_BASE * sizeMult;
