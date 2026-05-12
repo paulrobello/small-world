@@ -366,38 +366,83 @@ export function placeInstanced(geo, mat, count, heightFn, opts = {}) {
 }
 
 export function makeGrassField(biome, heightFn) {
-  const count = _coverScale(GRASS_DENSITY[biome.id] ?? 300, 1.7);
-  // Short ribbon — a tall thin plane with extra height segments so the wind
-  // shader can curve the blade smoothly. Slightly tapered toward the tip
-  // by hand-warping the top vertices.
+  const count = _coverScale(GRASS_DENSITY[biome.id] ?? 300, 2.8);
+
   const blade = new THREE.PlaneGeometry(0.06, 0.34, 1, 3);
-  // taper the top + push bottom flat to the ground
   const bp = blade.attributes.position;
-  for (let i = 0; i < bp.count; i++) {
-    const y = bp.getY(i) + 0.17; // shift so base sits at y=0, tip at y=0.34
+  const tipCount = bp.count;
+  const tipFactors = new Float32Array(tipCount);
+  for (let i = 0; i < tipCount; i++) {
+    const y = bp.getY(i) + 0.17;
     bp.setY(i, y);
-    // taper width with height
     const taper = 1 - Math.min(1, y / 0.34) * 0.6;
     bp.setX(i, bp.getX(i) * taper);
+    tipFactors[i] = Math.min(1, y / 0.34);
   }
+  blade.setAttribute("aTipFactor", new THREE.BufferAttribute(tipFactors, 1));
   blade.computeVertexNormals();
 
-  const base = new THREE.Color(biome.ground[1]).offsetHSL(
+  const baseCol = new THREE.Color(biome.ground[1]).offsetHSL(
     (Math.random() - 0.5) * 0.04, 0.1, -0.08
   );
-  const m = applyWindSway(
-    new THREE.MeshStandardMaterial({
-      color: base,
-      roughness: 0.95,
-      side: THREE.DoubleSide,
-    }),
-    1.8
-  );
-  return placeInstanced(blade, m, count, heightFn, {
+  const tipCol = baseCol.clone().offsetHSL(0.0, -0.15, 0.18);
+
+  const mat = new THREE.MeshStandardMaterial({
+    color: baseCol,
+    roughness: 0.95,
+    side: THREE.DoubleSide,
+    vertexColors: true,
+  });
+
+  const tipUniforms = {
+    uTipColor: { value: tipCol },
+  };
+  const prevOnBeforeCompile = mat.onBeforeCompile;
+  mat.onBeforeCompile = (shader) => {
+    if (prevOnBeforeCompile) prevOnBeforeCompile(shader);
+    shader.uniforms.uTipColor = tipUniforms.uTipColor;
+    shader.vertexShader = shader.vertexShader
+      .replace(
+        "#include <common>",
+        "#include <common>\nattribute float aTipFactor;\nvarying float vTipFactor;"
+      )
+      .replace(
+        "#include <begin_vertex>",
+        "#include <begin_vertex>\nvTipFactor = aTipFactor;"
+      );
+    shader.fragmentShader = shader.fragmentShader
+      .replace(
+        "#include <common>",
+        "#include <common>\nuniform vec3 uTipColor;\nvarying float vTipFactor;"
+      )
+      .replace(
+        "#include <color_fragment>",
+        "#include <color_fragment>\ndiffuseColor.rgb = mix(diffuseColor.rgb, uTipColor, vTipFactor * 0.85);"
+      );
+  };
+  applyWindSway(mat, 1.8);
+
+  const mesh = placeInstanced(blade, mat, count, heightFn, {
     minScale: 0.6,
     maxScale: 1.4,
     tilt: 0.18,
   });
+
+  const colors = new Float32Array(mesh.count * 3);
+  const tmp = new THREE.Color();
+  for (let i = 0; i < mesh.count; i++) {
+    tmp.copy(baseCol).offsetHSL(
+      (Math.random() - 0.5) * 0.08,
+      0,
+      (Math.random() - 0.5) * 0.10
+    );
+    colors[i * 3 + 0] = tmp.r / baseCol.r || 1;
+    colors[i * 3 + 1] = tmp.g / baseCol.g || 1;
+    colors[i * 3 + 2] = tmp.b / baseCol.b || 1;
+  }
+  mesh.instanceColor = new THREE.InstancedBufferAttribute(colors, 3);
+  mesh.instanceColor.needsUpdate = true;
+  return mesh;
 }
 
 export function makeWildflowerField(biome, heightFn) {

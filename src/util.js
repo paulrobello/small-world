@@ -24,7 +24,9 @@ export function jitterGeo(geo, amount = 0.05) {
 }
 
 export function applyWindSway(material, strength = 1.0) {
+  const prev = material.onBeforeCompile;
   material.onBeforeCompile = (shader) => {
+    if (prev && prev !== material.onBeforeCompile) prev(shader);
     shader.uniforms.uTime = state.windUniforms.uTime;
     shader.uniforms.uWindStrength = { value: strength };
     shader.vertexShader = shader.vertexShader
