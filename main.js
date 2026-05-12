@@ -127,11 +127,10 @@ function animate() {
     state.windUniforms.uTime.value = t;
     stepInspect(dt, t);
     controls.update();
-    if (state.postfx && state.postfx.isActive && state.postfx.isActive()) {
-      state.postfx.render(scene, camera);
-    } else {
-      renderer.render(scene, camera);
-    }
+    // Bypass the composer in inspect — the renderer's tone mapping plus
+    // OutputPass tone mapping inside the composer crushes the neutral-gray
+    // studio backdrop to black. Inspect mode doesn't need bloom anyway.
+    renderer.render(scene, camera);
     return;
   }
 
