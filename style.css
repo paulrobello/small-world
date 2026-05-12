@@ -867,6 +867,10 @@ body.photo-mode .help-panel {
   left: 50%;
   transform: translateX(-50%);
   z-index: 12;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
   font-family: "Major Mono Display", monospace;
   font-size: 14px;
   letter-spacing: 0.4em;
@@ -875,6 +879,21 @@ body.photo-mode .help-panel {
   pointer-events: none;
   opacity: 0;
   transition: opacity 0.4s ease;
+}
+.photo-hint {
+  font-family: "DM Mono", monospace;
+  font-size: 10px;
+  letter-spacing: 0.22em;
+  color: var(--ink-dim);
+  text-transform: lowercase;
+}
+.photo-hint kbd {
+  border: 1px solid var(--ink-faint);
+  padding: 1px 5px;
+  font-family: inherit;
+  font-size: 9px;
+  letter-spacing: 0.1em;
+  color: var(--ink-dim);
 }
 body.photo-mode .photo-seed { opacity: 0.85; }
 body.photo-mode .hud,

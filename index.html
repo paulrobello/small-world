@@ -107,7 +107,7 @@
         <dt>first-person stroll</dt>
         <dd>settings → first-person stroll. wasd to walk · mouse to look · esc to exit.</dd>
         <dt>photo mode</dt>
-        <dd>press <kbd>p</kbd> to hide the ui and freeze every animation for a clean screenshot.</dd>
+        <dd>press <kbd>p</kbd> to hide the ui and freeze every animation. press <kbd>s</kbd> while in photo mode to save a png to your downloads. <kbd>p</kbd> or <kbd>esc</kbd> to exit.</dd>
       </dl>
     </section>
 
@@ -118,6 +118,7 @@
         <dt>scroll · pinch</dt><dd>zoom in / out.</dd>
         <dt>hover a sleeper</dt><dd>gently wakes drowsing creatures.</dd>
         <dt><kbd>p</kbd></dt><dd>toggle photo mode.</dd>
+        <dt><kbd>s</kbd></dt><dd>save the current frame as a png (photo mode only).</dd>
         <dt><kbd>esc</kbd></dt><dd>cancel focus · exit any mode · close panels.</dd>
       </dl>
     </section>
@@ -217,7 +218,10 @@
     click a creature to follow it · press <kbd>esc</kbd> to cancel
   </div>
 
-  <div class="photo-seed" id="photo-seed" aria-hidden="true">0x0000</div>
+  <div class="photo-seed" id="photo-seed" aria-hidden="true">
+    <span id="photo-seed-value">0x0000</span>
+    <span class="photo-hint">press <kbd>s</kbd> to save · <kbd>p</kbd> to exit</span>
+  </div>
 
   <script type="module" src="main.js"></script>
 </body>

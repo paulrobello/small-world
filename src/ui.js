@@ -593,19 +593,42 @@ export function initUi({ camera, canvas, controls, renderer }) {
   // popstate, or bookmark click). The simplest hook is a polling watcher on
   // state.currentSeed — it changes rarely and the cost is trivial.
   const photoSeedEl = document.getElementById("photo-seed");
+  const photoSeedValueEl = document.getElementById("photo-seed-value");
   let _lastSeenSeed = state.currentSeed;
   setInterval(() => {
     if (state.currentSeed !== _lastSeenSeed) {
       _lastSeenSeed = state.currentSeed;
       syncBookmarkButton();
-      photoSeedEl.textContent = formatSeed(state.currentSeed);
+      photoSeedValueEl.textContent = formatSeed(state.currentSeed);
     }
   }, 250);
-  photoSeedEl.textContent = formatSeed(state.currentSeed);
+  photoSeedValueEl.textContent = formatSeed(state.currentSeed);
 
   // Photo mode — toggled with P. Hides every overlay, freezes auto-rotate,
   // and shows the seed at the bottom of the canvas for clean screenshots.
   let _photoSavedAutoRotate = controls.autoRotate;
+  function capturePhoto() {
+    // canvas already holds the most recent render (preserveDrawingBuffer:true)
+    // so we can grab pixels straight from it. The hud is in CSS overlay layers
+    // and isn't part of the WebGL canvas, so toDataURL gives us a clean shot
+    // of just the scene — which is what photo mode is for.
+    const seedTag = formatSeed(state.currentSeed).replace(/^0x/, "");
+    const biomeTag = (state.currentBiome?.id ?? "world").replace(/\s+/g, "-");
+    const url = canvas.toDataURL("image/png");
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `small-world-${biomeTag}-${seedTag}.png`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    // brief flash so the user sees the capture happened
+    const flash = document.createElement("div");
+    flash.style.cssText =
+      "position:fixed;inset:0;background:#fff;z-index:50;pointer-events:none;opacity:0.6;transition:opacity .35s ease;";
+    document.body.appendChild(flash);
+    requestAnimationFrame(() => (flash.style.opacity = "0"));
+    setTimeout(() => flash.remove(), 400);
+  }
   function setPhotoMode(on) {
     if (on) {
       _photoSavedAutoRotate = controls.autoRotate;
@@ -723,6 +746,9 @@ export function initUi({ camera, canvas, controls, renderer }) {
       else if (_settingsPanel.classList.contains("open")) setSettingsOpen(false);
     } else if (e.key === "p" || e.key === "P") {
       setPhotoMode(!document.body.classList.contains("photo-mode"));
+    } else if ((e.key === "s" || e.key === "S") && document.body.classList.contains("photo-mode")) {
+      e.preventDefault();
+      capturePhoto();
     }
   });
 }

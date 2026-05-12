@@ -28,6 +28,9 @@ const renderer = new THREE.WebGLRenderer({
   canvas,
   antialias: true,
   powerPreference: "high-performance",
+  // Lets us grab the canvas pixels via toDataURL after a render — needed
+  // for photo-mode capture. Negligible perf cost for this scene.
+  preserveDrawingBuffer: true,
 });
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 renderer.setSize(window.innerWidth, window.innerHeight);
