@@ -226,7 +226,13 @@ function spawnSpecimen(scene) {
     }
   } else {
     state.creatures.push(c);
-    c.group.position.set(0, c.flies ? 1.2 : 0.45, 0);
+    // Fliers normally hover at 1.4-3.2 units which leaves them above the
+    // inspect camera's frame. Cap to a height that sits comfortably in view.
+    if (c.flies) {
+      c.hoverHeight = 0.7;
+      c.currentHover = 0.7;
+    }
+    c.group.position.set(0, c.flies ? 0.7 : 0.45, 0);
     // Burrowers cycle through a hide-underground state machine, which makes
     // them disappear for 3-7s at a time. Pin them to the surface for inspect
     // so the small-and-cute burrower silhouette stays visible.
