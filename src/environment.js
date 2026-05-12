@@ -15,26 +15,77 @@ const _coverScale = (n, gain = 1) =>
   _lowfxScale(Math.round(n * (state.ISLAND_SIZE / DENSITY_BASE) * gain));
 
 // ─── particles ───
+const PARTICLE_KIND_ID = {
+  pollen: 0, dust: 1, snow: 2, firefly: 3, ember: 4,
+  lichenmote: 5, feather: 6, bubble: 7, leaf: 8, spark: 9, rain: 10,
+};
+
+const _particleVS = `
+attribute float aSeed;
+attribute float aLife;
+varying float vLife;
+varying float vSeed;
+uniform float uTime;
+uniform float uPixelRatio;
+uniform float uBaseSize;
+void main() {
+  vLife = aLife;
+  vSeed = aSeed;
+  vec4 mv = modelViewMatrix * vec4(position, 1.0);
+  float size = uBaseSize;
+  #if PARTICLE_KIND == 4 || PARTICLE_KIND == 9
+    size *= 1.0 - aLife * 0.7;
+  #elif PARTICLE_KIND == 2
+    size *= 0.7 + 0.3 * fract(aSeed);
+  #endif
+  gl_Position = projectionMatrix * mv;
+  gl_PointSize = size * uPixelRatio * (300.0 / max(0.001, -mv.z));
+}
+`;
+
+const _particleFS = `
+precision highp float;
+uniform vec3 uColor;
+uniform vec3 uColor2;
+uniform float uOpacity;
+uniform float uTime;
+varying float vLife;
+varying float vSeed;
+void main() {
+  vec2 c = gl_PointCoord - 0.5;
+  float d = length(c);
+  #if PARTICLE_KIND == 10
+    float a = smoothstep(0.5, 0.0, abs(c.x) * 2.0) * smoothstep(0.5, 0.0, abs(c.y));
+  #else
+    float a = smoothstep(0.5, 0.0, d);
+  #endif
+  vec3 col = uColor;
+  #if PARTICLE_KIND == 4 || PARTICLE_KIND == 9
+    col = mix(uColor, uColor2, vLife);
+    a *= 1.0 - vLife;
+  #elif PARTICLE_KIND == 3
+    float pulse = 0.5 + 0.5 * sin(uTime * 2.0 + vSeed * 18.0);
+    col *= 0.6 + 0.4 * pulse;
+    a *= pulse;
+  #elif PARTICLE_KIND == 5
+    a *= 0.6 + 0.3 * sin(uTime * 1.4 + vSeed * 9.0);
+  #endif
+  gl_FragColor = vec4(col, a * uOpacity);
+}
+`;
+
 export function makeParticles(biome) {
   const kind = biome.particle;
   const baseCount = {
-    pollen: 240,
-    dust: 320,
-    snow: 500,
-    firefly: 90,
-    ember: 180,
-    lichenmote: 140,
-    feather: 120,
-    bubble: 140,
-    leaf: 120,
-    spark: 240,
-    rain: 520,
+    pollen: 240, dust: 320, snow: 500, firefly: 90, ember: 180,
+    lichenmote: 140, feather: 120, bubble: 140, leaf: 120, spark: 240, rain: 520,
   }[kind] || 200;
   const count = _lowfxScale(baseCount);
 
   const positions = new Float32Array(count * 3);
   const velocities = new Float32Array(count * 3);
   const seeds = new Float32Array(count);
+  const lifes = new Float32Array(count);
 
   for (let i = 0; i < count; i++) {
     const r = Math.sqrt(Math.random()) * state.ISLAND_RADIUS * 1.1;
@@ -46,65 +97,63 @@ export function makeParticles(biome) {
     velocities[i * 3 + 1] = (Math.random() - 0.5) * 0.4;
     velocities[i * 3 + 2] = (Math.random() - 0.5) * 0.4;
     seeds[i] = Math.random() * 100;
+    lifes[i] = Math.random();
   }
 
   const geo = new THREE.BufferGeometry();
   geo.setAttribute("position", new THREE.BufferAttribute(positions, 3));
+  geo.setAttribute("aSeed", new THREE.BufferAttribute(seeds, 1));
+  geo.setAttribute("aLife", new THREE.BufferAttribute(lifes, 1));
 
   const colorMap = {
-    pollen: biome.sun,
-    dust: biome.fog,
-    snow: "#ffffff",
-    firefly: biome.accent,
-    ember: biome.accent,
-    lichenmote: biome.accent,
-    feather: "#ffffff",
-    bubble: biome.water || biome.sky,
-    leaf: biome.accent,
-    spark: biome.sun,
-    rain: biome.sun,
+    pollen: biome.sun, dust: biome.fog, snow: "#ffffff",
+    firefly: biome.accent, ember: biome.accent, lichenmote: biome.accent,
+    feather: "#ffffff", bubble: biome.water || biome.sky,
+    leaf: biome.accent, spark: biome.sun, rain: biome.sun,
   };
-
+  // Ember/spark fade toward a smokier secondary colour over life.
+  const color2Map = {
+    ember: "#3a2018", spark: "#fff2b3",
+  };
   const sizeMap = {
-    firefly: 0.16,
-    snow: 0.1,
-    lichenmote: 0.12,
-    feather: 0.18,
-    bubble: 0.13,
-    leaf: 0.16,
-    spark: 0.08,
-    rain: 0.06,
+    firefly: 24, snow: 14, lichenmote: 18, feather: 28,
+    bubble: 20, leaf: 24, spark: 12, rain: 8,
+    pollen: 10, dust: 10, ember: 18,
   };
   const opacityMap = {
-    dust: 0.35,
-    feather: 0.7,
-    bubble: 0.55,
-    leaf: 0.85,
-    spark: 0.95,
-    rain: 0.55,
+    dust: 0.35, feather: 0.7, bubble: 0.55, leaf: 0.85, spark: 0.95, rain: 0.55,
+    pollen: 0.85, snow: 0.85, firefly: 0.85, ember: 0.85, lichenmote: 0.85,
   };
   const additive = new Set(["firefly", "ember", "lichenmote", "spark"]);
 
-  const mat = new THREE.PointsMaterial({
-    color: new THREE.Color(colorMap[kind]),
-    size: sizeMap[kind] ?? 0.07,
+  const renderer = state.renderer; // set by main.js after init
+  const pixelRatio = renderer ? renderer.getPixelRatio() : 1;
+
+  const mat = new THREE.ShaderMaterial({
+    uniforms: {
+      uTime: { value: 0 },
+      uPixelRatio: { value: pixelRatio },
+      uBaseSize: { value: sizeMap[kind] ?? 14 },
+      uColor: { value: new THREE.Color(colorMap[kind]) },
+      uColor2: { value: new THREE.Color(color2Map[kind] ?? colorMap[kind]) },
+      uOpacity: { value: opacityMap[kind] ?? 0.85 },
+    },
+    defines: { PARTICLE_KIND: PARTICLE_KIND_ID[kind] ?? 0 },
+    vertexShader: _particleVS,
+    fragmentShader: _particleFS,
     transparent: true,
-    opacity: opacityMap[kind] ?? 0.85,
     depthWrite: false,
-    blending: additive.has(kind)
-      ? THREE.AdditiveBlending
-      : THREE.NormalBlending,
-    sizeAttenuation: true,
+    blending: additive.has(kind) ? THREE.AdditiveBlending : THREE.NormalBlending,
   });
 
   const points = new THREE.Points(geo, mat);
-  points.userData = { kind, velocities, seeds, count };
+  points.userData = { kind, velocities, seeds, lifes, count };
   return points;
 }
 
 export function stepParticles(points, dt, t) {
   if (!points) return;
-  const { kind, velocities, seeds, count } = points.userData;
+  const { kind, velocities, seeds, lifes, count } = points.userData;
   const pos = points.geometry.attributes.position.array;
 
   for (let i = 0; i < count; i++) {
@@ -236,16 +285,32 @@ export function stepParticles(points, dt, t) {
     pos[ix + 2] = z;
   }
 
-  // firefly twinkle
-  if (kind === "firefly") {
-    points.material.opacity = 0.6 + Math.sin(t * 2) * 0.25;
-  } else if (kind === "lichenmote") {
-    points.material.opacity = 0.45 + Math.sin(t * 1.4) * 0.2;
-  } else if (kind === "spark") {
-    points.material.opacity = 0.75 + Math.sin(t * 4.5) * 0.2;
-  }
-
   points.geometry.attributes.position.needsUpdate = true;
+
+  // aLife — drives shader-side size/opacity ramps. Infinite-loop kinds use a
+  // (t * speed + seed) % 1 cycle; recycle kinds use real elapsed-life
+  // progress. We treat all kinds identically here (cheap one-pass loop).
+  for (let i = 0; i < count; i++) {
+    const s = seeds[i];
+    if (kind === "ember" || kind === "spark") {
+      lifes[i] = Math.min(1, (lifes[i] ?? 0) + dt * 0.6);
+      if (lifes[i] >= 1) lifes[i] = 0;
+    } else if (kind === "firefly" || kind === "lichenmote") {
+      lifes[i] = (t * 0.3 + s * 0.01) % 1.0;
+    } else if (kind === "rain" || kind === "snow" || kind === "leaf" || kind === "feather" || kind === "bubble") {
+      // recycle handlers reset y; tie aLife to vertical position so it ramps
+      // back to 0 naturally when wrapped.
+      lifes[i] = Math.max(0, Math.min(1, 1 - (points.geometry.attributes.position.array[i * 3 + 1] / 14)));
+    } else {
+      lifes[i] = (t * 0.5 + s * 0.013) % 1.0;
+    }
+  }
+  points.geometry.attributes.aLife.needsUpdate = true;
+
+  // shader-side uTime
+  if (points.material.uniforms && points.material.uniforms.uTime) {
+    points.material.uniforms.uTime.value = t;
+  }
 }
 
 // ─── dirt puffs (burrower emerge/sink bursts) ───

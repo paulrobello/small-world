@@ -50,6 +50,9 @@ export const state = {
   // Camera ref, set in main.js on boot. Read by stepCreature for the
   // look-at-camera response when the user hovers a creature.
   camera: null,
+  // Renderer ref, set in main.js on boot. Read by makeParticles to pull the
+  // current pixel ratio into the particle ShaderMaterial.
+  renderer: null,
   // 0 = full day, 1 = full night. Updated each frame in updateDayNight so
   // fauna can react (sleep cycle at night). Personality may shift each
   // creature's effective threshold.

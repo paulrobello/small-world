@@ -73,6 +73,7 @@ controls.touches = {
 setSceneRef(scene);
 setControlsRef(controls);
 state.camera = camera;
+state.renderer = renderer;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Animation loop
