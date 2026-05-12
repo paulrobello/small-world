@@ -34,8 +34,16 @@ import {
   makeWildflowerField,
   makePebbleField,
   makeWaterPlane,
-  makeParallaxRing,
 } from "./environment.js";
+import {
+  makeSkyDome,
+  makeMountainBackdrop,
+  makeCloudLayer,
+  makeStarfield,
+  makeAurora,
+  stepClouds,
+  updateSkyColors,
+} from "./sky.js";
 import { LOWFX, LOWFX_DENSITY } from "./lowfx.js";
 
 let _scene = null;
@@ -127,10 +135,23 @@ export function updateDayNight(t) {
   // hemi fill scales hard with ambient so dark biomes actually brighten
   state.hemiLight.intensity = 0.32 + dayFactor * 0.45 + ab * 4.5;
 
-  if (state.parallaxRingMesh) {
-    state.parallaxRingMesh.material.color
-      .copy(dn.ringTint)
-      .lerp(dn.nightFog, nightAmt * 0.7);
+  // Sky dome zenith/horizon + mountain layer tint follow the day/night curve
+  updateSkyColors(state.skyDome, state.mountains, dn, liftedDay, nightAmt);
+
+  // Stars + aurora fade in at night. Start visible around dusk and ramp to
+  // full opacity at deep night so the transition feels like dimming up the
+  // sky-noise rather than punching them in suddenly.
+  if (state.starfield) {
+    const u = state.starfield.material.uniforms;
+    u.uTime.value = t;
+    u.uAlpha.value = Math.max(0, nightAmt - 0.25) * 1.4;
+  }
+  if (state.aurora) {
+    for (const m of state.aurora.userData.curtains) {
+      const u = m.material.uniforms;
+      u.uTime.value = t;
+      u.uAlpha.value = Math.max(0, nightAmt - 0.2) * 1.3;
+    }
   }
 }
 
@@ -215,10 +236,25 @@ export function generateWorld(seed) {
   accent.position.set(0, 8, 0);
   state.world.add(accent);
 
-  // parallax distance ring + day/night palette snapshot
-  const ring = makeParallaxRing(biome);
-  state.world.add(ring);
-  state.parallaxRingMesh = ring;
+  // Sky backdrop — dome (gradient) + two-layer mountain silhouette + drifting
+  // cloud sprites. Day/night re-tints them via updateSkyColors each frame.
+  const skyDome = makeSkyDome(biome);
+  state.world.add(skyDome);
+  state.skyDome = skyDome;
+
+  const mountains = makeMountainBackdrop(biome);
+  state.world.add(mountains);
+  state.mountains = mountains;
+
+  state.clouds = makeCloudLayer(biome);
+  if (state.clouds) state.world.add(state.clouds);
+
+  // Starfield + aurora — drawn always, faded by night-amount in updateDayNight.
+  state.starfield = makeStarfield();
+  state.world.add(state.starfield);
+
+  state.aurora = makeAurora(biome);
+  if (state.aurora) state.world.add(state.aurora);
 
   const nightP = biome.night ?? {};
   const duskP = biome.dusk ?? null;
@@ -236,7 +272,6 @@ export function generateWorld(seed) {
     duskFog: duskP ? new THREE.Color(duskP.fog) : null,
     duskSun: duskP ? new THREE.Color(duskP.sun) : null,
     duskGround: duskP ? new THREE.Color(duskP.ground) : null,
-    ringTint: ring.material.color.clone(),
     fogDensity: biome.fogDensity,
   };
 

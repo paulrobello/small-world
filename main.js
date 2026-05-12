@@ -11,6 +11,7 @@ import {
 import { stepCreature, stepCaterpillar, stepButterfly, stepBee } from "./src/fauna.js";
 import { stepFlock } from "./src/birds.js";
 import { stepParticles, stepWater, stepDirtPuffs } from "./src/environment.js";
+import { stepClouds } from "./src/sky.js";
 import { LOWFX } from "./src/lowfx.js";
 import {
   initUi,
@@ -104,6 +105,21 @@ function animate() {
   stepParticles(state.particles, dt, t);
   stepWater(state.waterMesh, dt, t);
   stepDirtPuffs(state.dirtPuffs, dt);
+  stepClouds(state.clouds, dt);
+
+  // Sky dome and starfield follow the camera so the gradient zenith and the
+  // star sphere are always centered on the viewer — otherwise they read as
+  // fixed-in-world objects (a bright "circle" of zenith color in the sky
+  // that drifts across the view as the camera orbits). Both live under
+  // state.world which has worldScale applied; divide by it so the final
+  // position lands on the camera regardless of scale.
+  const invWorldScale = 1 / (state.userSettings.worldScale || 1);
+  if (state.skyDome) {
+    state.skyDome.position.copy(camera.position).multiplyScalar(invWorldScale);
+  }
+  if (state.starfield) {
+    state.starfield.position.copy(camera.position).multiplyScalar(invWorldScale);
+  }
 
   if (isStrolling()) {
     stepStroll(dt);

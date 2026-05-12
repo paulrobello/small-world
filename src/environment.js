@@ -495,48 +495,5 @@ export function stepWater(water, dt, t) {
   pos.needsUpdate = true;
 }
 
-// ─── parallax ring ───
-export function makeParallaxRing(biome) {
-  const radius = 58;
-  const height = 22;
-  const segs = 96;
-  const geo = new THREE.CylinderGeometry(
-    radius, radius, height, segs, 4, true
-  );
-  const pos = geo.attributes.position;
-  // wobble the top half so the upper rim has a hill silhouette
-  for (let i = 0; i < pos.count; i++) {
-    const y = pos.getY(i);
-    if (y > 0) {
-      const x = pos.getX(i);
-      const z = pos.getZ(i);
-      const a = Math.atan2(z, x);
-      const wobble =
-        Math.sin(a * 7.0) * 1.8 +
-        Math.sin(a * 13.0 + 1.7) * 1.1 +
-        Math.sin(a * 3.0 - 0.4) * 2.4;
-      const lift = (y / (height * 0.5)) * wobble;
-      pos.setY(i, y + lift);
-    }
-  }
-  geo.computeVertexNormals();
-
-  // tint between sky and fog so the ring blends — slightly toward sky so
-  // it's faintly visible against fog when sky is the lighter of the two.
-  const skyC = new THREE.Color(biome.sky);
-  const fogC = new THREE.Color(biome.fog);
-  const tint = fogC.clone().lerp(skyC, 0.55);
-
-  const mat = new THREE.MeshBasicMaterial({
-    color: tint,
-    side: THREE.BackSide,
-    fog: true,
-    transparent: true,
-    opacity: 0.85,
-    depthWrite: false,
-  });
-  const mesh = new THREE.Mesh(geo, mat);
-  mesh.position.y = 1.5;
-  mesh.renderOrder = -1;
-  return mesh;
-}
+// Backdrop primitives (sky dome, mountain rings, clouds, stars, aurora) live
+// in src/sky.js — see makeSkyDome / makeMountainBackdrop / etc.

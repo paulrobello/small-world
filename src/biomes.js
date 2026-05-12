@@ -274,6 +274,21 @@ export const FLOWER_DENSITY = {
   mossy:   140, twilight: 240, coral: 110,
   cloud:   80,  grove:   170, obsidian: 60,
 };
+// Per-biome cloud count for the sky-backdrop. 0 / undefined = no clouds
+// (overcast deserts, smoky biomes). Cloud island gets the most by far.
+export const CLOUD_COUNT = {
+  verdant: 16, desert: 3, frozen: 10, marsh: 14,
+  ashen:    5, golden: 20, mossy:  12, twilight: 14,
+  coral:   18, cloud:  30, grove:  12, obsidian:  7,
+};
+// Biomes that get aurora curtains at night. Tinted via AURORA_TINTS below.
+export const AURORA_BIOMES = new Set(["frozen", "twilight", "cloud"]);
+export const AURORA_TINTS = {
+  frozen:   ["#7df0c8", "#a98cff"],
+  twilight: ["#ffd97a", "#c9a8e8"],
+  cloud:    ["#a8e0ff", "#ffd0e8"],
+};
+
 export const PEBBLE_DENSITY = {
   verdant: 80, desert: 130, frozen: 100,
   marsh:   70, ashen:  140, golden: 90,
