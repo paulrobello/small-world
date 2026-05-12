@@ -20,7 +20,7 @@ varying vec3 vNormal;
 void main() {
   vLayerT = uShellLayer / uLayers;
   vec3 p = position + normal * uFurLength * vLayerT;
-  vHairUv = position.xy * 18.0 + position.zx * 11.0;
+  vHairUv = position.xy * 60.0 + position.zx * 40.0;
   vNormal = normalMatrix * normal;
   gl_Position = projectionMatrix * modelViewMatrix * vec4(p, 1.0);
 }
@@ -44,14 +44,14 @@ float hash21(vec2 p) {
 
 void main() {
   float h = hash21(floor(vHairUv));
-  float threshold = 0.32 + vLayerT * 0.55;
+  float threshold = 0.55 + vLayerT * 0.40;
   if (h < threshold) discard;
   vec3 N = normalize(vNormal);
   float lam = max(0.0, dot(N, normalize(uLightDir)));
   float rim = pow(1.0 - max(0.0, dot(N, vec3(0.0, 0.0, 1.0))), 2.0);
   vec3 c = mix(uBaseColor, uTipColor, vLayerT);
   c *= 0.45 + 0.6 * lam * uLightIntensity + 0.15 * rim;
-  gl_FragColor = vec4(c, 1.0 - vLayerT * 0.15);
+  gl_FragColor = vec4(c, 1.0 - vLayerT * 0.35);
 }
 `;
 
@@ -89,7 +89,7 @@ function makeFurTemplate(baseColor, tipColor, furLength) {
 // state.world is rebuilt, since shells parent into the world via body).
 export function applyShellFur(body, biome, opts = {}) {
   const layers = LOWFX ? 4 : (opts.layers ?? 8);
-  const furLength = opts.length ?? 0.05;
+  const furLength = opts.length ?? 0.03;
   const baseColor =
     opts.baseColor ?? (body.material && body.material.color
       ? body.material.color.clone()

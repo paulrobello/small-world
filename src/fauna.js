@@ -109,6 +109,7 @@ export function makeCreature(biome, opts = {}) {
   if (biome.fuzzy && !flies) {
     furShells = applyShellFur(body, biome, {
       baseColor: bodyCol.clone().offsetHSL(0, -0.05, -0.05),
+      tipColor: bodyCol.clone().offsetHSL(0, -0.4, 0.18),
     });
   }
 
