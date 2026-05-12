@@ -32,6 +32,8 @@ const PERSISTED_KEYS = [
   "worldScale",
   "autoRegen",
   "autoRegenMinutes",
+  "bloom",
+  "tiltShift",
 ];
 const BOOKMARKS_KEY = "smallworld:bookmarks:v1";
 const BIOME_FILTER_KEY = "smallworld:biomefilter:v1";
@@ -465,25 +467,9 @@ export function initUi({ camera, canvas, controls, renderer }) {
 
   syncTimeUi();
 
-  // Rendering — bloom + tilt-shift
-  const SETTINGS_KEY = "small-world.settings";
-  function loadStoredSettings() {
-    try {
-      const raw = localStorage.getItem(SETTINGS_KEY);
-      return raw ? JSON.parse(raw) : {};
-    } catch { return {}; }
-  }
-  function persistSettings() {
-    const data = {
-      bloom: state.userSettings.bloom,
-      tiltShift: state.userSettings.tiltShift,
-    };
-    try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(data)); } catch {}
-  }
-  const stored = loadStoredSettings();
-  if (typeof stored.bloom === "boolean") state.userSettings.bloom = stored.bloom;
-  if (typeof stored.tiltShift === "boolean") state.userSettings.tiltShift = stored.tiltShift;
-
+  // Rendering — bloom + tilt-shift. Values come from state.userSettings,
+  // which loadSettings() already populated from localStorage at the top of
+  // initUi(), falling back to defaults in state.js.
   const bloomEl = document.getElementById("setting-bloom");
   const tiltEl = document.getElementById("setting-tiltshift");
   const lowfxHint = document.getElementById("setting-lowfx-hint");
@@ -500,12 +486,12 @@ export function initUi({ camera, canvas, controls, renderer }) {
   bloomEl.addEventListener("change", () => {
     state.userSettings.bloom = bloomEl.checked;
     if (state.postfx) state.postfx.setBloom(bloomEl.checked);
-    persistSettings();
+    saveSettings();
   });
   tiltEl.addEventListener("change", () => {
     state.userSettings.tiltShift = tiltEl.checked;
     if (state.postfx) state.postfx.setTiltShift(tiltEl.checked);
-    persistSettings();
+    saveSettings();
   });
 
   // Auto-regenerate timer — fires the regen button on an interval so the
