@@ -53,7 +53,7 @@ void main() {
   // cell, giving point-distributed hairs instead of interpolated bands.
   vec3 cell = floor(vPos * 120.0);
   float h = hash13(cell);
-  float threshold = 0.62 + vLayerT * 0.34;
+  float threshold = 0.30 + vLayerT * 0.62;
   if (h < threshold) discard;
   vec3 N = normalize(vNormal);
   float lam = max(0.0, dot(N, normalize(uLightDir)));
@@ -96,7 +96,7 @@ function makeFurTemplate(baseColor, tipColor, furLength) {
 // state.world is rebuilt, since shells parent into the world via body).
 export function applyShellFur(body, biome, opts = {}) {
   const layers = LOWFX ? 4 : (opts.layers ?? 8);
-  const furLength = opts.length ?? 0.018;
+  const furLength = opts.length ?? 0.036;
   const baseColor =
     opts.baseColor ?? (body.material && body.material.color
       ? body.material.color.clone()
