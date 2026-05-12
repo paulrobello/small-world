@@ -254,10 +254,17 @@ export function makeIslandUnderside(biome, center) {
       }
     }
   }
+  // ConeGeometry's apex sits at +Y by default — for a floating island we
+  // want the apex pointing *down* (the tapered bottom of the chunk), with
+  // the wide base attached just below sea level. Flipping the geometry
+  // (rather than scaling -1, which would flip winding) keeps shading correct.
+  geo.rotateX(Math.PI);
   geo.computeVertexNormals();
   const mesh = new THREE.Mesh(geo, mat);
-  // place at the centre and dip the cone so its rim aligns with sea level
-  mesh.position.set(center ? center.cx : 0, -coneH * 0.44, center ? center.cz : 0);
+  // Place so the wide rim sits a little below sea level (terrain plunges to
+  // ~-6 at the island edge so the rim is hidden by the cliff slope; the
+  // apex extends well below into the void).
+  mesh.position.set(center ? center.cx : 0, -coneH * 0.5 - 0.5, center ? center.cz : 0);
   mesh.rotation.y = Math.random() * Math.PI;
   return mesh;
 }
