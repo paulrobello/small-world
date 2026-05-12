@@ -18,23 +18,24 @@ make status
 make logs      # tail -f the log
 ```
 
-There are no tests, no linter, no build. Edits to `main.js` / `style.css` / `index.html` are picked up on browser reload — the server sends `Cache-Control: no-store` so a normal refresh is enough.
+There are no tests, no linter, no build. Edits to `main.js` / `src/*.js` / `style.css` / `index.html` are picked up on browser reload — the server sends `Cache-Control: no-store` so a normal refresh is enough.
 
 ## Architecture
 
-Everything client-side lives in `main.js` (~3100 lines, single module). The file is organized top-to-bottom in the order it executes; section dividers (`// ──`) mark logical regions:
+The app is one ES module graph loaded by `index.html` via an importmap. Entry point `main.js` (~130 lines) wires the renderer, camera, OrbitControls, kicks off `generateWorld(seed)`, and runs the `animate()` loop. Everything else lives in `src/`:
 
-1. **Seeded PRNG + URL plumbing** — `mulberry32`, `parseSeed`/`formatSeed`, `readSeedFromUrl`/`writeSeedToUrl`. Seeds are 16-bit hex (e.g. `0x3f2a`).
-2. **`BIOMES`** — the config table (currently twelve entries). Each entry fully specifies a biome's palette, fog, accent/sun colors, allowed flora kinds + count, particle type, and creature color palette + count range. Optional flags (`water`, `cloudlike`, `glowFlowers`, `glowEyes`, `creatureKind`) gate cross-cutting behavior — see "Biome-flag pattern" below. Adding visual variety usually means editing this table, not the builders.
-3. **Renderer / scene / camera / OrbitControls** — module-scope singletons. `autoRotate` is on by default.
-4. **Terrain** — `makeHeightFn(noise2D, layout, amp)` returns a `(x,z) => y` closure combining three simplex-noise octaves with a per-island smoothstep falloff (`islandFalloff`) so each island has a defined edge that plunges into void past its radius. `makeTerrain` bakes that into a vertex-colored `PlaneGeometry`; `makeIslandUnderside` is the craggy inverted cone beneath, one per island center.
-5. **Flora builders** — `FLORA_BUILDERS` is a `{ kind: (biome) => THREE.Group }` registry; see the source for the current set. Biomes reference these by string from their `flora` array. `jitterGeo` is the shared helper that welds an `IcosahedronGeometry`'s duplicate vertices via `mergeVertices` (after stripping UVs/normals so the merge works) and perturbs positions for a hand-modeled look.
-6. **Creatures / caterpillars / butterflies / birds** — each entity has a `makeX(biome)` constructor returning `{ group, …state }` and a separate `stepX(entity, dt, t, …)` updater. They share no base class; the animation loop just iterates four parallel arrays.
-7. **Instanced ground cover** — `placeInstanced` is the shared helper used by `makeGrassField` / `makeWildflowerField` / `makePebbleField`. Wildflowers return positions for butterflies to target via `flowerSpots`.
-8. **Optional water plane / parallax ring** — `makeWaterPlane(biome)` is added when `biome.water` is set (rippled in `stepWater`). `makeParallaxRing` is a wobbled cylinder behind the fog that gives depth; its tint is updated by the day/night system.
-9. **`generateWorld(seed)`** — the orchestrator. Disposes the previous `world` group, picks a biome and layout from the seed, builds terrain → flora → ground cover → creatures → birds → particles, updates the HUD, and writes the seed back to the URL.
-10. **`animate()`** — `requestAnimationFrame` loop that fans out to each `stepX`, advances `windUniforms.uTime`, and runs `updateDayNight`.
-11. **Settings panel + follow mode** — wired at the bottom of the file against the static HUD in `index.html`. Follow mode picks a creature via raycaster against `creatures` + `caterpillars` groups; `generateWorld` calls `setFollowTarget(null)` on regen so a stale ref doesn't survive `disposeGroup`.
+- **`src/state.js`** — the shared module-scope singleton. `state` holds `world` (the THREE.Group that's disposed/rebuilt every regen), all entity arrays (`creatures`, `caterpillars`, `butterflies`, `bees`, `flocks`, `dirtPuffs`, `flowerSpots`), `heightFn`, `currentBiome`, `currentLayout`, `ISLAND_SIZE`/`ISLAND_RADIUS`, `windUniforms`, `userSettings`. Every other module imports from here rather than passing things around. Also exports `disposeGroup`, the night-palette constants, and the `ISLAND_SIZE_BASE` / `DENSITY_BASE` anchors (see "Density scaling" below).
+- **`src/seed.js`** — `mulberry32`, `parseSeed`/`formatSeed`, `readSeedFromUrl`/`writeSeedToUrl`, `newRandomSeed({excludeBiomeId, allowedBiomeIds})`. Seeds are 16-bit hex (e.g. `0x3f2a`).
+- **`src/biomes.js`** — the `BIOMES` config table (currently twelve entries) plus `WILDFLOWER_PALETTES` / `GRASS_DENSITY` / `FLOWER_DENSITY` / `PEBBLE_DENSITY` overrides. Each biome fully specifies palette, fog, accent/sun colors, allowed flora kinds + count, particle type, creature color palette + count range, plus optional dusk/night palette deltas. Optional flags (`water`, `cloudlike`, `glowFlowers`, `glowEyes`, `creatureKind`) gate cross-cutting behavior — see "Biome-flag pattern" below. Adding visual variety usually means editing this table, not the builders.
+- **`src/terrain.js`** — `makeHeightFn(noise2D, layout, amp)` returns a `(x,z) => y` closure combining three simplex-noise octaves with a per-center smoothstep falloff (`islandFalloff`) so each island has a defined edge that plunges into void past its radius. `makeTerrain` bakes that into a vertex-colored `PlaneGeometry`. `pickLayout()` and `pickGroundPoint(maxRadiusFrac)` / `nearestCenter(x,z)` live here.
+- **`src/flora.js`** — `FLORA_BUILDERS` is a `{ kind: (biome) => THREE.Group }` registry; biomes reference these by string from their `flora` array. `jitterGeo` is the shared helper that welds an `IcosahedronGeometry`'s duplicate vertices via `mergeVertices` (after stripping UVs/normals so the merge works) and perturbs positions for a hand-modeled look. `resetFloraPool()` is called at the top of every regen since the previous-world materials/geometries were just disposed.
+- **`src/fauna.js`** — `makeCreature` / `makeCaterpillar` / `makeButterfly` / `makeBee` constructors and their `stepX` updaters. Each entity returns `{ group, …state }` with no base class; the animation loop iterates parallel arrays on `state`.
+- **`src/birds.js`** — `makeFlock(biome)` + `stepFlock(flock, dt, t)`.
+- **`src/environment.js`** — particles, instanced ground cover (`makeGrassField` / `makeWildflowerField` / `makePebbleField`, all built on a shared `placeInstanced`), `makeWaterPlane`, `makeParallaxRing`, and their per-frame `stepX` updaters. Wildflowers return positions for butterflies to target via `state.flowerSpots`.
+- **`src/world.js`** — `generateWorld(seed)`, the orchestrator. Disposes the previous `state.world`, picks biome + layout deterministically, builds atmosphere → lights → terrain → optional water → flora → ground cover → creatures → birds → particles, writes HUD stats and the seed back to the URL. Also exports `updateDayNight(t)` (the day/night color/sun lerp called from `animate`) and the `setSceneRef` / `setControlsRef` / `setFollowReleaseCallback` wiring used by `main.js`.
+- **`src/ui.js`** — all DOM wiring against the static HUD in `index.html`: settings panel, help panel, photo mode (P/S keys, save-to-png, freeze the sim), first-person stroll mode (F/WASD/mouse-look), follow mode (raycaster-based creature pick from `state.creatures` + `state.caterpillars`), biome filter chips, bookmarks, copy-link, auto-regenerate timer, regen button. `generateWorld` calls `setFollowTarget(null)` on regen so a stale ref doesn't survive `disposeGroup`.
+- **`src/lowfx.js`** — `LOWFX` boolean (true on touch / small-screen / low DPR devices) and `LOWFX_DENSITY` multiplier. Honor both when adding new instanced fields or particle-heavy effects; `main.js` also caps `setPixelRatio` at 1 when `LOWFX` is set.
+- **`src/util.js`** — shared helpers: `jitterGeo` (geometry weld + perturb), `applyWindSway` (see "Wind sway" below), `randInt`, and the `TRUNK` color constant.
 
 ### The determinism trick (important when touching world-gen)
 
@@ -44,9 +45,13 @@ Everything client-side lives in `main.js` (~3100 lines, single module). The file
 
 The biome is picked by the first `Math.random()` call inside `generateWorld`, and `pickLayout()` runs immediately after — both stay inside the deterministic window so the seed alone identifies the entire world. `newRandomSeed(excludeBiomeId)` rerolls up to 24 times to avoid landing on the same biome twice in a row when the user clicks regenerate.
 
-### Layout system (single-island vs archipelago)
+### Layout system
 
-`pickLayout()` returns a `{ centers, planeSize, boundRadius, kind }` describing one island (round / oblong / kidney) or a 2–3-island archipelago. The result is stored in module-scope `currentLayout` / `ISLAND_SIZE` / `ISLAND_RADIUS`. **Anything that needs to place objects on solid ground must go through `pickGroundPoint(maxRadiusFrac)`** rather than raw `Math.random()` over XZ — it weights by island area so multi-island worlds get coverage and the void between islands is skipped.
+`pickLayout()` returns `{ centers, planeSize, boundRadius, kind }` describing one island (round / oblong / kidney). It's always single-island today — archipelagos were tried but the creature roaming and silhouette didn't read well across disconnected chunks (see comment in `terrain.js`). The infrastructure is still multi-center though: `centers` is an array, `islandFalloff` is per-center, and `pickGroundPoint(maxRadiusFrac)` / `nearestCenter(x,z)` already weight by island area. **Anything that needs to place objects on solid ground must go through `pickGroundPoint`** rather than raw `Math.random()` over XZ, so re-enabling archipelagos later doesn't require rewriting every placement call.
+
+### Density scaling
+
+Biome `floraCount` and `creatureCount` values in `biomes.js` were tuned against a 38-unit base. The actual `ISLAND_SIZE_BASE` may be larger (currently 50); `src/state.js` exports a separate `DENSITY_BASE = 38` anchor, and `world.js` scales the per-world target counts by `state.ISLAND_SIZE / DENSITY_BASE` so larger or shape-stretched layouts stay cute-dense instead of going sparse. If you retune biome counts, update them at the `DENSITY_BASE` reference, not at the current base size.
 
 ### Wind sway
 
