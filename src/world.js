@@ -179,6 +179,12 @@ export function generateWorld(seed) {
 
   // clear
   disposeGroup(state.world);
+  // Dispose previous reflection's WebGL render target — disposeGroup only walks
+  // state.world, and the RT lives on state.waterReflection instead.
+  if (state.waterReflection && state.waterReflection.rt) {
+    state.waterReflection.rt.dispose();
+  }
+  state.waterReflection = null;
   _scene.remove(state.world);
   state.world = new THREE.Group();
   state.world.scale.setScalar(state.userSettings.worldScale ?? 1);
@@ -301,8 +307,6 @@ export function generateWorld(seed) {
       u.uReflTex.value = state.waterReflection.rt.texture;
       u.uReflMix.value = 0.3; // 30% blend
     }
-  } else {
-    state.waterReflection = null;
   }
 
   // measure max elevation for HUD — sample on actual ground
