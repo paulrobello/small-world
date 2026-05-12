@@ -1,7 +1,7 @@
 import * as THREE from "three";
 
 export const ISLAND_SIZE_BASE = 38;
-export const ISLAND_RADIUS_BASE = ISLAND_SIZE_BASE * 0.42;
+export const ISLAND_RADIUS_BASE = ISLAND_SIZE_BASE * 0.462;
 
 export const state = {
   ISLAND_SIZE: ISLAND_SIZE_BASE,

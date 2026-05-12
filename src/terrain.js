@@ -51,9 +51,9 @@ export function makeHeightFn(noise2D, layout, amp = 3.0) {
     h += noise2D(x * 0.06, z * 0.06) * amp;
     h += noise2D(x * 0.14, z * 0.14) * (amp * 0.45);
     h += noise2D(x * 0.32, z * 0.32) * (amp * 0.18);
+    // Smooth falloff at the edges — terrain tapers to base-plane level (~0)
+    // along the island boundary rather than plunging into the void.
     h *= falloff;
-    // edges plunge into void
-    if (falloff < 0.05) h -= (1 - falloff) * 6;
     return h;
   };
 }
@@ -198,46 +198,3 @@ export function makeTerrain(biome, heightFn) {
   return mesh;
 }
 
-export function makeIslandUnderside(biome, center) {
-  const r = (center && center.radius) || state.ISLAND_RADIUS;
-  // smaller islands get shorter, less craggy cones
-  const sizeFrac = r / ISLAND_RADIUS_BASE;
-  const coneH = 9 * Math.max(0.55, Math.min(1.2, sizeFrac));
-  // cloud-island biomes get a puffier, more amplitude-rich underside so the
-  // island reads like a hovering blob rather than a craggy chunk.
-  const jitter = (biome.cloudlike ? 2.4 : 0.8) * Math.max(0.6, sizeFrac);
-  const geo = new THREE.ConeGeometry(r * 1.06, coneH, 24, 1, true);
-  const mat = new THREE.MeshStandardMaterial({
-    color: new THREE.Color(biome.underside),
-    flatShading: true,
-    roughness: 1,
-    side: THREE.DoubleSide,
-  });
-  // perturb cone vertices for craggy bottom
-  const pos = geo.attributes.position;
-  // cloud underside perturbs across more of the cone for a puffball look
-  const yThreshold = biome.cloudlike ? coneH * 0.85 : coneH * 0.49;
-  for (let i = 0; i < pos.count; i++) {
-    const y = pos.getY(i);
-    if (y < yThreshold) {
-      pos.setX(i, pos.getX(i) + (Math.random() - 0.5) * jitter);
-      pos.setZ(i, pos.getZ(i) + (Math.random() - 0.5) * jitter);
-      if (biome.cloudlike) {
-        pos.setY(i, y + (Math.random() - 0.5) * jitter * 0.4);
-      }
-    }
-  }
-  // ConeGeometry's apex sits at +Y by default — for a floating island we
-  // want the apex pointing *down* (the tapered bottom of the chunk), with
-  // the wide base attached just below sea level. Flipping the geometry
-  // (rather than scaling -1, which would flip winding) keeps shading correct.
-  geo.rotateX(Math.PI);
-  geo.computeVertexNormals();
-  const mesh = new THREE.Mesh(geo, mat);
-  // Place so the wide rim sits a little below sea level (terrain plunges to
-  // ~-6 at the island edge so the rim is hidden by the cliff slope; the
-  // apex extends well below into the void).
-  mesh.position.set(center ? center.cx : 0, -coneH * 0.5 - 0.5, center ? center.cz : 0);
-  mesh.rotation.y = Math.random() * Math.PI;
-  return mesh;
-}

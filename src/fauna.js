@@ -441,26 +441,28 @@ export function stepCreature(c, dt, t, heightFn) {
     const step = c.speed * dt;
     const nx = pos.x + Math.cos(c.heading) * step;
     const nz = pos.z + Math.sin(c.heading) * step;
-    // Edge avoidance: flying creatures can range a bit beyond ground; walkers
-    // turn back the moment their next step is over a void or steep cliff.
-    // Both bounds are layout-aware — "back" means toward the nearest island
-    // center, not the world origin (which sits in the void on archipelagos).
-    const overVoid = heightFn(nx, nz) < -0.35;
+    // Edge avoidance:
+    //  - walkers stay on the island plateau (turn back near the radius edge,
+    //    so they don't wander down the slope onto the flat base plane)
+    //  - fliers may range out over the slope but turn back inside the base
+    //    plane so they never disappear off-world
     let wouldStray;
-    let nearest;
+    let target;
     if (c.flies && c.landState === "flying") {
-      nearest = nearestCenter(nx, nz);
-      const dx = nx - nearest.cx;
-      const dz = nz - nearest.cz;
-      wouldStray = Math.sqrt(dx * dx + dz * dz) > nearest.radius * 1.18;
+      const planeBound = state.ISLAND_SIZE * 0.46;
+      wouldStray = Math.sqrt(nx * nx + nz * nz) > planeBound;
+      target = nearestCenter(pos.x, pos.z);
     } else {
-      wouldStray = overVoid;
-      if (wouldStray) nearest = nearestCenter(pos.x, pos.z);
+      const near = nearestCenter(nx, nz);
+      const dx = nx - near.cx;
+      const dz = nz - near.cz;
+      wouldStray = Math.sqrt(dx * dx + dz * dz) > near.radius * 0.94;
+      target = near;
     }
 
     if (wouldStray) {
       c.heading =
-        Math.atan2(nearest.cz - pos.z, nearest.cx - pos.x) +
+        Math.atan2(target.cz - pos.z, target.cx - pos.x) +
         (Math.random() - 0.5) * 0.5;
     } else {
       pos.x = nx;
@@ -760,13 +762,14 @@ export function stepCaterpillar(c, dt, t, heightFn) {
   let nx = head.position.x + Math.cos(c.heading) * step;
   let nz = head.position.z + Math.sin(c.heading) * step;
 
-  // edge avoidance — if the next step is over a void or steep cliff, turn
-  // toward the nearest island center (not the world origin, which sits in
-  // the void between islands on archipelago worlds).
-  if (heightFn(nx, nz) < -0.25) {
-    const nearest = nearestCenter(head.position.x, head.position.z);
+  // edge avoidance — stay on the island plateau, turn back before reaching
+  // the sloped rim
+  const near = nearestCenter(nx, nz);
+  const ndx = nx - near.cx;
+  const ndz = nz - near.cz;
+  if (Math.sqrt(ndx * ndx + ndz * ndz) > near.radius * 0.94) {
     c.heading =
-      Math.atan2(nearest.cz - head.position.z, nearest.cx - head.position.x) +
+      Math.atan2(near.cz - head.position.z, near.cx - head.position.x) +
       (Math.random() - 0.5) * 0.4;
     nx = head.position.x + Math.cos(c.heading) * step;
     nz = head.position.z + Math.sin(c.heading) * step;

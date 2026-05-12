@@ -17,7 +17,6 @@ import {
   pickGroundPoint,
   pickLayout,
   makeTerrain,
-  makeIslandUnderside,
 } from "./terrain.js";
 import { FLORA_BUILDERS } from "./flora.js";
 import {
@@ -199,9 +198,6 @@ export function generateWorld(seed) {
   state.heightFn = makeHeightFn(noise2D, layout, 3.2);
   const terrain = makeTerrain(biome, state.heightFn);
   state.world.add(terrain);
-  for (const c of layout.centers) {
-    state.world.add(makeIslandUnderside(biome, c));
-  }
 
   // water plane (biomes that opt in)
   if (biome.water) {
