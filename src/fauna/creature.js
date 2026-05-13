@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import { state } from "../state.js";
 import { jitterGeo } from "../util.js";
+import { nearestCenter } from "../terrain.js";
 import { makeDirtPuff, makeDustKick } from "../environment.js";
 import { applyShellFur } from "../fur.js";
 import { BLOOM_LAYER } from "../postfx.js";
