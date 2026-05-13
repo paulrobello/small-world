@@ -7,7 +7,7 @@ import { mulberry32 } from "./seed.js";
 const _params = new URLSearchParams(window.location.search);
 export const INSPECT = _params.get("inspect") === "1";
 
-const VARIANTS = [
+const CREATURE_VARIANTS = [
   { name: "walker",   kind: "creature",    build: (biome) => makeCreature(biome) },
   { name: "flier",    kind: "creature",    build: (biome) => {
       // re-roll until we get a flier (or, on fish biomes, a fish — they always fly)
@@ -31,6 +31,15 @@ const VARIANTS = [
   { name: "snail",       kind: "caterpillar", build: (biome) => makeCaterpillar(biome, { kind: "snail" }) },
 ];
 
+const VARIANTS_BY_CATEGORY = {
+  creature: CREATURE_VARIANTS,
+  flora: [], // populated in Task 3
+};
+
+function _currentVariants() {
+  return VARIANTS_BY_CATEGORY[CATEGORIES[_categoryIdx]];
+}
+
 const CATEGORIES = ["creature", "flora"];
 
 function _findCategoryIdx(id) {
@@ -53,7 +62,7 @@ function _findBiomeIdx(id) {
 }
 function _findVariantIdx(name) {
   if (!name) return 0;
-  const i = VARIANTS.findIndex((v) => v.name === name);
+  const i = _currentVariants().findIndex((v) => v.name === name);
   return i >= 0 ? i : 0;
 }
 function _parseSeed(raw) {
@@ -87,7 +96,7 @@ function _syncUrl() {
   sp.set("inspect", "1");
   sp.set("category", CATEGORIES[_categoryIdx]);
   sp.set("biome", BIOMES[_biomeIdx].id);
-  sp.set("variant", VARIANTS[_variantIdx].name);
+  sp.set("variant", _currentVariants()[_variantIdx].name);
   const seed = _seedOverride ?? _derivedSeed();
   sp.set("seed", "0x" + seed.toString(16).padStart(4, "0"));
   if (_paused) sp.set("paused", "1");
@@ -193,7 +202,7 @@ function spawnSpecimen(scene) {
   state.dirtPuffs = [];
 
   const biome = BIOMES[_biomeIdx];
-  const variant = VARIANTS[_variantIdx];
+  const variant = _currentVariants()[_variantIdx];
 
   // Seeded RNG so the same biome+variant always produces the same look —
   // makes A/B comparison across reloads possible. An explicit seed param
@@ -261,7 +270,7 @@ function spawnSpecimen(scene) {
 function updateHud() {
   if (!_hudEl) return;
   const biome = BIOMES[_biomeIdx];
-  const variant = VARIANTS[_variantIdx];
+  const variant = _currentVariants()[_variantIdx];
   const pauseTag = _paused ? `<span class="ihud-paused">PAUSED</span>` : "";
   _hudEl.innerHTML =
     `<span class="ihud-key">INSPECT</span>` +
@@ -336,11 +345,11 @@ export function setupInspect(scene, renderer, camera, controls) {
       _seedOverride = null;
       spawnSpecimen(scene);
     } else if (e.key === ",") {
-      _variantIdx = (_variantIdx - 1 + VARIANTS.length) % VARIANTS.length;
+      _variantIdx = (_variantIdx - 1 + _currentVariants().length) % _currentVariants().length;
       _seedOverride = null;
       spawnSpecimen(scene);
     } else if (e.key === ".") {
-      _variantIdx = (_variantIdx + 1) % VARIANTS.length;
+      _variantIdx = (_variantIdx + 1) % _currentVariants().length;
       _seedOverride = null;
       spawnSpecimen(scene);
     } else if (e.key === "r") {
