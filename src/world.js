@@ -407,6 +407,12 @@ export function generateWorld(seed) {
   // Water-plane surface Y — matches makeWaterPlane in environment.js. Used to
   // separate underwater coral spawns from above-water flora in water biomes.
   const WATER_SURFACE_Y = -0.12;
+  // Local-space top of a coral at scale=1 (base height + tilted branch + tip
+  // ball). Used to compute the max scale that still fits beneath the water
+  // surface so corals never poke through.
+  const CORAL_TOP_LOCAL = 1.3;
+  const CORAL_SUBMERGE_MARGIN = 0.08;
+  const CORAL_MIN_SCALE = 0.55;
   while (placed < floraTarget && attempts < floraTarget * 6) {
     attempts++;
     const kind = biome.flora[Math.floor(Math.random() * biome.flora.length)];
@@ -432,7 +438,7 @@ export function generateWorld(seed) {
     // this keeps the downhill side buried instead of floating out of the
     // terrain. Footprint scales with flora kind (and with the random scale
     // applied below so a 1.4× tree gets a wider sample than a 0.7× one).
-    const s = 0.7 + Math.random() * 0.7;
+    let s = 0.7 + Math.random() * 0.7;
     const fp = (FLORA_FOOTPRINT[kind] ?? FLORA_FOOTPRINT_DEFAULT) * s;
     const y = Math.min(
       y0,
@@ -441,6 +447,12 @@ export function generateWorld(seed) {
       state.heightFn(p.x, p.z + fp),
       state.heightFn(p.x, p.z - fp)
     ) - FLORA_BURY;
+    if (isUnderwaterCoral) {
+      // Clamp scale so the tallest tip stays below the water surface.
+      const maxScale = (WATER_SURFACE_Y - CORAL_SUBMERGE_MARGIN - y) / CORAL_TOP_LOCAL;
+      if (maxScale < CORAL_MIN_SCALE) continue;
+      s = Math.min(s, maxScale);
+    }
     f.position.set(p.x, y, p.z);
     f.rotation.y = Math.random() * Math.PI * 2;
     f.scale.setScalar(s);
@@ -486,21 +498,19 @@ export function generateWorld(seed) {
   }
 
   // Coral top-up — the main loop's attempt budget gets eaten by underwater
-  // rejection, so it under-places corals. Run a coral-only pass to roughly
-  // double the reef density we'd otherwise get.
+  // rejection and scale-clamp skips, so it under-places corals. Run a
+  // coral-only pass with an absolute target tied to floraTarget.
   if (biome.water && biome.flora.includes("coral")) {
-    const coralTarget = coralPlaced * 2;
+    const coralTarget = Math.round(floraTarget * 0.5);
     const fpBase = FLORA_FOOTPRINT.coral ?? FLORA_FOOTPRINT_DEFAULT;
     let coralAttempts = 0;
-    while (coralPlaced < coralTarget && coralAttempts < coralTarget * 8) {
+    while (coralPlaced < coralTarget && coralAttempts < coralTarget * 12) {
       coralAttempts++;
       const p = pickGroundPoint(1.0);
       const y0 = state.heightFn(p.x, p.z);
       if (y0 > WATER_SURFACE_Y - 0.05) continue;
-      if (y0 < -1.8) continue;
-      const f = FLORA_BUILDERS.coral(biome);
-      f.userData.inspect = { category: "flora", variant: "coral" };
-      const s = 0.7 + Math.random() * 0.7;
+      if (y0 < -3.0) continue; // void / past the underwater shelf
+      let s = 0.7 + Math.random() * 0.7;
       const fp = fpBase * s;
       const y = Math.min(
         y0,
@@ -509,6 +519,11 @@ export function generateWorld(seed) {
         state.heightFn(p.x, p.z + fp),
         state.heightFn(p.x, p.z - fp)
       ) - FLORA_BURY;
+      const maxScale = (WATER_SURFACE_Y - CORAL_SUBMERGE_MARGIN - y) / CORAL_TOP_LOCAL;
+      if (maxScale < CORAL_MIN_SCALE) continue;
+      s = Math.min(s, maxScale);
+      const f = FLORA_BUILDERS.coral(biome);
+      f.userData.inspect = { category: "flora", variant: "coral" };
       f.position.set(p.x, y, p.z);
       f.rotation.y = Math.random() * Math.PI * 2;
       f.scale.setScalar(s);
