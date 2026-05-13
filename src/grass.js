@@ -165,7 +165,7 @@ export function makeGrassField(biome, heightFn) {
   // deterministic from the seed.
   const densityNoise = createNoise2D();
   const clumpNoise = createNoise2D();
-  const baldThreshold = BALD_THRESHOLD[biome.id] ?? 0.32;
+  const baldThreshold = BALD_THRESHOLD[biome.id] ?? 0.18;
 
   const m = new THREE.Matrix4();
   const v = new THREE.Vector3();
@@ -186,7 +186,11 @@ export function makeGrassField(biome, heightFn) {
     if (y < -0.15) continue;
 
     // Density rejection — simplex returns [-1, 1], remap to [0, 1].
-    const d = densityNoise(x * 0.18, z * 0.18) * 0.5 + 0.5;
+    // Noise frequency 0.55 gives bald patches ~1-2 units across (small,
+    // texture-scale), not the 5-unit patches the old 0.18 scale produced —
+    // valleys and other terrain features no longer line up with whole
+    // bald zones.
+    const d = densityNoise(x * 0.55, z * 0.55) * 0.5 + 0.5;
     if (d < baldThreshold) continue;
 
     // Clump-height modulation — taller blades in lush patches, stubbier in thin.
