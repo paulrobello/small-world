@@ -202,17 +202,39 @@
     </section>
 
     <section class="settings-section">
-      <div class="settings-section-label">rendering</div>
+      <details class="fx-details" id="setting-fx-details">
+        <summary class="settings-section-label fx-summary">fx</summary>
 
-      <label class="setting setting-checkbox">
-        <input type="checkbox" id="setting-bloom" checked />
-        <span class="setting-label">bloom</span>
-      </label>
+        <label class="setting setting-checkbox">
+          <input type="checkbox" id="setting-bloom" checked />
+          <span class="setting-label">bloom</span>
+        </label>
 
-      <label class="setting setting-checkbox">
-        <input type="checkbox" id="setting-tiltshift" />
-        <span class="setting-label">tilt-shift miniature</span>
-      </label>
+        <label class="setting setting-checkbox">
+          <input type="checkbox" id="setting-tiltshift" />
+          <span class="setting-label">tilt-shift miniature</span>
+        </label>
+
+        <label class="setting setting-checkbox">
+          <input type="checkbox" id="setting-softparticles" checked />
+          <span class="setting-label">soft particles</span>
+        </label>
+
+        <label class="setting setting-checkbox">
+          <input type="checkbox" id="setting-outline" checked />
+          <span class="setting-label">depth outlines</span>
+        </label>
+
+        <label class="setting setting-checkbox">
+          <input type="checkbox" id="setting-ao" checked />
+          <span class="setting-label">contact AO</span>
+        </label>
+
+        <label class="setting setting-checkbox">
+          <input type="checkbox" id="setting-depthfog" checked />
+          <span class="setting-label">depth fog</span>
+        </label>
+      </details>
 
       <label class="setting setting-checkbox">
         <input type="checkbox" id="setting-show-fps" />

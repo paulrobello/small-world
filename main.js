@@ -19,6 +19,7 @@ import { initPostFX } from "./src/postfx.js";
 import { updateWaterReflection } from "./src/reflection.js";
 import {
   initUi,
+  loadSettings,
   getFollowTarget,
   setFollowTarget,
   isStrolling,
@@ -56,7 +57,7 @@ const camera = new THREE.PerspectiveCamera(
   0.1,
   400
 );
-camera.position.set(34, 25, 34);
+camera.position.set(20, 14, 20);
 
 const controls = new OrbitControls(camera, canvas);
 controls.enableDamping = true;
@@ -79,6 +80,13 @@ setControlsRef(controls);
 state.camera = camera;
 state.renderer = renderer;
 
+// Persisted settings must be applied BEFORE initPostFX so the composer is
+// built with the user's saved bloom / tilt-shift / softParticles / outline /
+// ao / depthFog values rather than the defaults. initUi runs later in this
+// file and re-loads settings to drive its checkboxes — harmless on the
+// second call since localStorage is the source of truth.
+loadSettings();
+
 const postfx = initPostFX(renderer, scene, camera);
 state.postfx = postfx;
 
@@ -94,6 +102,10 @@ window.addEventListener("resize", () => {
       1 / w,
       1 / h
     );
+  }
+  // Soft-particle shader samples tDepth by gl_FragCoord/uResolution.
+  if (state.particles && state.particles.material.uniforms.uResolution) {
+    state.particles.material.uniforms.uResolution.value.set(w, h);
   }
 });
 
@@ -211,13 +223,16 @@ function animate() {
     updateWaterReflection(state.waterReflection, renderer, camera, controls);
   }
 
-  // Update tilt-shift focus band: project the island origin to screen-Y so
-  // the sharp band tracks the island as the camera orbits.
+  // Update tilt-shift focus: project the orbit target to screen-Y for the
+  // sharp band, and measure camera→target distance for the depth focus.
   if (postfx.isActive && postfx.isActive()) {
-    const v = new THREE.Vector3(0, 1.5, 0).project(camera);
+    const focusPoint = controls.target;
+    const v = focusPoint.clone().project(camera);
     // v.y is in NDC [-1, 1]; convert to UV [0, 1]. Three's UV origin is at
     // bottom-left, so (v.y * 0.5 + 0.5) gives the right vertical axis.
-    postfx.updateTiltShiftFocus(v.y * 0.5 + 0.5);
+    const focusY = v.y * 0.5 + 0.5;
+    const focusZ = camera.position.distanceTo(focusPoint);
+    postfx.updateTiltShiftFocus(focusY, focusZ);
     postfx.render(scene, camera);
   } else {
     renderer.render(scene, camera);

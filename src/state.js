@@ -68,8 +68,16 @@ export const state = {
     autoRegenMinutes: 2,
     bloom: true,
     tiltShift: false,
+    softParticles: true,
+    outline: true,
+    ao: true,
+    depthFog: true,
+    fxPanelOpen: false,
     showFps: false,
   },
+  // Set by initPostFX; environment.js reads it to enable soft-particle depth
+  // testing. Null under LOWFX (no composer, no depth capture).
+  depthTexture: null,
 };
 
 export const NIGHT_SKY = new THREE.Color("#0a0d24");

@@ -215,6 +215,11 @@ export function generateWorld(seed) {
   // Force bloom off for them; the user's checkbox is unchanged so it comes
   // back automatically on the next biome.
   if (state.postfx) state.postfx.setBloom(state.userSettings.bloom && !biome.darkBiome);
+  // depth-fog post pass tints distant pixels toward the same atmosphere color
+  // as the in-scene FogExp2, just with a more painterly far-field falloff.
+  if (state.postfx && state.postfx.setDepthFogColor) {
+    state.postfx.setDepthFogColor(new THREE.Color(biome.fog));
+  }
 
   // atmosphere — Color/Fog instances are mutated by updateDayNight()
   _scene.background = new THREE.Color(biome.sky);

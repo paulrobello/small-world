@@ -34,12 +34,17 @@ const PERSISTED_KEYS = [
   "autoRegenMinutes",
   "bloom",
   "tiltShift",
+  "softParticles",
+  "outline",
+  "ao",
+  "depthFog",
+  "fxPanelOpen",
   "showFps",
 ];
 const BOOKMARKS_KEY = "smallworld:bookmarks:v1";
 const BIOME_FILTER_KEY = "smallworld:biomefilter:v1";
 
-function loadSettings() {
+export function loadSettings() {
   try {
     const raw = localStorage.getItem(SETTINGS_KEY);
     if (!raw) return;
@@ -468,18 +473,36 @@ export function initUi({ camera, canvas, controls, renderer }) {
 
   syncTimeUi();
 
+  const fxDetailsEl = document.getElementById("setting-fx-details");
   const bloomEl = document.getElementById("setting-bloom");
   const tiltEl = document.getElementById("setting-tiltshift");
+  const softParticlesEl = document.getElementById("setting-softparticles");
+  const outlineEl = document.getElementById("setting-outline");
+  const aoEl = document.getElementById("setting-ao");
+  const depthFogEl = document.getElementById("setting-depthfog");
   const lowfxHint = document.getElementById("setting-lowfx-hint");
 
+  fxDetailsEl.open = !!state.userSettings.fxPanelOpen;
   bloomEl.checked = state.userSettings.bloom;
   tiltEl.checked = state.userSettings.tiltShift;
+  softParticlesEl.checked = state.userSettings.softParticles;
+  outlineEl.checked = state.userSettings.outline;
+  aoEl.checked = state.userSettings.ao;
+  depthFogEl.checked = state.userSettings.depthFog;
 
   if (LOWFX) {
-    bloomEl.disabled = true;
-    tiltEl.disabled = true;
+    // The depth pre-pass and composer are stubbed out under LOWFX, so every
+    // FX in this section is a no-op there.
+    for (const el of [bloomEl, tiltEl, softParticlesEl, outlineEl, aoEl, depthFogEl]) {
+      el.disabled = true;
+    }
     lowfxHint.hidden = false;
   }
+
+  fxDetailsEl.addEventListener("toggle", () => {
+    state.userSettings.fxPanelOpen = fxDetailsEl.open;
+    saveSettings();
+  });
 
   bloomEl.addEventListener("change", () => {
     state.userSettings.bloom = bloomEl.checked;
@@ -493,6 +516,31 @@ export function initUi({ camera, canvas, controls, renderer }) {
   tiltEl.addEventListener("change", () => {
     state.userSettings.tiltShift = tiltEl.checked;
     if (state.postfx) state.postfx.setTiltShift(tiltEl.checked);
+    saveSettings();
+  });
+  softParticlesEl.addEventListener("change", () => {
+    state.userSettings.softParticles = softParticlesEl.checked;
+    // Particle material's uSoftParticles is a runtime float toggle (no
+    // shader recompile). Only live particle systems need the update.
+    const p = state.particles;
+    if (p && p.material.uniforms.uSoftParticles && state.depthTexture) {
+      p.material.uniforms.uSoftParticles.value = softParticlesEl.checked ? 1.0 : 0.0;
+    }
+    saveSettings();
+  });
+  outlineEl.addEventListener("change", () => {
+    state.userSettings.outline = outlineEl.checked;
+    if (state.postfx) state.postfx.setOutline(outlineEl.checked);
+    saveSettings();
+  });
+  aoEl.addEventListener("change", () => {
+    state.userSettings.ao = aoEl.checked;
+    if (state.postfx) state.postfx.setAo(aoEl.checked);
+    saveSettings();
+  });
+  depthFogEl.addEventListener("change", () => {
+    state.userSettings.depthFog = depthFogEl.checked;
+    if (state.postfx) state.postfx.setDepthFog(depthFogEl.checked);
     saveSettings();
   });
 

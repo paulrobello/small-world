@@ -551,6 +551,29 @@ body.photo-mode .help-panel {
   padding-bottom: 6px;
   margin-bottom: 10px;
 }
+.fx-details { margin: 0 0 12px; }
+.fx-details > .fx-summary {
+  cursor: pointer;
+  list-style: none;
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  user-select: none;
+  outline: none;
+}
+.fx-details > .fx-summary::-webkit-details-marker { display: none; }
+.fx-details > .fx-summary::after {
+  content: "+";
+  font-size: 14px;
+  letter-spacing: 0;
+  color: var(--ink-faint);
+  transform: translateY(-1px);
+  transition: transform 0.2s ease, color 0.2s ease;
+}
+.fx-details[open] > .fx-summary::after { content: "−"; color: var(--ink-dim); }
+.fx-details > .fx-summary:hover { color: var(--ink); }
+.fx-details[open] { margin-bottom: 4px; }
+.fx-details[open] > .fx-summary { margin-bottom: 10px; }
 
 .setting {
   display: grid;
