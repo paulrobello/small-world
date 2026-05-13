@@ -129,7 +129,11 @@ export function isPhotoMode() {
 export function stepStroll(dt) {
   if (!_stroll) return;
   const { camera, keys, savedTarget } = _stroll;
-  const speed = (keys.shift ? 12 : 6) * dt;
+  // Move speed scales with the world — at higher worldScale the island is
+  // bigger in world coords, so a fixed-units speed feels slower. Multiply
+  // by ws so traversal time stays roughly constant across scales.
+  const wsMove = state.userSettings.worldScale ?? 1;
+  const speed = (keys.shift ? 12 : 6) * wsMove * dt;
   let fx = 0;
   let fz = 0;
   if (keys.w) fz -= 1;
@@ -152,25 +156,32 @@ export function stepStroll(dt) {
   }
   // Lock camera to terrain height + eye offset, but never sink below the
   // base plane so walking off an island just hovers at minimum height.
-  // Sample heightFn at camera XZ plus four short offsets so a slope or
-  // small ridge close to the player lifts the camera over it instead of
-  // letting the terrain mesh slice through the near plane. heightFn can
-  // return negative in valleys — that's fine; the camera dips with the
-  // terrain instead of floating above the noise floor.
-  const probe = 0.45;
-  const hC = state.heightFn(camera.position.x, camera.position.z);
-  const hN = state.heightFn(camera.position.x, camera.position.z + probe);
-  const hS = state.heightFn(camera.position.x, camera.position.z - probe);
-  const hE = state.heightFn(camera.position.x + probe, camera.position.z);
-  const hW = state.heightFn(camera.position.x - probe, camera.position.z);
-  const groundY = Math.max(hC, hN, hS, hE, hW);
-  // Eye height: clears grass and small flora.
-  const targetY = groundY + 1.9;
+  // state.world is uniformly scaled by userSettings.worldScale, so terrain
+  // mesh vertices live at (localX*ws, heightFn(localX,localZ)*ws, localZ*ws)
+  // in world coords. The camera moves in world coords, so convert XZ to
+  // mesh-local before sampling heightFn, then scale the result back up.
+  const ws = state.userSettings.worldScale ?? 1;
+  const wsi = 1 / ws;
+  const cx = camera.position.x * wsi;
+  const cz = camera.position.z * wsi;
+  // Probe radius is 0.45 in world units — convert to mesh-local before sampling.
+  const probe = 0.45 * wsi;
+  // Sample center + four short cardinal offsets so a slope or small ridge
+  // close to the player lifts the camera over it instead of letting the
+  // terrain mesh slice through the near plane.
+  const hC = state.heightFn(cx, cz);
+  const hN = state.heightFn(cx, cz + probe);
+  const hS = state.heightFn(cx, cz - probe);
+  const hE = state.heightFn(cx + probe, cz);
+  const hW = state.heightFn(cx - probe, cz);
+  const groundY = Math.max(hC, hN, hS, hE, hW) * ws;
+  // Eye height: clears grass (~0.7 world units at default scale) and small flora.
+  const targetY = groundY + 1.9 * ws;
   // Smooth Y for soft cresting on bumps — but clamp so the camera never
-  // dips below groundY + 1.0 (high enough that the near plane stays out
-  // of the terrain even when you're inches from a wall on a steep slope).
+  // dips below groundY + 1.0×ws (high enough that the near plane stays
+  // out of the terrain even when you're inches from a wall on a slope).
   const next = camera.position.y + (targetY - camera.position.y) * Math.min(1, dt * 8);
-  camera.position.y = Math.max(next, groundY + 1.0);
+  camera.position.y = Math.max(next, groundY + 1.0 * ws);
 
   // Apply yaw / pitch as a quaternion so the camera doesn't roll.
   camera.rotation.order = "YXZ";
@@ -337,7 +348,12 @@ export function initUi({ camera, canvas, controls, renderer }) {
     const dz = lookZ - camera.position.z;
     const yaw = Math.atan2(-dx, -dz);
     // Drop the camera to creature-eye height on the terrain at its XZ.
-    const groundY = state.heightFn(camera.position.x, camera.position.z);
+    // Account for state.world's scale — heightFn is mesh-local.
+    const ws0 = state.userSettings.worldScale ?? 1;
+    const groundY = state.heightFn(
+      camera.position.x / ws0,
+      camera.position.z / ws0
+    ) * ws0;
     _stroll = {
       camera,
       keys: { w: false, a: false, s: false, d: false, shift: false },
@@ -351,7 +367,7 @@ export function initUi({ camera, canvas, controls, renderer }) {
       savedTarget: controls.target,
       handlers: {},
     };
-    camera.position.y = groundY + 1.9;
+    camera.position.y = groundY + 1.9 * ws0;
 
     // Pointer lock so the mouse can move infinitely without leaving the
     // canvas. Browsers require this from a user gesture (button click).
