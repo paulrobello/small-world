@@ -403,12 +403,24 @@ export function generateWorld(seed) {
   // Extra pad on top of the slope-plant footprint so creature bodies don't
   // visually nose-clip the trunk. fp itself is already ~1.5× the trunk radius.
   const OBSTACLE_PAD = 1.15;
+  // Water-plane surface Y — matches makeWaterPlane in environment.js. Used to
+  // separate underwater coral spawns from above-water flora in water biomes.
+  const WATER_SURFACE_Y = -0.12;
   while (placed < floraTarget && attempts < floraTarget * 6) {
     attempts++;
-    const p = pickGroundPoint(0.88);
-    const y0 = state.heightFn(p.x, p.z);
-    if (y0 < -0.3) continue; // skip steep cliffs / void
     const kind = biome.flora[Math.floor(Math.random() * biome.flora.length)];
+    // Coral grows on submerged shelves in water biomes — sample the wider
+    // falloff band where heights dip below sea level and reject picks that
+    // would put it above water.
+    const isUnderwaterCoral = biome.water && kind === "coral";
+    const p = pickGroundPoint(isUnderwaterCoral ? 1.0 : 0.88);
+    const y0 = state.heightFn(p.x, p.z);
+    if (isUnderwaterCoral) {
+      if (y0 > WATER_SURFACE_Y - 0.05) continue; // not submerged enough
+      if (y0 < -1.8) continue; // void / extreme depth
+    } else if (y0 < -0.3) {
+      continue; // skip steep cliffs / void
+    }
     // Hard cap on crystals — they each spawn a point light, and we want at
     // most 4 in any world to keep the shader cost (and the visual chaos) down.
     if (kind === "crystal" && crystalCount >= CRYSTAL_CAP) continue;
