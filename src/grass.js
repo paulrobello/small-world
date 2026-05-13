@@ -3,7 +3,6 @@ import { state, DENSITY_BASE } from "./state.js";
 import { pickGroundPoint } from "./terrain.js";
 import { GRASS_DENSITY } from "./biomes.js";
 import { LOWFX, LOWFX_DENSITY } from "./lowfx.js";
-import { applyWindSway } from "./util.js";
 
 const _lowfxScale = (n) => (LOWFX ? Math.max(1, Math.round(n * LOWFX_DENSITY)) : n);
 const _coverScale = (n, gain = 1) =>
@@ -38,20 +37,89 @@ export function makeGrassField(biome, heightFn) {
     vertexColors: true,
   });
 
-  const tipUniforms = { uTipColor: { value: tipCol } };
-  const prevOnBeforeCompile = mat.onBeforeCompile;
+  // Per-world deterministic wind direction. Drawn inside generateWorld's
+  // seeded Math.random window so the same seed reproduces the same wind.
+  const wdAngle = Math.random() * Math.PI * 2;
+  const uniforms = {
+    uTime: state.windUniforms.uTime,                   // shared with rest of world
+    uTipColor: { value: tipCol },
+    uWindScale: { value: 0.15 },
+    uWindSpeed: { value: 0.6 },
+    uWindDir: { value: new THREE.Vector2(Math.cos(wdAngle), Math.sin(wdAngle)) },
+    uWindStrength: { value: LOWFX ? 0.8 : 1.2 },
+    // Camera fade uniforms — wired in Task 5. Carried now so the shader
+    // structure stays stable across tasks.
+    uCameraXZ: { value: new THREE.Vector2(0, 0) },
+    uFadeStart: { value: 9999 },  // disabled in this task
+    uFadeEnd: { value: 9999 },
+  };
+
   mat.onBeforeCompile = (shader) => {
-    if (prevOnBeforeCompile) prevOnBeforeCompile(shader);
-    shader.uniforms.uTipColor = tipUniforms.uTipColor;
+    shader.uniforms.uTime = uniforms.uTime;
+    shader.uniforms.uTipColor = uniforms.uTipColor;
+    shader.uniforms.uWindScale = uniforms.uWindScale;
+    shader.uniforms.uWindSpeed = uniforms.uWindSpeed;
+    shader.uniforms.uWindDir = uniforms.uWindDir;
+    shader.uniforms.uWindStrength = uniforms.uWindStrength;
+    shader.uniforms.uCameraXZ = uniforms.uCameraXZ;
+    shader.uniforms.uFadeStart = uniforms.uFadeStart;
+    shader.uniforms.uFadeEnd = uniforms.uFadeEnd;
+
     shader.vertexShader = shader.vertexShader
       .replace(
         "#include <common>",
-        "#include <common>\nattribute float aTipFactor;\nvarying float vTipFactor;"
+        `#include <common>
+        attribute float aTipFactor;
+        attribute float aWindSeed;
+        varying float vTipFactor;
+        uniform float uTime;
+        uniform float uWindScale;
+        uniform float uWindSpeed;
+        uniform vec2  uWindDir;
+        uniform float uWindStrength;
+        uniform vec2  uCameraXZ;
+        uniform float uFadeStart;
+        uniform float uFadeEnd;
+        float gHash(vec2 p) {
+          return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453);
+        }
+        float gNoise(vec2 p) {
+          vec2 i = floor(p), f = fract(p);
+          vec2 u = f * f * (3.0 - 2.0 * f);
+          return mix(mix(gHash(i),             gHash(i + vec2(1.0, 0.0)), u.x),
+                     mix(gHash(i + vec2(0.0, 1.0)), gHash(i + vec2(1.0, 1.0)), u.x), u.y);
+        }`
       )
       .replace(
         "#include <begin_vertex>",
-        "#include <begin_vertex>\nvTipFactor = aTipFactor;"
+        `#include <begin_vertex>
+        vTipFactor = aTipFactor;
+        {
+          #ifdef USE_INSTANCING
+            vec4 wp4 = modelMatrix * instanceMatrix * vec4(transformed, 1.0);
+          #else
+            vec4 wp4 = modelMatrix * vec4(transformed, 1.0);
+          #endif
+          vec2 worldXZ = wp4.xz;
+          vec2 windFlow = uTime * uWindSpeed * uWindDir;
+          float a = gNoise(worldXZ * uWindScale - windFlow);
+          float b = gNoise(worldXZ * uWindScale * 2.3 - windFlow * 1.7);
+          float gust = 0.7 * a + 0.3 * b;
+          float swirl = (gust - 0.5) * 0.6;
+          float cs = cos(swirl), sn = sin(swirl);
+          vec2 bendDir = vec2(
+            uWindDir.x * cs - uWindDir.y * sn,
+            uWindDir.x * sn + uWindDir.y * cs
+          );
+          float amp = aTipFactor * aTipFactor
+                    * uWindStrength
+                    * gust
+                    * (0.75 + 0.5 * aWindSeed);
+          transformed.x += bendDir.x * amp * 0.18;
+          transformed.z += bendDir.y * amp * 0.18;
+        }`
       );
+
     shader.fragmentShader = shader.fragmentShader
       .replace(
         "#include <common>",
@@ -62,7 +130,7 @@ export function makeGrassField(biome, heightFn) {
         "#include <color_fragment>\ndiffuseColor.rgb = mix(diffuseColor.rgb, uTipColor, vTipFactor * 0.85);"
       );
   };
-  applyWindSway(mat, 1.8);
+  mat.needsUpdate = true;
 
   const mesh = new THREE.InstancedMesh(blade, mat, count);
   mesh.receiveShadow = true;
@@ -98,6 +166,10 @@ export function makeGrassField(biome, heightFn) {
   mesh.count = placed;
   mesh.instanceMatrix.needsUpdate = true;
 
+  const windSeeds = new Float32Array(mesh.count);
+  for (let i = 0; i < mesh.count; i++) windSeeds[i] = Math.random();
+  blade.setAttribute("aWindSeed", new THREE.InstancedBufferAttribute(windSeeds, 1));
+
   const colors = new Float32Array(mesh.count * 3);
   const tmp = new THREE.Color();
   for (let i = 0; i < mesh.count; i++) {
@@ -113,7 +185,7 @@ export function makeGrassField(biome, heightFn) {
   mesh.instanceColor = new THREE.InstancedBufferAttribute(colors, 3);
   mesh.instanceColor.needsUpdate = true;
 
-  state.grass = { mesh, uniforms: tipUniforms };
+  state.grass = { mesh, uniforms };
   return mesh;
 }
 
