@@ -162,7 +162,7 @@ export function makeGrassField(biome, heightFn) {
   // Combined with the crossed-plane blade geometry, each instance now
   // contributes meaningful screen area regardless of viewing angle.
   // LOWFX trims the count to stay inside a smaller GPU budget.
-  const overshoot = LOWFX ? 5.0 : 11.0;
+  const overshoot = LOWFX ? 22.0 : 55.0;
   const count = _coverScale(GRASS_DENSITY[biome.id] ?? 300, overshoot);
 
   const { blade, material: mat, uniforms, baseCol } = makeGrassMaterial(biome);
@@ -195,7 +195,11 @@ export function makeGrassField(biome, heightFn) {
     const x = p.x;
     const z = p.z;
     const y = heightFn(x, z);
-    if (y < -0.15) continue;
+    // -4.0 = "void zone past the island falloff", not "natural valley".
+    // pickGroundPoint(0.88) already keeps us inside the island radius;
+    // the inner noise amplitude is ±3.2 so any negative under -4 is the
+    // edge plunge. Don't reject mid-island dips.
+    if (y < -4.0) continue;
 
     // Density rejection — simplex returns [-1, 1], remap to [0, 1].
     // Noise frequency 0.55 gives bald patches ~1-2 units across (small,
