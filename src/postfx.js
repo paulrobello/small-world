@@ -3,9 +3,39 @@ import { EffectComposer } from "three/addons/postprocessing/EffectComposer.js";
 import { RenderPass } from "three/addons/postprocessing/RenderPass.js";
 import { ShaderPass } from "three/addons/postprocessing/ShaderPass.js";
 import { UnrealBloomPass } from "three/addons/postprocessing/UnrealBloomPass.js";
-import { OutputPass } from "three/addons/postprocessing/OutputPass.js";
 import { state } from "./state.js";
 import { LOWFX } from "./lowfx.js";
+
+// Custom output: sRGB OETF only, no tone-mapping. The standard OutputPass
+// would apply ACES a second time on top of RenderPass's tone-mapped output,
+// crushing very dark biomes (obsidian) to pure black. Tone-mapping is already
+// applied by the renderer during RenderPass, so this pass only needs to do
+// the linear → sRGB gamma encode for display.
+const _srgbOutputShader = {
+  uniforms: { tDiffuse: { value: null } },
+  vertexShader: `
+    varying vec2 vUv;
+    void main() {
+      vUv = uv;
+      gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+    }
+  `,
+  fragmentShader: `
+    precision highp float;
+    uniform sampler2D tDiffuse;
+    varying vec2 vUv;
+    vec3 linearToSRGB(vec3 c) {
+      // sRGB OETF, mirrors three's built-in sRGBTransferOETF
+      vec3 lo = c * 12.92;
+      vec3 hi = pow(c, vec3(1.0/2.4)) * 1.055 - 0.055;
+      return mix(lo, hi, step(0.0031308, c));
+    }
+    void main() {
+      vec4 t = texture2D(tDiffuse, vUv);
+      gl_FragColor = vec4(linearToSRGB(t.rgb), t.a);
+    }
+  `,
+};
 
 // Hand-rolled tilt-shift: 4-tap blur scaled by distance from a focus band.
 // Focus band's screen-Y is updated each frame from main.js so it tracks the
@@ -81,20 +111,7 @@ export function initPostFX(renderer, scene, camera) {
   tiltShiftPass.enabled = state.userSettings.tiltShift;
   composer.addPass(tiltShiftPass);
 
-  // OutputPass reads renderer.toneMapping each frame to pick its tone-mapping
-  // algorithm. We disable the renderer's tone mapping during composer.render
-  // so RenderPass doesn't double-tone-map the scene — but OutputPass would
-  // then also skip tone mapping, leaving HDR values washed out. Wrap its
-  // render() to force ACES regardless of renderer state.
-  const outputPass = new OutputPass();
-  const _origOutputRender = outputPass.render.bind(outputPass);
-  outputPass.render = function (rdr, writeBuf, readBuf, dt, maskActive) {
-    const prev = rdr.toneMapping;
-    rdr.toneMapping = THREE.ACESFilmicToneMapping;
-    _origOutputRender(rdr, writeBuf, readBuf, dt, maskActive);
-    rdr.toneMapping = prev;
-  };
-  composer.addPass(outputPass);
+  composer.addPass(new ShaderPass(_srgbOutputShader));
 
   return {
     composer,
@@ -102,19 +119,9 @@ export function initPostFX(renderer, scene, camera) {
     tiltShiftPass,
     isActive: () => bloomPass.enabled || tiltShiftPass.enabled,
     render: (s, cam) => {
-      // Keep render pass + scene refs synced (scene/camera refs are stable
-      // per session, but cheap to assign).
       renderPass.scene = s;
       renderPass.camera = cam;
-      // Disable renderer tone mapping during the composer chain so RenderPass
-      // emits HDR-ish values; OutputPass (above) overrides back to ACES to
-      // do the single tone-map at the end. Restored after for any other
-      // direct renderer.render calls that happen this frame (reflection RT
-      // updates, photo capture, etc.).
-      const prevTone = renderer.toneMapping;
-      renderer.toneMapping = THREE.NoToneMapping;
       composer.render();
-      renderer.toneMapping = prevTone;
     },
     onResize: (w, h) => {
       composer.setSize(w, h);

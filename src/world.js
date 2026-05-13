@@ -209,6 +209,13 @@ export function generateWorld(seed) {
   state.currentBiome = biome;
   state.currentSeed = seed;
 
+  // Very dark biomes (obsidian, ashen) interact poorly with UnrealBloomPass:
+  // the additive blend on a HalfFloat target loses precision against their
+  // near-zero linear values and crushes the whole scene to pure black.
+  // Force bloom off for them; the user's checkbox is unchanged so it comes
+  // back automatically on the next biome.
+  if (state.postfx) state.postfx.setBloom(state.userSettings.bloom && !biome.darkBiome);
+
   // atmosphere — Color/Fog instances are mutated by updateDayNight()
   _scene.background = new THREE.Color(biome.sky);
   _scene.fog = new THREE.FogExp2(new THREE.Color(biome.fog), biome.fogDensity);

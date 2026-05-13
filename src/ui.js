@@ -482,7 +482,11 @@ export function initUi({ camera, canvas, controls, renderer }) {
 
   bloomEl.addEventListener("change", () => {
     state.userSettings.bloom = bloomEl.checked;
-    if (state.postfx) state.postfx.setBloom(bloomEl.checked);
+    // darkBiome biomes (obsidian, ashen) collapse to pure black under bloom
+    // due to additive-blend precision against their near-zero linear values;
+    // world.js applies the same gate after every regen.
+    const allowBloom = bloomEl.checked && !state.currentBiome?.darkBiome;
+    if (state.postfx) state.postfx.setBloom(allowBloom);
     saveSettings();
   });
   tiltEl.addEventListener("change", () => {
