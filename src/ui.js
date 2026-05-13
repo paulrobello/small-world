@@ -156,8 +156,11 @@ export function stepStroll(dt) {
   // Eye height clears tall grass clumps (max ~0.7 with current scale) and
   // sits at small-flora head-height so you can look around naturally.
   const targetY = groundY + 1.9;
-  // smooth Y so cresting bumps doesn't jolt
-  camera.position.y += (targetY - camera.position.y) * Math.min(1, dt * 8);
+  // Smooth Y so cresting bumps doesn't jolt — but clamp to groundY + 0.6
+  // so a fast uphill ascent can't lag the camera below the actual terrain
+  // (which would clip into the ground).
+  const next = camera.position.y + (targetY - camera.position.y) * Math.min(1, dt * 8);
+  camera.position.y = Math.max(next, groundY + 0.6);
 
   // Apply yaw / pitch as a quaternion so the camera doesn't roll.
   camera.rotation.order = "YXZ";

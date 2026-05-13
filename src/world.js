@@ -352,19 +352,44 @@ export function generateWorld(seed) {
   const floraTarget = LOWFX
     ? Math.max(8, Math.round(biome.floraCount * densityScale * LOWFX_DENSITY))
     : Math.round(biome.floraCount * densityScale);
+  // Per-kind footprint radius — how far around the trunk axis we sample
+  // heightFn to find the lowest ground the base needs to reach. Bigger
+  // trunks need a wider sample so the downhill side stays buried on slopes.
+  // Anything not listed falls back to FLORA_FOOTPRINT_DEFAULT.
+  const FLORA_FOOTPRINT = {
+    tree: 0.28, pine: 0.28, deadtree: 0.22, mushroom: 0.18,
+    bigmushroom: 0.45, lantern: 0.18, pillar: 0.30, archstone: 0.55,
+    balloontree: 0.22, crystal: 0.30, obsidianshard: 0.28, skull: 0.22,
+    berrybush: 0.30, coral: 0.25, fern: 0.18, rock: 0.30, reed: 0.10,
+  };
+  const FLORA_FOOTPRINT_DEFAULT = 0.20;
+  const FLORA_BURY = 0.08; // extra sink so the seam is hidden in soft fog
   while (placed < floraTarget && attempts < floraTarget * 6) {
     attempts++;
     const p = pickGroundPoint(0.88);
-    const y = state.heightFn(p.x, p.z);
-    if (y < -0.3) continue; // skip steep cliffs / void
+    const y0 = state.heightFn(p.x, p.z);
+    if (y0 < -0.3) continue; // skip steep cliffs / void
     const kind = biome.flora[Math.floor(Math.random() * biome.flora.length)];
     // Hard cap on crystals — they each spawn a point light, and we want at
     // most 4 in any world to keep the shader cost (and the visual chaos) down.
     if (kind === "crystal" && crystalCount >= CRYSTAL_CAP) continue;
     const f = FLORA_BUILDERS[kind](biome);
+    // Slope-plant: sample heightFn at four offsets around the trunk axis
+    // and sink the base to the lowest sample minus FLORA_BURY. On a slope
+    // this keeps the downhill side buried instead of floating out of the
+    // terrain. Footprint scales with flora kind (and with the random scale
+    // applied below so a 1.4× tree gets a wider sample than a 0.7× one).
+    const s = 0.7 + Math.random() * 0.7;
+    const fp = (FLORA_FOOTPRINT[kind] ?? FLORA_FOOTPRINT_DEFAULT) * s;
+    const y = Math.min(
+      y0,
+      state.heightFn(p.x + fp, p.z),
+      state.heightFn(p.x - fp, p.z),
+      state.heightFn(p.x, p.z + fp),
+      state.heightFn(p.x, p.z - fp)
+    ) - FLORA_BURY;
     f.position.set(p.x, y, p.z);
     f.rotation.y = Math.random() * Math.PI * 2;
-    const s = 0.7 + Math.random() * 0.7;
     f.scale.setScalar(s);
     if (kind === "crystal") {
       const glow = new THREE.PointLight(new THREE.Color(biome.accent), 1.4, 6.5, 1.8);
