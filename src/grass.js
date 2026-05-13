@@ -10,11 +10,10 @@ const _coverScale = (n, gain = 1) =>
   _lowfxScale(Math.round(n * (state.ISLAND_SIZE / DENSITY_BASE) * gain));
 
 export function makeGrassField(biome, heightFn) {
-  // Overshoot factor bumped from 2.8 → 4.4: covers ~35-50% density-mask
-  // rejection and the camera-fade savings let us draw more blades total.
-  // LOWFX uses a lower overshoot since the fade band closes in earlier
-  // and the GPU budget is tighter.
-  const overshoot = LOWFX ? 2.5 : 4.4;
+  // Overshoot factor covers ~35-50% density-mask rejection AND keeps a
+  // visible carpet across the entire orbit-visible area despite the
+  // camera-distance fade. LOWFX is half so the GPU budget stays sane.
+  const overshoot = LOWFX ? 3.5 : 7.0;
   const count = _coverScale(GRASS_DENSITY[biome.id] ?? 300, overshoot);
 
   const blade = new THREE.PlaneGeometry(0.06, 0.34, 1, 3);
@@ -57,11 +56,12 @@ export function makeGrassField(biome, heightFn) {
     // structure stays stable across tasks.
     uCameraXZ: { value: new THREE.Vector2(0, 0) },
     // Distance is measured from camera XZ. Default orbit puts the camera
-    // at XZ radius ~28 from origin, so the island's far edge sits ~51
-    // units from the camera projection. Fade band 25→50 covers the full
-    // island width and gives a clean near/far gradient across the view.
-    uFadeStart: { value: LOWFX ? 18.0 : 25.0 },
-    uFadeEnd: { value: LOWFX ? 35.0 : 50.0 },
+    // at XZ radius ~28 from origin and the far island edge ~51 from the
+    // camera projection. Band sits past the far edge so the whole orbit
+    // view shows tall blades, with a soft taper into the void; LOD savings
+    // come from collapsing blades past the island, not on it.
+    uFadeStart: { value: LOWFX ? 30.0 : 45.0 },
+    uFadeEnd: { value: LOWFX ? 55.0 : 85.0 },
   };
 
   mat.onBeforeCompile = (shader) => {
@@ -183,8 +183,8 @@ export function makeGrassField(biome, heightFn) {
 
     // Clump-height modulation — taller blades in lush patches, stubbier in thin.
     const cN = clumpNoise(x * 0.35, z * 0.35) * 0.5 + 0.5;
-    const baseScale = 0.6 + Math.random() * 0.8;
-    const heightMul = 0.55 + 0.9 * cN;
+    const baseScale = 0.7 + Math.random() * 0.7;
+    const heightMul = 0.75 + 0.7 * cN;
 
     v.set(x, y, z);
     s.set(baseScale, baseScale * heightMul, baseScale);

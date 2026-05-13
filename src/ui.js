@@ -968,6 +968,9 @@ export function initUi({ camera, canvas, controls, renderer }) {
       e.preventDefault();
       if (_stroll) exitStroll();
       else enterStroll();
+    } else if (e.key === "r" || e.key === "R") {
+      e.preventDefault();
+      document.getElementById("regen").click();
     }
   });
 }
