@@ -152,15 +152,25 @@ export function stepStroll(dt) {
   }
   // Lock camera to terrain height + eye offset, but never sink below the
   // base plane so walking off an island just hovers at minimum height.
-  const groundY = Math.max(0, state.heightFn(camera.position.x, camera.position.z));
-  // Eye height clears tall grass clumps (max ~0.7 with current scale) and
-  // sits at small-flora head-height so you can look around naturally.
+  // Sample heightFn at camera XZ plus four short offsets so a slope or
+  // small ridge close to the player lifts the camera over it instead of
+  // letting the terrain mesh slice through the near plane. heightFn can
+  // return negative in valleys — that's fine; the camera dips with the
+  // terrain instead of floating above the noise floor.
+  const probe = 0.45;
+  const hC = state.heightFn(camera.position.x, camera.position.z);
+  const hN = state.heightFn(camera.position.x, camera.position.z + probe);
+  const hS = state.heightFn(camera.position.x, camera.position.z - probe);
+  const hE = state.heightFn(camera.position.x + probe, camera.position.z);
+  const hW = state.heightFn(camera.position.x - probe, camera.position.z);
+  const groundY = Math.max(hC, hN, hS, hE, hW);
+  // Eye height: clears grass and small flora.
   const targetY = groundY + 1.9;
-  // Smooth Y so cresting bumps doesn't jolt — but clamp to groundY + 0.6
-  // so a fast uphill ascent can't lag the camera below the actual terrain
-  // (which would clip into the ground).
+  // Smooth Y for soft cresting on bumps — but clamp so the camera never
+  // dips below groundY + 1.0 (high enough that the near plane stays out
+  // of the terrain even when you're inches from a wall on a steep slope).
   const next = camera.position.y + (targetY - camera.position.y) * Math.min(1, dt * 8);
-  camera.position.y = Math.max(next, groundY + 0.6);
+  camera.position.y = Math.max(next, groundY + 1.0);
 
   // Apply yaw / pitch as a quaternion so the camera doesn't roll.
   camera.rotation.order = "YXZ";
@@ -327,7 +337,7 @@ export function initUi({ camera, canvas, controls, renderer }) {
     const dz = lookZ - camera.position.z;
     const yaw = Math.atan2(-dx, -dz);
     // Drop the camera to creature-eye height on the terrain at its XZ.
-    const groundY = Math.max(0, state.heightFn(camera.position.x, camera.position.z));
+    const groundY = state.heightFn(camera.position.x, camera.position.z);
     _stroll = {
       camera,
       keys: { w: false, a: false, s: false, d: false, shift: false },
@@ -341,7 +351,7 @@ export function initUi({ camera, canvas, controls, renderer }) {
       savedTarget: controls.target,
       handlers: {},
     };
-    camera.position.y = groundY + 1.5;
+    camera.position.y = groundY + 1.9;
 
     // Pointer lock so the mouse can move infinitely without leaving the
     // canvas. Browsers require this from a user gesture (button click).

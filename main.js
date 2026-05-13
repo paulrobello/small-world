@@ -55,7 +55,8 @@ scene.add(state.world);
 const camera = new THREE.PerspectiveCamera(
   38,
   window.innerWidth / window.innerHeight,
-  0.1,
+  0.03,   // tight near plane so first-person walking close to walls / slopes
+          // doesn't slice the terrain into the view frustum.
   400
 );
 camera.position.set(20, 14, 20);
