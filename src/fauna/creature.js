@@ -1070,7 +1070,15 @@ export function stepCreature(c, dt, t, heightFn) {
     // the flier crosses the curve quickly. Perch lift accounts for the
     // flier body's half-Y (≈0.39·scale) being slightly larger than restH
     // (0.35·scale): without it the body visibly sinks into the cap.
+    //
+    // Non-fish fliers over water: raise the floor to the water surface
+    // (WATER_AVOID_Y) so hover-above-terrain doesn't put them below the
+    // lakebed-relative waterline. Without this, deep underwater terrain
+    // (-2 to -3) drags pos.y well below the surface even at full hover.
     let floorY = ground;
+    if (!c.isFish && state.waterMesh && ground < WATER_AVOID_Y) {
+      floorY = WATER_AVOID_Y;
+    }
     const restH = 0.35 * c.scale;
     if (c.perchTarget) {
       const dxp = c.perchTarget.x - pos.x;
