@@ -2,6 +2,83 @@ import * as THREE from "three";
 import { jitterGeo, applyWindSway, TRUNK } from "./util.js";
 import { BLOOM_LAYER } from "./postfx.js";
 
+// Cactus needles. Each spine is a real little cone mesh sitting on the
+// capsule's surface, oriented along the outward normal — the shell-fur
+// approach we use for fuzzy creatures renders frosted square columns at
+// sparse densities, which reads as ice crystals rather than thin spikes.
+// One InstancedMesh per cactus part keeps the draw count down (a single
+// 3-arm cactus is at most 3 draws regardless of needle count).
+const NEEDLE_TIP_COLOR = new THREE.Color("#f5ead0");
+const NEEDLE_LENGTH = 0.085;
+const NEEDLE_DENSITY = 95; // needles per local-unit² of capsule surface area
+function addCapsuleNeedles(parent, radius, length) {
+  // One needle geo + material are pooled per regen — disposeGroup runs on
+  // state.world before resetFloraPool(), so the disposed cone gets re-built
+  // by the pool factory on the next world. (A module-scoped singleton would
+  // hand back a stale, already-disposed geometry handle.)
+  const needleGeo = pooled("cactus.needle.geo", () => {
+    const g = new THREE.ConeGeometry(0.014, NEEDLE_LENGTH, 4);
+    g.translate(0, NEEDLE_LENGTH / 2, 0);
+    return g;
+  });
+  const needleMat = pooled("cactus.needle.mat", () =>
+    new THREE.MeshStandardMaterial({
+      color: NEEDLE_TIP_COLOR,
+      flatShading: true,
+      roughness: 0.55,
+    })
+  );
+  // CapsuleGeometry(radius, length, ...) defines `length` as the cylinder run
+  // between the two hemispherical caps, with the local Y-axis as the spine.
+  // We sample uniformly by surface area across cylinder + caps.
+  const cylArea = 2 * Math.PI * radius * length;
+  const capArea = 4 * Math.PI * radius * radius;
+  const totalArea = cylArea + capArea;
+  const count = Math.max(8, Math.round(totalArea * NEEDLE_DENSITY));
+  const inst = new THREE.InstancedMesh(needleGeo, needleMat, count);
+  inst.castShadow = false; // shadow per-needle would shimmer and is invisible at this scale
+  const m = new THREE.Matrix4();
+  const q = new THREE.Quaternion();
+  const up = new THREE.Vector3(0, 1, 0);
+  const scl = new THREE.Vector3();
+  const pos = new THREE.Vector3();
+  const norm = new THREE.Vector3();
+  const halfL = length / 2;
+  for (let i = 0; i < count; i++) {
+    if (Math.random() * totalArea < cylArea) {
+      const a = Math.random() * Math.PI * 2;
+      const y = (Math.random() - 0.5) * length;
+      norm.set(Math.cos(a), 0, Math.sin(a));
+      pos.set(norm.x * radius, y, norm.z * radius);
+    } else {
+      // sample a unit hemisphere normal (theta ∈ [0, π/2]) using
+      // u = cos(theta) uniformly distributed → uniform area on the sphere
+      const upper = Math.random() < 0.5;
+      const u = Math.random();
+      const phi = Math.random() * Math.PI * 2;
+      const sinT = Math.sqrt(Math.max(0, 1 - u * u));
+      norm.set(
+        sinT * Math.cos(phi),
+        upper ? u : -u,
+        sinT * Math.sin(phi),
+      );
+      pos.set(norm.x * radius, (upper ? halfL : -halfL) + norm.y * radius, norm.z * radius);
+    }
+    q.setFromUnitVectors(up, norm);
+    // Slight per-needle length jitter — uniform spikes would read mechanical.
+    const sy = 0.65 + Math.random() * 0.7;
+    scl.set(1, sy, 1);
+    m.compose(pos, q, scl);
+    inst.setMatrixAt(i, m);
+  }
+  inst.instanceMatrix.needsUpdate = true;
+  // Parent into the capsule mesh so needles inherit its world transform —
+  // body needles ride the body's y=0.6 offset, arm needles ride the arm's
+  // rotation.z without any extra bookkeeping.
+  parent.add(inst);
+  return inst;
+}
+
 // Per-world resource pool. Each generateWorld() call resets it via
 // resetFloraPool(), so two trees in the same biome share one trunk
 // CylinderGeometry / MeshStandardMaterial, but rebuilding (which disposes
@@ -25,18 +102,24 @@ export const FLORA_BUILDERS = {
   tree(biome) {
     const g = new THREE.Group();
     const trunkGeo = pooled("tree.trunk.geo", () =>
-      new THREE.CylinderGeometry(0.13, 0.18, 1.1, 6)
+      new THREE.CylinderGeometry(0.13, 0.18, 1.1, 6).translate(0, 0.55, 0)
     );
     const trunkMat = pooled("tree.trunk.mat", () =>
       new THREE.MeshStandardMaterial({ color: TRUNK, flatShading: true, roughness: 1 })
     );
     const trunk = new THREE.Mesh(trunkGeo, trunkMat);
-    trunk.position.y = 0.55;
     trunk.castShadow = true;
     g.add(trunk);
-    const leafGeo = pooled("tree.leaves.geo", () =>
-      jitterGeo(new THREE.IcosahedronGeometry(0.75, 0), 0.12)
-    );
+    // Canopy geometry is pre-positioned so transformed.y measures height above
+    // the ground rather than the canopy's center. With windAmp = y²·strength,
+    // the bottom of the canopy stays put and only the top tilts — the whole
+    // crown reads as bending in the wind rather than just smearing upward.
+    const leafGeo = pooled("tree.leaves.geo", () => {
+      const geo = jitterGeo(new THREE.IcosahedronGeometry(0.75, 0), 0.12);
+      geo.scale(1, 1.15, 1);
+      geo.translate(0, 1.45, 0);
+      return geo;
+    });
     const leafMat = pooled("tree.leaves.mat", () =>
       applyWindSway(
         new THREE.MeshStandardMaterial({
@@ -44,12 +127,10 @@ export const FLORA_BUILDERS = {
           flatShading: true,
           roughness: 0.85,
         }),
-        1.0
+        0.18
       )
     );
     const leaves = new THREE.Mesh(leafGeo, leafMat);
-    leaves.position.y = 1.45;
-    leaves.scale.set(1, 1.15, 1);
     leaves.castShadow = true;
     g.add(leaves);
     return g;
@@ -57,14 +138,23 @@ export const FLORA_BUILDERS = {
 
   pine(biome) {
     const g = new THREE.Group();
+    // Pine is built so every piece's local y matches its height above ground:
+    // trunk geo translated up by half its height, each cone tier translated to
+    // its final stack position, and every mesh placed at y=0. Both trunkMat
+    // and coneMat share the same wind strength so the entire silhouette sways
+    // as one shape, with applyWindSway's y² term giving the downward falloff
+    // (trunk barely moves, top cone moves most).
+    const PINE_WIND = 0.18;
     const trunkGeo = pooled("pine.trunk.geo", () =>
-      new THREE.CylinderGeometry(0.08, 0.12, 0.4, 6)
+      new THREE.CylinderGeometry(0.08, 0.12, 0.4, 6).translate(0, 0.2, 0)
     );
     const trunkMat = pooled("pine.trunk.mat", () =>
-      new THREE.MeshStandardMaterial({ color: TRUNK, flatShading: true })
+      applyWindSway(
+        new THREE.MeshStandardMaterial({ color: TRUNK, flatShading: true }),
+        PINE_WIND
+      )
     );
     const trunk = new THREE.Mesh(trunkGeo, trunkMat);
-    trunk.position.y = 0.2;
     trunk.castShadow = true;
     g.add(trunk);
     const coneMat = pooled("pine.cone.mat", () =>
@@ -73,16 +163,15 @@ export const FLORA_BUILDERS = {
           color: new THREE.Color(biome.accent).lerp(new THREE.Color("#0d2c1f"), 0.35),
           flatShading: true,
         }),
-        0.6
+        PINE_WIND
       )
     );
     const tiers = 3 + Math.floor(Math.random() * 2);
     for (let i = 0; i < tiers; i++) {
       const coneGeo = pooled("pine.cone.geo." + i, () =>
-        new THREE.ConeGeometry(0.65 - i * 0.13, 0.65, 6)
+        new THREE.ConeGeometry(0.65 - i * 0.13, 0.65, 6).translate(0, 0.45 + i * 0.42, 0)
       );
       const cone = new THREE.Mesh(coneGeo, coneMat);
-      cone.position.y = 0.45 + i * 0.42;
       cone.castShadow = true;
       g.add(cone);
     }
@@ -99,6 +188,7 @@ export const FLORA_BUILDERS = {
     body.position.y = 0.6;
     body.castShadow = true;
     g.add(body);
+    addCapsuleNeedles(body, 0.18, 0.7);
     if (Math.random() > 0.4) {
       const armGeo = pooled("cactus.arm1.geo", () => new THREE.CapsuleGeometry(0.1, 0.4, 4, 8));
       const arm = new THREE.Mesh(armGeo, m);
@@ -106,6 +196,7 @@ export const FLORA_BUILDERS = {
       arm.rotation.z = -Math.PI / 2.5;
       arm.castShadow = true;
       g.add(arm);
+      addCapsuleNeedles(arm, 0.1, 0.4);
     }
     if (Math.random() > 0.5) {
       const armGeo = pooled("cactus.arm2.geo", () => new THREE.CapsuleGeometry(0.1, 0.35, 4, 8));
@@ -114,24 +205,37 @@ export const FLORA_BUILDERS = {
       arm.rotation.z = Math.PI / 2.5;
       arm.castShadow = true;
       g.add(arm);
+      addCapsuleNeedles(arm, 0.1, 0.35);
     }
     return g;
   },
 
   mushroom(biome) {
     const g = new THREE.Group();
+    // Stem geo is shifted so its base sits at y=0 (mesh at the origin) — that
+    // makes applyWindSway's y² bend anchor at the ground and grow toward the
+    // cap. Cap and underside use the same shared wind strength so they
+    // translate along with the stem's top instead of warping on their own:
+    // their geometry spans only ~0.2 in y near the stem's top, so windY² is
+    // nearly uniform across each piece and the cap reads as rigid.
+    const MUSH_WIND = 0.9;
+    const STEM_TOP = 0.35;
     const stemGeo = pooled("mushroom.stem.geo", () =>
-      new THREE.CylinderGeometry(0.07, 0.1, 0.35, 6)
+      new THREE.CylinderGeometry(0.07, 0.1, 0.35, 6).translate(0, 0.175, 0)
     );
     const stemMat = pooled("mushroom.stem.mat", () =>
-      new THREE.MeshStandardMaterial({ color: "#f1e8d8", flatShading: true })
+      applyWindSway(
+        new THREE.MeshStandardMaterial({ color: "#f1e8d8", flatShading: true }),
+        MUSH_WIND
+      )
     );
     const stem = new THREE.Mesh(stemGeo, stemMat);
-    stem.position.y = 0.18;
     stem.castShadow = true;
     g.add(stem);
     const capGeo = pooled("mushroom.cap.geo", () =>
       new THREE.SphereGeometry(0.22, 8, 6, 0, Math.PI * 2, 0, Math.PI / 2)
+        .scale(1.4, 0.9, 1.4)
+        .translate(0, STEM_TOP + 0.01, 0)
     );
     const capMat = pooled("mushroom.cap.mat", () =>
       applyWindSway(
@@ -140,23 +244,24 @@ export const FLORA_BUILDERS = {
           flatShading: true,
           roughness: 0.6,
         }),
-        0.4
+        MUSH_WIND
       )
     );
     const cap = new THREE.Mesh(capGeo, capMat);
-    cap.position.y = 0.36;
-    cap.scale.set(1.4, 0.9, 1.4);
     cap.castShadow = true;
     g.add(cap);
     // Underside disc — closes the hemisphere so looking up under the cap
     // from first-person stroll doesn't see through into empty space.
-    const undersideGeo = pooled("mushroom.underside.geo", () =>
-      new THREE.CircleGeometry(0.22, 8)
-    );
+    // Rotation/scale are baked into the geometry so the wind shader sees a
+    // uniform transformed.y = STEM_TOP across every vertex.
+    const undersideGeo = pooled("mushroom.underside.geo", () => {
+      const geo = new THREE.CircleGeometry(0.22, 8);
+      geo.rotateX(Math.PI / 2);
+      geo.scale(1.4, 1, 1.4);
+      geo.translate(0, STEM_TOP + 0.01, 0);
+      return geo;
+    });
     const underside = new THREE.Mesh(undersideGeo, stemMat);
-    underside.rotation.x = Math.PI / 2; // face down (normal -Y)
-    underside.position.y = 0.36;
-    underside.scale.set(1.4, 1.4, 1);
     g.add(underside);
     // Local Y of the cap top so world.js can register an accurate perch
     // spot for fliers. Sphere radius 0.22 with Y-scale 0.9 puts the apex at
@@ -465,20 +570,28 @@ export const FLORA_BUILDERS = {
     const g = new THREE.Group();
     // tall stem — creatures could pass beneath the cap
     const stemH = 1.4 + Math.random() * 0.5;
+    // Big mushroom uses the same trick as the small one — geometry is shifted
+    // so each piece's local y matches its world height above the group's
+    // anchor, and every mesh sits at y=0. Because stemH is per-instance, the
+    // stem/cap/underside geometries can't be pooled. Wind on all three at the
+    // same strength keeps the stem-bend coherent: the y² bend grows from the
+    // ground up so the slim stem flexes more than the cap (whose vertices
+    // share nearly identical y ~ stemH and so move as a rigid block).
+    const BIG_WIND = 0.45;
     const stemMat = pooled("bigmushroom.stem.mat", () =>
-      new THREE.MeshStandardMaterial({ color: "#f1e8d8", flatShading: true, roughness: 0.95 })
+      applyWindSway(
+        new THREE.MeshStandardMaterial({ color: "#f1e8d8", flatShading: true, roughness: 0.95 }),
+        BIG_WIND
+      )
     );
-    const stem = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.13, 0.18, stemH, 7),
-      stemMat
-    );
-    stem.position.y = stemH / 2;
+    const stemGeo = new THREE.CylinderGeometry(0.13, 0.18, stemH, 7).translate(0, stemH / 2, 0);
+    const stem = new THREE.Mesh(stemGeo, stemMat);
     stem.rotation.z = (Math.random() - 0.5) * 0.1;
     stem.castShadow = true;
     g.add(stem);
-    const capGeo = pooled("bigmushroom.cap.geo", () =>
-      new THREE.SphereGeometry(0.8, 12, 8, 0, Math.PI * 2, 0, Math.PI / 2)
-    );
+    const capGeo = new THREE.SphereGeometry(0.8, 12, 8, 0, Math.PI * 2, 0, Math.PI / 2)
+      .scale(1, 0.55, 1)
+      .translate(0, stemH, 0);
     const capMat = pooled("bigmushroom.cap.mat", () =>
       applyWindSway(
         new THREE.MeshStandardMaterial({
@@ -486,12 +599,10 @@ export const FLORA_BUILDERS = {
           flatShading: true,
           roughness: 0.55,
         }),
-        0.35
+        BIG_WIND
       )
     );
     const cap = new THREE.Mesh(capGeo, capMat);
-    cap.position.y = stemH;
-    cap.scale.set(1, 0.55, 1);
     cap.castShadow = true;
     g.add(cap);
     // Local Y of the cap top — varies with this instance's random stemH,
@@ -501,15 +612,22 @@ export const FLORA_BUILDERS = {
     // Underside disc — closes the hemisphere so walking under the cap in
     // first-person doesn't see through into empty space above. Uses the
     // stem material (cream) which reads as a fresh mushroom gill plate.
-    const undersideGeo = pooled("bigmushroom.underside.geo", () =>
-      new THREE.CircleGeometry(0.8, 12)
-    );
+    // Rotation baked into geometry so wind shader sees a uniform y = stemH.
+    const undersideGeo = new THREE.CircleGeometry(0.8, 12);
+    undersideGeo.rotateX(Math.PI / 2);
+    undersideGeo.translate(0, stemH, 0);
     const underside = new THREE.Mesh(undersideGeo, stemMat);
-    underside.rotation.x = Math.PI / 2;
-    underside.position.y = stemH;
     g.add(underside);
+    // Spots share the cap's wind strength so they sway with it. Each spot's
+    // orientation + world position is baked into its geometry — the mesh sits
+    // at the group origin so applyWindSway's transformed.y reads the spot's
+    // actual world-y above ground. Without this the spots float free of the
+    // cap whenever wind nudges the cap material.
     const spotMat = pooled("bigmushroom.spot.mat", () =>
-      new THREE.MeshStandardMaterial({ color: "#fbf3df", flatShading: true, roughness: 0.9 })
+      applyWindSway(
+        new THREE.MeshStandardMaterial({ color: "#fbf3df", flatShading: true, roughness: 0.9 }),
+        BIG_WIND
+      )
     );
     const spots = 3 + Math.floor(Math.random() * 3);
     const capR = 0.8;
@@ -517,6 +635,8 @@ export const FLORA_BUILDERS = {
     const capA2 = capR * capR;
     const capB2 = (capR * capSY) * (capR * capSY);
     const up = new THREE.Vector3(0, 1, 0);
+    const tmpQuat = new THREE.Quaternion();
+    const tmpMat = new THREE.Matrix4();
     for (let i = 0; i < spots; i++) {
       const a = Math.random() * Math.PI * 2;
       const r = 0.25 + Math.random() * 0.4;
@@ -524,14 +644,14 @@ export const FLORA_BUILDERS = {
       const z = Math.sin(a) * r;
       const yLocal = Math.sqrt(Math.max(0, capA2 - r * r)) * capSY;
       const n = new THREE.Vector3(x / capA2, yLocal / capB2, z / capA2).normalize();
-      const spot = new THREE.Mesh(
-        new THREE.SphereGeometry(0.08 + Math.random() * 0.05, 6, 5),
-        spotMat
-      );
       const sink = 0.02;
-      spot.position.set(x - n.x * sink, stemH + yLocal - n.y * sink, z - n.z * sink);
-      spot.quaternion.setFromUnitVectors(up, n);
-      spot.scale.y = 0.35;
+      const spotGeo = new THREE.SphereGeometry(0.08 + Math.random() * 0.05, 6, 5);
+      spotGeo.scale(1, 0.35, 1);
+      tmpQuat.setFromUnitVectors(up, n);
+      tmpMat.makeRotationFromQuaternion(tmpQuat);
+      spotGeo.applyMatrix4(tmpMat);
+      spotGeo.translate(x - n.x * sink, stemH + yLocal - n.y * sink, z - n.z * sink);
+      const spot = new THREE.Mesh(spotGeo, spotMat);
       g.add(spot);
     }
     return g;
