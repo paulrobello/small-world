@@ -740,9 +740,11 @@ export function initUi({ camera, canvas, controls, renderer }) {
 
   fxDetailsEl.open = !!state.userSettings.fxPanelOpen;
   bloomEl.checked = state.userSettings.bloom;
-  // Slider range 0-150% maps to 0.0-1.5 radius — staying inside the no-gap
-  // zone for the 5-tap kernel (above ~1.5 the taps separate enough to form
-  // a visible pointillist grid around each bright source).
+  // Slider 0-300% feeds postfx.setBloomRadius. Below 100% it scales the
+  // per-pass radius on the 3 base blur pairs; above 100% it pins per-pass
+  // radius at 1.0 (the no-gap zone for the 5-tap kernel) and adds more
+  // pairs — convolving N narrow kernels gives effective σ ≈ √N × σ_base
+  // with no pointillist sample-grid at any slider value.
   const bloomRadius = state.userSettings.bloomRadius ?? 1.0;
   bloomRadiusEl.value = String(Math.round(bloomRadius * 100));
   bloomRadiusValueEl.textContent = bloomRadiusEl.value + "%";

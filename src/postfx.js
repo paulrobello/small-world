@@ -419,10 +419,14 @@ export function initPostFX(renderer, scene, camera) {
     Math.max(1, Math.round(size.x * pixelRatio)),
     Math.max(1, Math.round(size.y * pixelRatio))
   );
+  // HalfFloat for HDR headroom — emissives with linear values >1 (very
+  // bright glow flowers / lantern orbs) contribute to bloom in proportion
+  // to their true brightness instead of being clamped at 1, and 16-bit
+  // precision eliminates the 8-bit gradient banding in soft halo falloffs.
   const bloomRT = new THREE.WebGLRenderTarget(
     bloomPhysSize.x, bloomPhysSize.y,
     {
-      type: THREE.UnsignedByteType,
+      type: THREE.HalfFloatType,
       format: THREE.RGBAFormat,
       depthBuffer: true,
       depthTexture,
@@ -459,18 +463,52 @@ export function initPostFX(renderer, scene, camera) {
   // {value: 1.0}. After construction we re-point uRadius back at the
   // shared reference so setBloomRadius can update both passes at once.
   const bloomRadiusUniform = { value: state.userSettings.bloomRadius ?? 1.0 };
-  const bloomBlurH = new ShaderPass(_blurShader("h", bloomRadiusUniform));
-  const bloomBlurV = new ShaderPass(_blurShader("v", bloomRadiusUniform));
-  bloomBlurH.uniforms.uRadius = bloomRadiusUniform;
-  bloomBlurV.uniforms.uRadius = bloomRadiusUniform;
-  bloomBlurH.material.depthTest = false;
-  bloomBlurH.material.depthWrite = false;
-  bloomBlurV.material.depthTest = false;
-  bloomBlurV.material.depthWrite = false;
-  bloomBlurH.uniforms.uResolution.value.copy(bloomPhysSize);
-  bloomBlurV.uniforms.uResolution.value.copy(bloomPhysSize);
-  bloomComposer.addPass(bloomBlurH);
-  bloomComposer.addPass(bloomBlurV);
+  // Multi-pass blur — 3 H+V pairs convolve to effective sigma ≈ √3 × σ
+  // base ≈ 3.5px at radius=1, giving a wide soft halo. Each individual
+  // pass stays at the safe tap spacing, so widening the radius slider can't
+  // produce pointillist gaps the way a single big-radius pass would.
+  // Pre-allocate up to BLOOM_MAX_PAIRS H+V pairs. Slider beyond 100% enables
+  // more pairs rather than widening per-pass offsets — each pass stays at
+  // radius ≤ 1 (the safe no-gap zone for the 5-tap kernel), and stacked
+  // convolutions give effective σ ≈ √N × σ_base. Unused pairs are
+  // `enabled = false` so EffectComposer skips them.
+  const BLOOM_BASE_PAIRS = 3;   // active at slider ≤ 100%
+  const BLOOM_MAX_PAIRS = 8;    // active at slider 300%
+  const bloomBlurPasses = [];
+  function makeBlurPass(axis) {
+    const pass = new ShaderPass(_blurShader(axis, bloomRadiusUniform));
+    pass.uniforms.uRadius = bloomRadiusUniform; // ShaderPass clones uniforms
+    pass.material.depthTest = false;
+    pass.material.depthWrite = false;
+    pass.uniforms.uResolution.value.copy(bloomPhysSize);
+    bloomBlurPasses.push(pass);
+    return pass;
+  }
+  for (let i = 0; i < BLOOM_MAX_PAIRS; i++) {
+    bloomComposer.addPass(makeBlurPass("h"));
+    bloomComposer.addPass(makeBlurPass("v"));
+  }
+  function applyBloomRadiusSetting(sliderUnit) {
+    // sliderUnit ∈ [0, 3]. ≤1: scale per-pass radius on base pair count;
+    // >1: clamp per-pass radius at 1 and grow the active pair count linearly
+    // up to BLOOM_MAX_PAIRS at sliderUnit=3.
+    let activePairs, perPass;
+    if (sliderUnit <= 1.0) {
+      activePairs = BLOOM_BASE_PAIRS;
+      perPass = sliderUnit;
+    } else {
+      perPass = 1.0;
+      activePairs = Math.min(
+        BLOOM_MAX_PAIRS,
+        Math.round(BLOOM_BASE_PAIRS + (sliderUnit - 1) * 2.5)
+      );
+    }
+    bloomRadiusUniform.value = perPass;
+    for (let i = 0; i < bloomBlurPasses.length; i++) {
+      bloomBlurPasses[i].enabled = Math.floor(i / 2) < activePairs;
+    }
+  }
+  applyBloomRadiusSetting(state.userSettings.bloomRadius ?? 1.0);
 
   const composer = new EffectComposer(renderer);
   composer.setSize(size.x, size.y);
@@ -481,13 +519,11 @@ export function initPostFX(renderer, scene, camera) {
   // Composite the bloom-only blurred output onto the main render. Whole
   // pass is `enabled = false` when bloom is off so the composer skips it.
   const bloomCompositePass = new ShaderPass(_bloomCompositeShader);
-  // Composite weight. The halo brightness depends on this AND on
-  // BLOOM_RADIUS_PX in the blur shader (wider radius = energy spread thinner
-  // = each halo pixel dimmer). Dial pair as needed: if halos look washed
-  // out, lower strength; if invisible, raise it. Reference: the original
-  // UnrealBloom + composite combo here was 0.6 × 0.45 = 0.27 raw, but its
-  // 5-mip chain accumulated brightness across scales for an effective ~1.5×.
-  const BLOOM_COMPOSITE_STRENGTH = 2.0;
+  // Composite weight. Multi-pass blur spreads energy thinner across more
+  // pixels — at BLOOM_PASS_PAIRS=3 the peak halo pixel sits roughly 3× dimmer
+  // than a single H+V pass, so the strength compensates. Dial up if the
+  // halo reads as washed out; down if it bleeds across the frame.
+  const BLOOM_COMPOSITE_STRENGTH = 4.5;
   bloomCompositePass.uniforms.uStrength.value =
     state.userSettings.bloom ? BLOOM_COMPOSITE_STRENGTH : 0.0;
   // Skip the composite pass entirely when bloom is off — one fewer
@@ -595,8 +631,7 @@ export function initPostFX(renderer, scene, camera) {
       const pw = Math.max(1, Math.round(w * pr));
       const ph = Math.max(1, Math.round(h * pr));
       bloomComposer.setSize(pw, ph);
-      bloomBlurH.uniforms.uResolution.value.set(pw, ph);
-      bloomBlurV.uniforms.uResolution.value.set(pw, ph);
+      for (const p of bloomBlurPasses) p.uniforms.uResolution.value.set(pw, ph);
       tiltShiftPass.uniforms.uResolution.value.set(w, h);
       depthFXPass.uniforms.uResolution.value.set(w, h);
       depthRT.setSize(pw, ph);
@@ -605,7 +640,7 @@ export function initPostFX(renderer, scene, camera) {
       bloomCompositePass.uniforms.uStrength.value = on ? BLOOM_COMPOSITE_STRENGTH : 0.0;
       bloomCompositePass.enabled = !!on;
     },
-    setBloomRadius: (r) => { bloomRadiusUniform.value = r; },
+    setBloomRadius: (r) => { applyBloomRadiusSetting(r); },
     setTiltShift: (on) => { tiltShiftPass.enabled = on; },
     setSoftParticles: () => { /* particle shader reads userSettings directly */ },
     setOutline: (on) => {
