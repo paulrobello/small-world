@@ -443,15 +443,22 @@ function spawnSpecimen(scene) {
 function updateHud() {
   if (!_hudEl) return;
   const biome = BIOMES[_biomeIdx];
-  const variant = _currentVariants()[_variantIdx];
+  const variants = _currentVariants();
+  const variant = variants[_variantIdx];
+  const category = CATEGORIES[_categoryIdx];
   const pauseTag = _paused ? `<span class="ihud-paused">PAUSED</span>` : "";
+  // Reroll has no visible effect for most flora; hide the hint there to
+  // avoid implying we'll change something.
+  const rerollHint = category === "flora" ? "" : " &nbsp; r reroll";
   _hudEl.innerHTML =
     `<span class="ihud-key">INSPECT</span>` +
     `<span class="ihud-val">${biome.name}</span>` +
     `<span class="ihud-sep">·</span>` +
+    `<span class="ihud-val">${category}</span>` +
+    `<span class="ihud-sep">·</span>` +
     `<span class="ihud-val">${variant.name}</span>` +
     pauseTag +
-    `<span class="ihud-keys">[/] biome &nbsp; ,/. variant &nbsp; r reroll &nbsp; space pause &nbsp; ←/→ step</span>`;
+    `<span class="ihud-keys">[/] biome &nbsp; k category &nbsp; ,/. variant${rerollHint} &nbsp; space pause &nbsp; ←/→ step</span>`;
 }
 
 const _flatHeight = () => 0;
@@ -544,6 +551,11 @@ export function setupInspect(scene, renderer, camera, controls) {
       // Step-based randomness (think pauses, herding) isn't re-rolled, but
       // for short back/forth nudges the visible result is symmetric.
       _stepDt = -1 / 60;
+    } else if (e.key === "k") {
+      _categoryIdx = (_categoryIdx + 1) % CATEGORIES.length;
+      _variantIdx = 0;
+      _seedOverride = null;
+      spawnSpecimen(scene);
     }
   });
 
