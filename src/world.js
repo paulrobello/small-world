@@ -362,6 +362,7 @@ export function generateWorld(seed) {
   let placed = 0;
   let attempts = 0;
   let crystalCount = 0;
+  let coralPlaced = 0;
   const CRYSTAL_CAP = 4;
   // Density compensation: biome counts were tuned against a 38-unit base; the
   // current ISLAND_SIZE may be larger. Scale linearly with width so a bigger
@@ -480,7 +481,40 @@ export function generateWorld(seed) {
       state.world.add(swarm);
       state.flySwarms.push(swarm);
     }
+    if (kind === "coral") coralPlaced++;
     placed++;
+  }
+
+  // Coral top-up — the main loop's attempt budget gets eaten by underwater
+  // rejection, so it under-places corals. Run a coral-only pass to roughly
+  // double the reef density we'd otherwise get.
+  if (biome.water && biome.flora.includes("coral")) {
+    const coralTarget = coralPlaced * 2;
+    const fpBase = FLORA_FOOTPRINT.coral ?? FLORA_FOOTPRINT_DEFAULT;
+    let coralAttempts = 0;
+    while (coralPlaced < coralTarget && coralAttempts < coralTarget * 8) {
+      coralAttempts++;
+      const p = pickGroundPoint(1.0);
+      const y0 = state.heightFn(p.x, p.z);
+      if (y0 > WATER_SURFACE_Y - 0.05) continue;
+      if (y0 < -1.8) continue;
+      const f = FLORA_BUILDERS.coral(biome);
+      f.userData.inspect = { category: "flora", variant: "coral" };
+      const s = 0.7 + Math.random() * 0.7;
+      const fp = fpBase * s;
+      const y = Math.min(
+        y0,
+        state.heightFn(p.x + fp, p.z),
+        state.heightFn(p.x - fp, p.z),
+        state.heightFn(p.x, p.z + fp),
+        state.heightFn(p.x, p.z - fp)
+      ) - FLORA_BURY;
+      f.position.set(p.x, y, p.z);
+      f.rotation.y = Math.random() * Math.PI * 2;
+      f.scale.setScalar(s);
+      state.world.add(f);
+      coralPlaced++;
+    }
   }
 
   // ground cover — instanced grass / wildflowers / pebbles
