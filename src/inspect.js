@@ -2,6 +2,7 @@ import * as THREE from "three";
 import { state } from "./state.js";
 import { BIOMES } from "./biomes.js";
 import { makeCreature, makeCaterpillar, stepCreature, stepCaterpillar } from "./fauna.js";
+import { FLORA_BUILDERS, resetFloraPool } from "./flora.js";
 import { mulberry32 } from "./seed.js";
 
 const _params = new URLSearchParams(window.location.search);
@@ -33,7 +34,15 @@ const CREATURE_VARIANTS = [
 
 const VARIANTS_BY_CATEGORY = {
   creature: CREATURE_VARIANTS,
-  flora: [], // populated in Task 3
+  flora: [
+    "tree", "pine", "mushroom", "fern", "rock", "grass", "deadtree",
+    "pillar", "archstone", "crystal", "bigmushroom", "berrybush",
+    "lantern", "coral", "balloontree", "obsidianshard",
+  ].map((name) => ({
+    name,
+    kind: "flora",
+    build: (biome) => FLORA_BUILDERS[name](biome),
+  })),
 };
 
 function _currentVariants() {
@@ -187,10 +196,22 @@ function buildStage(scene) {
   scene.add(_stage);
 }
 
+// Compute a Y offset so a flora group rests on the turntable disc top.
+// Disc top sits at y ≈ 0 (disc center is at y=-0.03 with height 0.05, so the
+// top face is at y ≈ -0.005). Most flora builders author their geometry with
+// the base at y=0, but some (crystal shards, obsidian shards) place their
+// lowest geometry slightly below 0. Use the post-build bbox to lift up.
+function _liftForFlora(group) {
+  const bbox = new THREE.Box3().setFromObject(group);
+  if (!isFinite(bbox.min.y)) return 0;
+  return Math.max(0, -bbox.min.y);
+}
+
 function spawnSpecimen(scene) {
-  if (_specimen && _specimen.group) {
-    if (_specimen.group.parent) _specimen.group.parent.remove(_specimen.group);
-    disposeObject(_specimen.group);
+  if (_specimen) {
+    const grp = _specimen.group ?? _specimen;
+    if (grp.parent) grp.parent.remove(grp);
+    disposeObject(grp);
   }
 
   state.creatures = [];
@@ -219,7 +240,15 @@ function spawnSpecimen(scene) {
 
   _specimen = c;
   _specimenKind = variant.kind;
-  if (variant.kind === "caterpillar") {
+  if (variant.kind === "flora") {
+    // Flora returns just a THREE.Group with no per-frame state. Lift so the
+    // group sits on the disc; the wind-sway shader animates via the global
+    // windUniforms.uTime advance in main.js.
+    resetFloraPool();
+    const lift = _liftForFlora(c);
+    c.position.set(0, lift, 0);
+    scene.add(c);
+  } else if (variant.kind === "caterpillar") {
     state.caterpillars.push(c);
     // Lift so the head's bottom sphere clears the disc.
     // head bottom (body-local) = baseOffset - radius*scale = -radius*scale*0.3
@@ -244,6 +273,7 @@ function spawnSpecimen(scene) {
         z: -Math.sin(c.heading) * i * seedStep,
       });
     }
+    scene.add(c.group);
   } else {
     state.creatures.push(c);
     // Fliers normally hover at 1.4-3.2 units which leaves them above the
@@ -261,8 +291,8 @@ function spawnSpecimen(scene) {
       c.burrowState = "surface";
       c.burrowDepth = 0;
     }
+    scene.add(c.group);
   }
-  scene.add(c.group);
   updateHud();
   _syncUrl();
 }
@@ -379,6 +409,7 @@ export function setupInspect(scene, renderer, camera, controls) {
 
 export function stepInspect(dt, t) {
   if (!_specimen) return;
+  if (_specimenKind === "flora") return; // wind sway runs via global uTime; no per-frame work
   // Pause/step: when paused, zero dt and freeze t so all sin-time-driven
   // animations (bob, flap, breath) stop. ArrowRight while paused advances
   // exactly one ~16 ms frame.
