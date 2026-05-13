@@ -101,6 +101,14 @@ export const state = {
     depthFog: true,
     fxPanelOpen: false,
     showFps: false,
+    windEnabled: true,
+    windStrength: 1.0,
+    windNoiseScale: 1.0,
+    windPanelOpen: false,
+    grassEnabled: true,
+    grassDensity: 2.0,
+    grassHeight: 1.2,
+    grassPanelOpen: false,
   },
   // Set by initPostFX; environment.js reads it to enable soft-particle depth
   // testing. Null under LOWFX (no composer, no depth capture).

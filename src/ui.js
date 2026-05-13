@@ -40,6 +40,14 @@ const PERSISTED_KEYS = [
   "depthFog",
   "fxPanelOpen",
   "showFps",
+  "windEnabled",
+  "windStrength",
+  "windNoiseScale",
+  "windPanelOpen",
+  "grassEnabled",
+  "grassDensity",
+  "grassHeight",
+  "grassPanelOpen",
 ];
 const BOOKMARKS_KEY = "smallworld:bookmarks:v1";
 const BIOME_FILTER_KEY = "smallworld:biomefilter:v1";
@@ -521,6 +529,179 @@ export function initUi({ camera, canvas, controls, renderer }) {
 
   syncTimeUi();
 
+  // Wind controls -----------------------------------------------------------
+  // Live multipliers on the grass shader's wind uniforms. Disabling wind
+  // freezes the shared windUniforms.uTime (advanced in animate()) AND zeros
+  // out the grass strength so blades stand fully upright — handy when
+  // verifying the creature-push bend without wind motion confounding it.
+  // Other foliage that uses applyWindSway shares uTime, so freezing it also
+  // settles trees/ferns into a still pose.
+  const windDetailsEl = document.getElementById("setting-wind-details");
+  const windEnabledEl = document.getElementById("setting-wind-enabled");
+  const windStrengthEl = document.getElementById("setting-wind-strength");
+  const windStrengthValueEl = document.getElementById("setting-wind-strength-value");
+  const windNoiseEl = document.getElementById("setting-wind-noise");
+  const windNoiseValueEl = document.getElementById("setting-wind-noise-value");
+
+  // Base grass uniform values, snapshotted on first apply so sliders compose
+  // against the engine's per-LOWFX defaults rather than overwriting them.
+  let _grassWindBase = null;
+
+  function applyWindSettings() {
+    const g = state.grass;
+    if (!g) return;
+    if (_grassWindBase === null) {
+      _grassWindBase = {
+        strength: g.uniforms.uWindStrength.value,
+        scale: g.uniforms.uWindScale.value,
+      };
+    }
+    const on = !!state.userSettings.windEnabled;
+    const ks = on ? (state.userSettings.windStrength ?? 1) : 0;
+    const kn = state.userSettings.windNoiseScale ?? 1;
+    g.uniforms.uWindStrength.value = _grassWindBase.strength * ks;
+    // Larger "noise size" = coarser pattern = lower frequency. Slider scales
+    // an inverse multiplier so the % feels intuitive (higher = bigger gusts).
+    g.uniforms.uWindScale.value = _grassWindBase.scale / Math.max(0.01, kn);
+  }
+
+  // Re-apply wind settings whenever the world rebuilds (state.grass is reset
+  // by generateWorld). Cheap to poll alongside the existing seed watcher.
+  // The first regen after page load is what populates state.grass, so reset
+  // the snapshot baseline on world change too.
+  state.userSettings.windEnabled =
+    state.userSettings.windEnabled !== undefined ? state.userSettings.windEnabled : true;
+
+  windDetailsEl.open = !!state.userSettings.windPanelOpen;
+  windEnabledEl.checked = !!state.userSettings.windEnabled;
+  windStrengthEl.value = String(Math.round((state.userSettings.windStrength ?? 1) * 100));
+  windStrengthValueEl.textContent = windStrengthEl.value + "%";
+  windNoiseEl.value = String(Math.round((state.userSettings.windNoiseScale ?? 1) * 100));
+  windNoiseValueEl.textContent = windNoiseEl.value + "%";
+  function syncWindSliderEnabledState() {
+    const dis = !state.userSettings.windEnabled;
+    windStrengthEl.disabled = dis;
+    windNoiseEl.disabled = dis;
+    windStrengthEl.style.opacity = dis ? "0.4" : "";
+    windNoiseEl.style.opacity = dis ? "0.4" : "";
+  }
+  syncWindSliderEnabledState();
+
+  windDetailsEl.addEventListener("toggle", () => {
+    state.userSettings.windPanelOpen = windDetailsEl.open;
+    saveSettings();
+  });
+  windEnabledEl.addEventListener("change", () => {
+    state.userSettings.windEnabled = windEnabledEl.checked;
+    syncWindSliderEnabledState();
+    applyWindSettings();
+    saveSettings();
+  });
+  windStrengthEl.addEventListener("input", () => {
+    const v = Number(windStrengthEl.value);
+    state.userSettings.windStrength = v / 100;
+    windStrengthValueEl.textContent = v + "%";
+    applyWindSettings();
+    saveSettings();
+  });
+  windNoiseEl.addEventListener("input", () => {
+    const v = Number(windNoiseEl.value);
+    state.userSettings.windNoiseScale = v / 100;
+    windNoiseValueEl.textContent = v + "%";
+    applyWindSettings();
+    saveSettings();
+  });
+
+  // Expose so world.js / regen flow can re-apply after generateWorld rebuilds
+  // state.grass.uniforms. The seed-watcher interval below picks up regen
+  // events generically and re-baselines.
+  state._reapplyWindSettings = () => {
+    _grassWindBase = null;
+    applyWindSettings();
+  };
+  applyWindSettings();
+
+  // Grass controls ----------------------------------------------------------
+  // Density scales `mesh.count` between 0 and the pre-allocated maxPlaced —
+  // a live show/hide of placed blades, no regen needed. Height multiplies
+  // the per-vertex Y in the grass shader via a uniform.
+  const grassDetailsEl = document.getElementById("setting-grass-details");
+  const grassEnabledEl = document.getElementById("setting-grass-enabled");
+  const grassDensityEl = document.getElementById("setting-grass-density");
+  const grassDensityValueEl = document.getElementById("setting-grass-density-value");
+  const grassHeightEl = document.getElementById("setting-grass-height");
+  const grassHeightValueEl = document.getElementById("setting-grass-height-value");
+
+  function applyGrassSettings() {
+    const g = state.grass;
+    if (!g) return;
+    const enabled = state.userSettings.grassEnabled !== false;
+    const density = state.userSettings.grassDensity ?? 1.0;
+    const height = state.userSettings.grassHeight ?? 1.0;
+    // Disabled = mesh.count 0, but the saved density value is left
+    // intact so re-enabling restores the user's previous setting.
+    const target = enabled
+      ? Math.round((g.stockCount ?? g.mesh.count) * density)
+      : 0;
+    g.mesh.count = Math.max(0, Math.min(g.maxPlaced ?? g.mesh.count, target));
+    g.uniforms.uHeightMul.value = height;
+  }
+  function syncGrassSliderEnabledState() {
+    const dis = state.userSettings.grassEnabled === false;
+    grassDensityEl.disabled = dis;
+    grassHeightEl.disabled = dis;
+    grassDensityEl.style.opacity = dis ? "0.4" : "";
+    grassHeightEl.style.opacity = dis ? "0.4" : "";
+  }
+
+  // Both sliders are rebased so "100%" matches the user's preferred look.
+  // Internal grassDensity / grassHeight stay in their natural "× biome
+  // stock" / "× blade height" units, so persisted values remain meaningful
+  // — only the slider display is rescaled. Conversion:
+  //   sliderValue = internalValue / BASE * 100
+  //   internalValue = sliderValue / 100 * BASE
+  const DENSITY_BASE = 2.0;
+  const HEIGHT_BASE = 1.2;
+  grassDetailsEl.open = !!state.userSettings.grassPanelOpen;
+  grassEnabledEl.checked = state.userSettings.grassEnabled !== false;
+  grassDensityEl.value = String(
+    Math.round(((state.userSettings.grassDensity ?? DENSITY_BASE) / DENSITY_BASE) * 100)
+  );
+  grassDensityValueEl.textContent = grassDensityEl.value + "%";
+  grassHeightEl.value = String(
+    Math.round(((state.userSettings.grassHeight ?? HEIGHT_BASE) / HEIGHT_BASE) * 100)
+  );
+  grassHeightValueEl.textContent = grassHeightEl.value + "%";
+  syncGrassSliderEnabledState();
+
+  grassDetailsEl.addEventListener("toggle", () => {
+    state.userSettings.grassPanelOpen = grassDetailsEl.open;
+    saveSettings();
+  });
+  grassEnabledEl.addEventListener("change", () => {
+    state.userSettings.grassEnabled = grassEnabledEl.checked;
+    syncGrassSliderEnabledState();
+    applyGrassSettings();
+    saveSettings();
+  });
+  grassDensityEl.addEventListener("input", () => {
+    const v = Number(grassDensityEl.value);
+    state.userSettings.grassDensity = (v / 100) * DENSITY_BASE;
+    grassDensityValueEl.textContent = v + "%";
+    applyGrassSettings();
+    saveSettings();
+  });
+  grassHeightEl.addEventListener("input", () => {
+    const v = Number(grassHeightEl.value);
+    state.userSettings.grassHeight = (v / 100) * HEIGHT_BASE;
+    grassHeightValueEl.textContent = v + "%";
+    applyGrassSettings();
+    saveSettings();
+  });
+
+  state._reapplyGrassSettings = applyGrassSettings;
+  applyGrassSettings();
+
   const fxDetailsEl = document.getElementById("setting-fx-details");
   const bloomEl = document.getElementById("setting-bloom");
   const tiltEl = document.getElementById("setting-tiltshift");
@@ -832,6 +1013,10 @@ export function initUi({ camera, canvas, controls, renderer }) {
       _lastSeenSeed = state.currentSeed;
       syncBookmarkButton();
       photoSeedValueEl.textContent = formatSeed(state.currentSeed);
+      // state.grass.uniforms is a new object after every regen — re-baseline
+      // and re-apply user wind/grass settings so they survive across worlds.
+      if (state._reapplyWindSettings) state._reapplyWindSettings();
+      if (state._reapplyGrassSettings) state._reapplyGrassSettings();
     }
   }, 250);
   photoSeedValueEl.textContent = formatSeed(state.currentSeed);

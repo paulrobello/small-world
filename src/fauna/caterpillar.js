@@ -63,6 +63,11 @@ export function makeCaterpillar(biome, opts = {}) {
   });
   const head = new THREE.Mesh(headGeo, headMat);
   head.castShadow = true;
+  // YXZ resolves pitch/roll in the body frame after yaw — so the head can
+  // tilt to match slopes (see stepCaterpillar) without yaw + pitch tangling
+  // into roll along the heading axis. Default XYZ order would tilt around
+  // world-X regardless of which way the head was facing.
+  head.rotation.order = "YXZ";
   group.add(head);
   segments.push(head);
 
@@ -300,7 +305,29 @@ export function stepCaterpillar(c, dt, t, heightFn) {
   const headY = heightFn(nx, nz) + baseOffset;
   head.position.set(nx, headY, nz);
   head.rotation.y = -c.heading + Math.PI / 2;
-  head.rotation.x = Math.sin(c.age * 4) * 0.06;
+
+  // Terrain tilt — same slope-sampling shape walkers use in stepCreature.
+  // Sample heightFn along heading (forward/back) and perpendicular to it
+  // (right/left), derive slope gradients, and ease pitch (rotation.x) and
+  // roll (rotation.z) toward angles that lay the head flat against the
+  // hillside. The idle nodding bob is folded into the pitch target so it
+  // adds on top of the slope rather than overwriting it.
+  const ds = 0.25 * c.scale;
+  const ch = Math.cos(c.heading);
+  const sh = Math.sin(c.heading);
+  const yF = heightFn(nx + ch * ds, nz + sh * ds);
+  const yB = heightFn(nx - ch * ds, nz - sh * ds);
+  const yR = heightFn(nx + sh * ds, nz - ch * ds);
+  const yL = heightFn(nx - sh * ds, nz + ch * ds);
+  const slopeFwd = (yF - yB) / (2 * ds);
+  const slopeRight = (yR - yL) / (2 * ds);
+  const cl = (v) => Math.max(-2, Math.min(2, v));
+  const nod = Math.sin(c.age * 4) * 0.06;
+  const pitchTarget = -Math.atan(cl(slopeFwd)) + nod;
+  const rollTarget = Math.atan(cl(slopeRight));
+  const k = Math.min(1, dt * 5);
+  head.rotation.x += (pitchTarget - head.rotation.x) * k;
+  head.rotation.z += (rollTarget - head.rotation.z) * k;
 
   // record path (3D so 3D-arclength following stays accurate on slopes)
   c.trail.unshift({ x: nx, y: headY, z: nz });

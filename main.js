@@ -86,6 +86,10 @@ setSceneRef(scene);
 setControlsRef(controls);
 state.camera = camera;
 state.renderer = renderer;
+// Debug-only handle for poking at the running scene from devtools/agentchrome
+// during development. Safe to leave — it's just a window ref. Remove if it
+// becomes load-bearing for anything besides debugging.
+if (typeof window !== "undefined") window.__sw = { state, controls, scene, camera, renderer };
 
 // Persisted settings must be applied BEFORE initPostFX so the composer is
 // built with the user's saved bloom / tilt-shift / softParticles / outline /
@@ -173,8 +177,12 @@ function animate() {
   }
 
   if (!paused) {
-    // shared wind shader time
-    state.windUniforms.uTime.value = t;
+    // shared wind shader time — frozen when the user disables wind in
+    // settings, so grass and applyWindSway-driven foliage settle into a
+    // still pose (easier to see other effects like the creature-push bend).
+    if (state.userSettings.windEnabled !== false) {
+      state.windUniforms.uTime.value = t;
+    }
     stepGrass(camera);
     updateDayNight(t);
   }

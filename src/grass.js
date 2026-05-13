@@ -6,6 +6,24 @@ import { pickGroundPoint } from "./terrain.js";
 import { GRASS_DENSITY, BALD_THRESHOLD } from "./biomes.js";
 import { LOWFX, LOWFX_DENSITY } from "./lowfx.js";
 
+// Max number of creatures that can perturb the grass at once. Each slot is a
+// vec4 uniform; the vertex shader early-outs on `radius < 0.001`, so unused
+// slots cost a single compare per blade vertex.
+// Sized for the worst-case biome: ~18 walkers + ~5 caterpillars × up to 4
+// segments ≈ 38, rounded up. The vertex shader early-outs on `radius < 0.001`
+// for unused slots so the cost of empty slots is one compare per blade
+// vertex — cheap. Sized too small and creatures past the cap will appear to
+// "toggle" bending on and off as the array reshuffles (e.g. fliers taking
+// off frees a slot for a previously-skipped walker).
+const MAX_PUSHERS = 40;
+
+// Upper bound on the user's grass-density slider. Sets how much headroom
+// makeGrassField pre-allocates so the slider can go past 100% without
+// needing a regen. The slider labels 100% as the user's preferred lush
+// look (internally a 2.0× multiplier on biome stock); slider max 200%
+// corresponds to a 4.0× internal multiplier, so the cap here matches.
+const MAX_DENSITY_MULTIPLIER = 4.0;
+
 const _lowfxScale = (n) => (LOWFX ? Math.max(1, Math.round(n * LOWFX_DENSITY)) : n);
 const _coverScale = (n, gain = 1) =>
   _lowfxScale(Math.round(n * (state.ISLAND_SIZE / DENSITY_BASE) * gain));
@@ -59,6 +77,10 @@ export function makeGrassMaterial(biome, opts = {}) {
   });
 
   const wdAngle = Math.random() * Math.PI * 2;
+  // Pre-allocate the creature-pusher slots once; stepGrass mutates them in
+  // place each frame. xy = world XZ, z = radius, w = bend strength.
+  const pushers = new Array(MAX_PUSHERS);
+  for (let i = 0; i < MAX_PUSHERS; i++) pushers[i] = new THREE.Vector4(0, 0, 0, 0);
   const uniforms = {
     uTime: state.windUniforms.uTime,
     uTipColor: { value: tipCol },
@@ -69,6 +91,9 @@ export function makeGrassMaterial(biome, opts = {}) {
     uCameraXZ: { value: new THREE.Vector2(0, 0) },
     uFadeStart: { value: disableFade ? 1.0e6 : (LOWFX ? 30.0 : 45.0) },
     uFadeEnd:   { value: disableFade ? 1.0e6 + 1.0 : (LOWFX ? 55.0 : 85.0) },
+    uPusherCount: { value: 0 },
+    uPushers: { value: pushers },
+    uHeightMul: { value: 1.0 },
   };
 
   mat.onBeforeCompile = (shader) => {
@@ -81,6 +106,9 @@ export function makeGrassMaterial(biome, opts = {}) {
     shader.uniforms.uCameraXZ = uniforms.uCameraXZ;
     shader.uniforms.uFadeStart = uniforms.uFadeStart;
     shader.uniforms.uFadeEnd = uniforms.uFadeEnd;
+    shader.uniforms.uPusherCount = uniforms.uPusherCount;
+    shader.uniforms.uPushers = uniforms.uPushers;
+    shader.uniforms.uHeightMul = uniforms.uHeightMul;
 
     shader.vertexShader = shader.vertexShader
       .replace(
@@ -97,6 +125,10 @@ export function makeGrassMaterial(biome, opts = {}) {
         uniform vec2  uCameraXZ;
         uniform float uFadeStart;
         uniform float uFadeEnd;
+        uniform float uHeightMul;
+        #define MAX_PUSHERS 40
+        uniform int  uPusherCount;
+        uniform vec4 uPushers[MAX_PUSHERS];
         float gHash(vec2 p) {
           return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453);
         }
@@ -114,8 +146,20 @@ export function makeGrassMaterial(biome, opts = {}) {
         {
           #ifdef USE_INSTANCING
             vec4 wp4 = modelMatrix * instanceMatrix * vec4(transformed, 1.0);
+            // World-space images of mesh-local X and Z axes (instanceMatrix
+            // is the source of the per-blade random Y yaw + uniform XZ
+            // scale). Used below to inverse-rotate world-space bend deltas
+            // into mesh-local coords — otherwise each yawed blade applies
+            // the bend along its own rotated local-X and the field reads as
+            // random instead of coherent wind.
+            vec2 axW = vec2(instanceMatrix[0].x, instanceMatrix[0].z);
+            vec2 azW = vec2(instanceMatrix[2].x, instanceMatrix[2].z);
+            float invXZScaleSq = 1.0 / max(dot(axW, axW), 1e-6);
           #else
             vec4 wp4 = modelMatrix * vec4(transformed, 1.0);
+            vec2 axW = vec2(1.0, 0.0);
+            vec2 azW = vec2(0.0, 1.0);
+            float invXZScaleSq = 1.0;
           #endif
           vec2 worldXZ = wp4.xz;
           vec2 windFlow = uTime * uWindSpeed * uWindDir;
@@ -132,11 +176,35 @@ export function makeGrassMaterial(biome, opts = {}) {
                     * uWindStrength
                     * gust
                     * (0.75 + 0.5 * aWindSeed);
-          transformed.x += bendDir.x * amp * 0.18;
-          transformed.z += bendDir.y * amp * 0.18;
+          vec2 windWorld = bendDir * amp * 0.18;
+          transformed.x += dot(axW, windWorld) * invXZScaleSq;
+          transformed.z += dot(azW, windWorld) * invXZScaleSq;
+          // Creature push: bend tips radially outward from each pusher's
+          // XZ. Roots stay anchored (aTipFactor² weighting) and the tip
+          // also dips slightly so trampled grass reads as flattened rather
+          // than just splayed.
+          for (int pi = 0; pi < MAX_PUSHERS; pi++) {
+            if (pi >= uPusherCount) break;
+            vec4 push = uPushers[pi];
+            float pr = push.z;
+            if (pr < 0.001) continue;
+            vec2 pd = worldXZ - push.xy;
+            float pd2 = dot(pd, pd);
+            float pr2 = pr * pr;
+            if (pd2 > pr2) continue;
+            float pdl = sqrt(pd2);
+            vec2 pdir = pdl > 0.0001 ? pd / pdl : vec2(1.0, 0.0);
+            float ft = 1.0 - pdl / pr;
+            float pushFalloff = ft * ft;
+            float pushAmp = aTipFactor * aTipFactor * pushFalloff * push.w;
+            vec2 pushWorld = pdir * pushAmp;
+            transformed.x += dot(axW, pushWorld) * invXZScaleSq;
+            transformed.z += dot(azW, pushWorld) * invXZScaleSq;
+            transformed.y -= pushAmp * 0.35;
+          }
           float dist = length(worldXZ - uCameraXZ);
           float fade = 1.0 - smoothstep(uFadeStart, uFadeEnd, dist);
-          transformed.y *= fade;
+          transformed.y *= fade * uHeightMul;
           transformed.x *= mix(1.0, fade, 0.5);
           transformed.z *= mix(1.0, fade, 0.5);
         }`
@@ -168,7 +236,13 @@ export function makeGrassField(biome, heightFn) {
   // contributes meaningful screen area regardless of viewing angle.
   // LOWFX trims the count to stay inside a smaller GPU budget.
   const overshoot = LOWFX ? 22.0 : 55.0;
-  const count = _coverScale(density, overshoot);
+  const nominalCount = _coverScale(density, overshoot);
+  // Allocate headroom so the user's density slider can push above the
+  // biome's stock count without needing a regen. The slider's visible
+  // range is [0, MAX_DENSITY_MULTIPLIER]; live changes just shift
+  // mesh.count between 0 and the allocated maximum.
+  const maxCount = Math.ceil(nominalCount * MAX_DENSITY_MULTIPLIER);
+  const count = maxCount;
 
   const { blade, material: mat, uniforms, baseCol } = makeGrassMaterial(biome);
 
@@ -231,16 +305,25 @@ export function makeGrassField(biome, heightFn) {
     mesh.setMatrixAt(placed, m);
     placed++;
   }
-  mesh.count = placed;
+  // `placed` is the actual filled-slot count; `nominalCount` is the
+  // biome's stock density (slider value 1.0). Live density changes set
+  // mesh.count between 0 and `placed` so the slider scales how many of
+  // the placed blades are drawn each frame without rebuilding the mesh.
+  const maxPlaced = placed;
+  const stockCount = Math.min(nominalCount, maxPlaced);
+  const initialDensity = state.userSettings.grassDensity ?? 1.0;
+  mesh.count = Math.min(maxPlaced, Math.max(0, Math.round(stockCount * initialDensity)));
   mesh.instanceMatrix.needsUpdate = true;
 
-  const windSeeds = new Float32Array(mesh.count);
-  for (let i = 0; i < mesh.count; i++) windSeeds[i] = Math.random();
+  // Per-instance attributes (wind seed, color) are sized to the allocated
+  // slot count so any future `mesh.count` raise still has valid data.
+  const windSeeds = new Float32Array(maxPlaced);
+  for (let i = 0; i < maxPlaced; i++) windSeeds[i] = Math.random();
   blade.setAttribute("aWindSeed", new THREE.InstancedBufferAttribute(windSeeds, 1));
 
-  const colors = new Float32Array(mesh.count * 3);
+  const colors = new Float32Array(maxPlaced * 3);
   const tmp = new THREE.Color();
-  for (let i = 0; i < mesh.count; i++) {
+  for (let i = 0; i < maxPlaced; i++) {
     tmp.copy(baseCol).offsetHSL(
       (Math.random() - 0.5) * 0.08,
       0,
@@ -253,7 +336,11 @@ export function makeGrassField(biome, heightFn) {
   mesh.instanceColor = new THREE.InstancedBufferAttribute(colors, 3);
   mesh.instanceColor.needsUpdate = true;
 
-  state.grass = { mesh, uniforms };
+  // Apply the user's initial height multiplier (the uniform default is
+  // 1.0, but settings may have been persisted from a previous session).
+  uniforms.uHeightMul.value = state.userSettings.grassHeight ?? 1.0;
+
+  state.grass = { mesh, uniforms, stockCount, maxPlaced };
   return mesh;
 }
 
@@ -262,4 +349,50 @@ export function stepGrass(camera) {
   const u = state.grass.uniforms.uCameraXZ.value;
   u.x = camera.position.x;
   u.y = camera.position.z;
+
+  // Creature → grass push. The grass shader compares against world-space XZ
+  // (modelMatrix is applied before the test), but creature.group.position is
+  // in state.world's local space, so scale both position and radius by
+  // worldScale to match. Caterpillars/snails animate per-segment inside a
+  // root group pinned at the origin; we push from each segment so the whole
+  // worm's path bends grass, not just the head's logical anchor.
+  const pushers = state.grass.uniforms.uPushers.value;
+  const MAX = pushers.length;
+  const ws = state.userSettings.worldScale ?? 1;
+  let n = 0;
+
+  for (const c of state.creatures) {
+    if (n >= MAX) break;
+    // Skip airborne fliers — their shadow disc shrinks with hover already,
+    // and we don't want grass laying over below an in-flight insect.
+    if (c.flies && c.landState !== "landed") continue;
+    const p = c.group.position;
+    // Body silhouette is ~0.5*c.scale. Radius is ~2.6× that — tighter
+    // than before so the trampled patch matches the creature's footprint
+    // rather than reading as a wide invisible bubble. Min radius keeps
+    // tiny creatures from pushing a sub-unit halo at default zoom.
+    const r = Math.max(1.0 * ws, 1.3 * c.scale * ws);
+    pushers[n].set(p.x * ws, p.z * ws, r, 0.5 * c.scale * ws);
+    n++;
+  }
+  for (const c of state.caterpillars) {
+    if (!c.segments) continue;
+    // Skinnier than walkers — segment radius is ~0.22*c.scale. Push
+    // radius keeps the bend right around each segment, so the whole worm
+    // reads as a flattened narrow trail rather than a wide swath. Slot
+    // budget is high enough (MAX_PUSHERS=40) that every segment of every
+    // caterpillar fits without competing with walkers.
+    const r = Math.max(0.45 * ws, 0.6 * c.scale * ws);
+    const str = 0.4 * c.scale * ws;
+    for (let i = 0; i < c.segments.length; i++) {
+      if (n >= MAX) break;
+      const sp = c.segments[i].position;
+      pushers[n].set(sp.x * ws, sp.z * ws, r, str);
+      n++;
+    }
+    if (n >= MAX) break;
+  }
+
+  for (let i = n; i < MAX; i++) pushers[i].set(0, 0, 0, 0);
+  state.grass.uniforms.uPusherCount.value = n;
 }
