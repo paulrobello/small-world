@@ -566,15 +566,17 @@ export const FLORA_BUILDERS = {
     );
     const berryGeo = pooled("berrybush.berry.geo", () => new THREE.SphereGeometry(0.05, 6, 5));
     const berries = 4 + Math.floor(Math.random() * 4);
+    // Bush is an ellipsoid at (0, 0.28, 0): xz-radius 0.32, y-scale 0.85.
+    // Place berries on the upper hemisphere of that surface so they hug the
+    // bush instead of floating off the side at small horizontal slices.
+    const R = 0.33;
     for (let i = 0; i < berries; i++) {
       const a = Math.random() * Math.PI * 2;
-      const r = 0.15 + Math.random() * 0.15;
+      const elev = 0.2 + Math.random() * 1.1; // [~11°, ~75°] above equator
+      const c = Math.cos(elev);
+      const s = Math.sin(elev);
       const berry = new THREE.Mesh(berryGeo, berryMat);
-      berry.position.set(
-        Math.cos(a) * r,
-        0.4 + Math.random() * 0.1,
-        Math.sin(a) * r
-      );
+      berry.position.set(Math.cos(a) * c * R, 0.28 + s * R * 0.85, Math.sin(a) * c * R);
       g.add(berry);
     }
     return g;
