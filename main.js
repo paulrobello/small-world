@@ -205,14 +205,22 @@ function animate() {
 
   if (isStrolling()) {
     stepStroll(dt);
-    // Walk-up wake: any sleeping creature within ~2.5 units of the player
-    // pops awake. Cheap O(n) per frame; n stays under ~30 in practice.
+    // Walk-up wake: any sleeping creature within ~2.5 mesh-local units of
+    // the player pops awake. Camera lives in world space; creatures live
+    // inside state.world (scaled by worldScale), so convert camera XZ to
+    // mesh-local before comparing. Wakes both spawned sleepers and any
+    // walker that has curled up from the night sleepiness cycle.
+    const ws = state.userSettings.worldScale ?? 1;
+    const wsi = 1 / ws;
+    const camLx = camera.position.x * wsi;
+    const camLz = camera.position.z * wsi;
     const WAKE_DIST_SQ = 2.5 * 2.5;
     for (const c of state.creatures) {
-      if (!c.isSleeper) continue;
+      const asleep = c.isSleeper || (!c.flies && c.sleepiness > 0.4);
+      if (!asleep) continue;
       const p = c.group.position;
-      const dx = p.x - camera.position.x;
-      const dz = p.z - camera.position.z;
+      const dx = p.x - camLx;
+      const dz = p.z - camLz;
       if (dx * dx + dz * dz < WAKE_DIST_SQ) wakeCreature(c);
     }
   } else {

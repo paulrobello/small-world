@@ -486,13 +486,24 @@ function herdInfluence(c, dt) {
   c.heading += sign * diff * c.herdStrength * 0.4;
 }
 
-// Wake a sleeping creature. Called from the UI hover handler.
+// Wake a sleeping creature. Called from the UI hover handler and from the
+// first-person stroll proximity check. Handles two distinct sleep states:
+//   - isSleeper: spawned-asleep flag set at world-gen time
+//   - sleepiness > 0.05: natural night-sleep, eased in by the night cycle
+// Either path triggers the same unfurl animation, and we set alertUntil so
+// the per-frame sleepiness target is forced to 0 for a few seconds (otherwise
+// they'd re-curl immediately because state.nightFactor is still high).
 export function wakeCreature(c) {
-  if (!c.isSleeper) return;
-  // mark "waking" — wakeProgress will animate from 0→1 in stepCreature
-  c.isSleeper = false;          // logically awake (no longer blocks movement)
-  c._waking = true;             // animate the unfurl
-  // small heading kick so they wander off in a fresh direction
+  const naturallyAsleep = !c.flies && c.sleepiness > 0.05;
+  if (!c.isSleeper && !naturallyAsleep) return;
+  c.isSleeper = false;
+  c.sleepiness = 0;
+  c._waking = true;
+  // Reset wakeProgress so the unfurl actually animates from curled → upright.
+  // For natural sleepers wakeProgress was 1 (set at spawn), so without this
+  // the eyes/body would snap open instantly on wake.
+  c.wakeProgress = 0;
+  c.alertUntil = (c.age ?? 0) + 8;
   c.heading = Math.random() * Math.PI * 2;
   c.nextThink = 0.3 + Math.random() * 0.6;
 }
@@ -515,6 +526,8 @@ export function stepCreature(c, dt, t, heightFn) {
     if (target < 0) target = 0;
     else if (target > 1) target = 1;
     else target = target * target * (3 - 2 * target);
+    // Alert window after being woken — keep them out of sleep even at night.
+    if (c.alertUntil && c.age < c.alertUntil) target = 0;
     // ease toward target at ~0.6/s so dawn/dusk transitions are smooth
     c.sleepiness += (target - c.sleepiness) * Math.min(1, dt * 0.6);
   } else if (c.flies && !c.isFish) {
