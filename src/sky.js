@@ -380,6 +380,97 @@ export function makeAurora(biome) {
 
 // Stepping for sky-dome / mountain re-tinting (called by updateDayNight in
 // world.js — kept here so all sky knobs live alongside their constructors).
+// Cloud-biome swirling cloud halo. A wide flat torus around the island with
+// a custom shader: two-octave value noise sampled at UV, scrolled in opposing
+// directions to read as swirling, soft alpha falloff at the torus poles, and
+// colors blended from biome.fog → biome.accent. Returns null on any biome
+// that isn't flagged cloudlike.
+export function makeCloudSwirl(biome) {
+  if (!biome.cloudlike) return null;
+
+  const radius = 30.0;      // major radius — wraps around the island
+  const tube = 7.0;         // minor radius — thickness of the cloud band
+  const geo = new THREE.TorusGeometry(radius, tube, 14, 96);
+
+  const colA = new THREE.Color(biome.fog);
+  const colB = new THREE.Color(biome.accent);
+
+  const mat = new THREE.ShaderMaterial({
+    transparent: true,
+    depthWrite: false,
+    fog: false,
+    side: THREE.DoubleSide,
+    uniforms: {
+      uTime: state.windUniforms.uTime,   // shared time — no per-frame step needed
+      uColA: { value: colA },
+      uColB: { value: colB },
+      uAlpha: { value: 0.55 },           // overall opacity
+    },
+    vertexShader: `
+      varying vec2 vUv;
+      void main() {
+        vUv = uv;
+        gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+      }
+    `,
+    fragmentShader: `
+      precision highp float;
+      uniform float uTime;
+      uniform vec3  uColA;
+      uniform vec3  uColB;
+      uniform float uAlpha;
+      varying vec2  vUv;
+
+      float hash(vec2 p) {
+        return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453);
+      }
+      float vnoise(vec2 p) {
+        vec2 i = floor(p), f = fract(p);
+        vec2 u = f * f * (3.0 - 2.0 * f);
+        return mix(mix(hash(i),             hash(i + vec2(1.0, 0.0)), u.x),
+                   mix(hash(i + vec2(0.0, 1.0)), hash(i + vec2(1.0, 1.0)), u.x), u.y);
+      }
+      // Two octaves at different scales, scrolled in opposite directions
+      // along U; together they read as slow-swirling cumulus.
+      float swirl(vec2 uv, float t) {
+        float a = vnoise(vec2(uv.x * 8.0 - t * 0.08, uv.y * 4.0));
+        float b = vnoise(vec2(uv.x * 16.0 + t * 0.14, uv.y * 8.0 + t * 0.05));
+        return 0.65 * a + 0.45 * b;
+      }
+
+      void main() {
+        // Distort the lookup itself with a low-frequency noise to break
+        // up directional banding — gives the "curling" feel.
+        vec2 warp = vec2(
+          vnoise(vUv * 2.7 + vec2(uTime * 0.04, 0.0)),
+          vnoise(vUv * 2.1 + vec2(0.0, uTime * 0.03))
+        );
+        float n = swirl(vUv + (warp - 0.5) * 0.25, uTime);
+
+        // Softer-edge fog (low end of noise) → bright tufts (high end).
+        float density = smoothstep(0.30, 0.95, n);
+
+        // Fade the band near the torus poles (v → 0 or 1) so it doesn't
+        // read as a hard ring — soft top/bottom edges.
+        float pole = smoothstep(0.0, 0.18, vUv.y) * smoothstep(1.0, 0.82, vUv.y);
+
+        vec3 col = mix(uColA, uColB, density * 0.55);
+        float a = density * pole * uAlpha;
+        gl_FragColor = vec4(col, a);
+      }
+    `,
+  });
+
+  const mesh = new THREE.Mesh(geo, mat);
+  // Lay the torus flat (around Y axis) so the band wraps horizontally
+  // around the island.
+  mesh.rotation.x = Math.PI / 2;
+  mesh.position.y = 6.0;     // sits just above the island silhouette
+  mesh.frustumCulled = false;
+  mesh.renderOrder = -65;    // behind the clouds layer, in front of mountains
+  return mesh;
+}
+
 export function updateSkyColors(skyDome, mountains, dayNight, dayFactor, nightAmt) {
   if (skyDome) {
     const u = skyDome.material.uniforms;

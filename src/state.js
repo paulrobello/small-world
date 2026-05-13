@@ -32,6 +32,10 @@ export const state = {
   clouds: null,
   starfield: null,
   aurora: null,
+  // Cloud-biome only — torus-shaped swirling cloud halo built by makeCloudSwirl.
+  // Null on every other biome. Parented to state.world; disposeGroup handles
+  // teardown.
+  cloudSwirl: null,
   shadowDisks: null,
   waterReflection: null,
   mountainBasePos: null,

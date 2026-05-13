@@ -104,9 +104,12 @@ export function makeCreature(biome, opts = {}) {
   group.add(body);
 
   let furShells = null;
-  // Fuzzy biomes give walkers (and only walkers — fliers/fish read aquatic
-  // or airborne) a shell-fur layer. Burrowers + sleepers count as walkers.
-  if (biome.fuzzy && !flies) {
+  // Per-creature fur roll. furProbability ∈ [0,1]; biomes without an
+  // override fall back to 0 (no fur) — fliers/fish never get fur regardless.
+  // The roll happens inside generateWorld's seeded Math.random window, so the
+  // same seed reproduces the same fuzzy/smooth split.
+  const furProb = biome.furProbability ?? 0;
+  if (furProb > 0 && !flies && Math.random() < furProb) {
     furShells = applyShellFur(body, biome, {
       baseColor: bodyCol.clone(),                              // exact body color
       tipColor: bodyCol.clone().offsetHSL(0, -0.05, 0.10),     // grass-style: slightly desat + lighter tips
@@ -1128,10 +1131,12 @@ export function makeCaterpillar(biome, opts = {}) {
   head.position.set(startX, 0, startZ);
 
   // Fur — applied per segment so head and body each get their own shell stack.
-  // Auto-on in fuzzy biomes; can be forced via opts.furry. Snails are excluded
-  // (a furry snail shell reads as a hairy rock, not as a snail).
+  // Per-caterpillar roll against biome.furProbability (0 if missing); can be
+  // forced via opts.furry. Snails are excluded (a furry snail shell reads as
+  // a hairy rock, not as a snail).
   let furShells = null;
-  if (!isSnail && (opts.furry ?? biome.fuzzy)) {
+  const furProb = biome.furProbability ?? 0;
+  if (!isSnail && (opts.furry ?? (furProb > 0 && Math.random() < furProb))) {
     furShells = [];
     // Length scaled to segment radius (creatures use 0.072 on radius 0.42,
     // ~17% — match that ratio here).

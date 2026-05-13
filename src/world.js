@@ -42,6 +42,7 @@ import {
   makeCloudLayer,
   makeStarfield,
   makeAurora,
+  makeCloudSwirl,
   stepClouds,
   updateSkyColors,
 } from "./sky.js";
@@ -286,6 +287,9 @@ export function generateWorld(seed) {
 
   state.aurora = makeAurora(biome);
   if (state.aurora) state.world.add(state.aurora);
+
+  state.cloudSwirl = makeCloudSwirl(biome);
+  if (state.cloudSwirl) state.world.add(state.cloudSwirl);
 
   const nightP = biome.night ?? {};
   const duskP = biome.dusk ?? null;

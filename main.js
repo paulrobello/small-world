@@ -8,7 +8,7 @@ import {
   setSceneRef,
   setControlsRef,
 } from "./src/world.js";
-import { stepCreature, stepCaterpillar, stepButterfly, stepBee } from "./src/fauna.js";
+import { stepCreature, stepCaterpillar, stepButterfly, stepBee, wakeCreature } from "./src/fauna.js";
 import { stepFlock } from "./src/birds.js";
 import { stepParticles, stepWater, stepDirtPuffs, stepDustKicks } from "./src/environment.js";
 import { stepGrass } from "./src/grass.js";
@@ -204,6 +204,16 @@ function animate() {
 
   if (isStrolling()) {
     stepStroll(dt);
+    // Walk-up wake: any sleeping creature within ~2.5 units of the player
+    // pops awake. Cheap O(n) per frame; n stays under ~30 in practice.
+    const WAKE_DIST_SQ = 2.5 * 2.5;
+    for (const c of state.creatures) {
+      if (!c.isSleeper) continue;
+      const p = c.group.position;
+      const dx = p.x - camera.position.x;
+      const dz = p.z - camera.position.z;
+      if (dx * dx + dz * dz < WAKE_DIST_SQ) wakeCreature(c);
+    }
   } else {
     // Smoothly track a followed creature, if any.
     const ft = getFollowTarget();
