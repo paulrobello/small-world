@@ -1,9 +1,11 @@
 import * as THREE from "three";
 import { state } from "./state.js";
 import { BIOMES } from "./biomes.js";
+import { WILDFLOWER_PALETTES } from "./biomes.js";
 import { makeCreature, makeCaterpillar, stepCreature, stepCaterpillar } from "./fauna.js";
 import { FLORA_BUILDERS, resetFloraPool } from "./flora.js";
 import { mulberry32 } from "./seed.js";
+import { jitterGeo, applyWindSway } from "./util.js";
 
 const _params = new URLSearchParams(window.location.search);
 export const INSPECT = _params.get("inspect") === "1";
@@ -32,6 +34,142 @@ const CREATURE_VARIANTS = [
   { name: "snail",       kind: "caterpillar", build: (biome) => makeCaterpillar(biome, { kind: "snail" }) },
 ];
 
+// Single-instance stand-ins for things that exist only as InstancedMesh fields
+// or world-spanning planes in normal worlds. Sized up so they read at the
+// turntable distance (~1.5 units to camera) — actual field instances are
+// 0.05–0.34 units tall, which would be invisible specks on the disc.
+const INSPECT_SCENERY_BUILDERS = {
+  wildflower(biome) {
+    const palette = WILDFLOWER_PALETTES[biome.id] ?? ["#ffffff"];
+    const g = new THREE.Group();
+    const flowerGeo = new THREE.IcosahedronGeometry(0.05, 0);
+    flowerGeo.scale(1, 0.7, 1);
+    // 3 wildflowers in a tight cluster, each a different palette color, so
+    // a multi-color biome (verdant, marsh) shows its range at a glance.
+    for (let i = 0; i < Math.min(3, palette.length); i++) {
+      const baseCol = new THREE.Color(palette[i]);
+      const m = applyWindSway(
+        new THREE.MeshStandardMaterial({
+          color: baseCol,
+          emissive: biome.glowFlowers ? baseCol.clone() : 0x000000,
+          emissiveIntensity: biome.glowFlowers ? 1.1 : 0,
+          flatShading: true,
+          roughness: 0.4,
+        }),
+        1.2
+      );
+      const flower = new THREE.Mesh(flowerGeo, m);
+      // ~6× the field-instance scale so the cluster reads at inspect distance.
+      flower.scale.setScalar(6);
+      const a = (i / 3) * Math.PI * 2;
+      flower.position.set(Math.cos(a) * 0.18, 0, Math.sin(a) * 0.18);
+      flower.castShadow = true;
+      g.add(flower);
+    }
+    return g;
+  },
+
+  grassblade(biome) {
+    const g = new THREE.Group();
+    const blade = new THREE.PlaneGeometry(0.06, 0.34, 1, 3);
+    const bp = blade.attributes.position;
+    const tipCount = bp.count;
+    const tipFactors = new Float32Array(tipCount);
+    for (let i = 0; i < tipCount; i++) {
+      const y = bp.getY(i) + 0.17;
+      bp.setY(i, y);
+      const taper = 1 - Math.min(1, y / 0.34) * 0.6;
+      bp.setX(i, bp.getX(i) * taper);
+      tipFactors[i] = Math.min(1, y / 0.34);
+    }
+    blade.setAttribute("aTipFactor", new THREE.BufferAttribute(tipFactors, 1));
+    blade.computeVertexNormals();
+
+    const baseCol = new THREE.Color(biome.ground[1]).offsetHSL(0, 0.1, -0.08);
+    const tipCol = baseCol.clone().offsetHSL(0.0, -0.15, 0.18);
+    const mat = new THREE.MeshStandardMaterial({
+      color: baseCol,
+      roughness: 0.95,
+      side: THREE.DoubleSide,
+    });
+    const tipUniforms = { uTipColor: { value: tipCol } };
+    const prevOnBeforeCompile = mat.onBeforeCompile;
+    mat.onBeforeCompile = (shader) => {
+      if (prevOnBeforeCompile) prevOnBeforeCompile(shader);
+      shader.uniforms.uTipColor = tipUniforms.uTipColor;
+      shader.vertexShader = shader.vertexShader
+        .replace(
+          "#include <common>",
+          "#include <common>\nattribute float aTipFactor;\nvarying float vTipFactor;"
+        )
+        .replace(
+          "#include <begin_vertex>",
+          "#include <begin_vertex>\nvTipFactor = aTipFactor;"
+        );
+      shader.fragmentShader = shader.fragmentShader
+        .replace(
+          "#include <common>",
+          "#include <common>\nuniform vec3 uTipColor;\nvarying float vTipFactor;"
+        )
+        .replace(
+          "#include <color_fragment>",
+          "#include <color_fragment>\ndiffuseColor.rgb = mix(diffuseColor.rgb, uTipColor, vTipFactor * 0.85);"
+        );
+    };
+    applyWindSway(mat, 1.8);
+
+    // Tuft of 5 blades fanning out from the center. Scale ~2× for inspect.
+    for (let i = 0; i < 5; i++) {
+      const m = new THREE.Mesh(blade, mat);
+      const a = (i / 5) * Math.PI * 2;
+      m.position.set(Math.cos(a) * 0.04, 0, Math.sin(a) * 0.04);
+      m.rotation.y = a;
+      m.rotation.z = (Math.random() - 0.5) * 0.15;
+      m.scale.setScalar(2);
+      g.add(m);
+    }
+    return g;
+  },
+
+  pebble(biome) {
+    const g = new THREE.Group();
+    const pebbleGeo = jitterGeo(new THREE.IcosahedronGeometry(0.08, 0), 0.025);
+    pebbleGeo.scale(1.3, 0.45, 1.3);
+    const col = new THREE.Color(biome.cliff).offsetHSL(0, -0.05, 0.12);
+    const mat = new THREE.MeshStandardMaterial({
+      color: col,
+      flatShading: true,
+      roughness: 1,
+    });
+    // Single pebble, ~3× field-instance scale so it reads on the disc.
+    const m = new THREE.Mesh(pebbleGeo, mat);
+    m.scale.setScalar(3);
+    m.position.y = 0.02 * 3;
+    m.castShadow = true;
+    m.receiveShadow = true;
+    g.add(m);
+    return g;
+  },
+
+  water(biome) {
+    const g = new THREE.Group();
+    const geo = new THREE.PlaneGeometry(1.8, 1.8);
+    geo.rotateX(-Math.PI / 2);
+    const col = new THREE.Color(biome.water || biome.fog);
+    const mat = new THREE.MeshStandardMaterial({
+      color: col,
+      transparent: true,
+      opacity: 0.55,
+      roughness: 0.32,
+      metalness: 0.18,
+    });
+    const m = new THREE.Mesh(geo, mat);
+    m.position.y = 0.001; // sit just above disc surface to avoid z-fighting
+    g.add(m);
+    return g;
+  },
+};
+
 const VARIANTS_BY_CATEGORY = {
   creature: CREATURE_VARIANTS,
   flora: [
@@ -42,7 +180,12 @@ const VARIANTS_BY_CATEGORY = {
     name,
     kind: "flora",
     build: (biome) => FLORA_BUILDERS[name](biome),
-  })),
+  })).concat([
+    { name: "wildflower", kind: "flora", build: (biome) => INSPECT_SCENERY_BUILDERS.wildflower(biome) },
+    { name: "grassblade", kind: "flora", build: (biome) => INSPECT_SCENERY_BUILDERS.grassblade(biome) },
+    { name: "pebble",     kind: "flora", build: (biome) => INSPECT_SCENERY_BUILDERS.pebble(biome) },
+    { name: "water",      kind: "flora", build: (biome) => INSPECT_SCENERY_BUILDERS.water(biome) },
+  ]),
 };
 
 function _currentVariants() {
