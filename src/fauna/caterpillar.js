@@ -289,32 +289,17 @@ export function stepCaterpillar(c, dt, t, heightFn) {
   let nz = head.position.z + Math.sin(c.heading) * step;
 
   // edge avoidance — stay on the island plateau, turn back before reaching
-  // the sloped rim. Also turn back from water in water biomes. Edge fires
-  // every frame while predicted nx/nz is past the buffer, so setting the
-  // *target* and letting the slew finish over a few frames keeps the
-  // caterpillar inside the island without any visible snap.
+  // the sloped rim. Water handling is delegated entirely to the post-slide
+  // probe below; retargeting heading here on every wetAhead frame caused
+  // the slew to run at max indefinitely (visible as a shaking head while
+  // the body collapses around it).
   const near = nearestCenter(nx, nz);
   const ndx = nx - near.cx;
   const ndz = nz - near.cz;
-  const wetAhead = state.waterMesh && heightFn(nx, nz) < WATER_AVOID_Y;
-  const wetHere = state.waterMesh && heightFn(head.position.x, head.position.z) < WATER_AVOID_Y;
-  if (Math.sqrt(ndx * ndx + ndz * ndz) > near.radius * 0.94 || wetAhead) {
-    const inland = Math.atan2(
-      near.cz - head.position.z,
-      near.cx - head.position.x
-    );
-    // For water rejection, snap heading directly (not just the slew
-    // target) and recompute this frame's step. Slew-only correction at
-    // the snail's turnRate is too slow — the position-revert below would
-    // pin them at the waterline for ~1.5 seconds otherwise.
-    if (wetAhead || wetHere) {
-      c.heading = inland + (Math.random() - 0.5) * 0.2;
-      c.headingTarget = c.heading;
-      nx = head.position.x + Math.cos(c.heading) * step;
-      nz = head.position.z + Math.sin(c.heading) * step;
-    } else {
-      c.headingTarget = inland + (Math.random() - 0.5) * 0.4;
-    }
+  if (Math.sqrt(ndx * ndx + ndz * ndz) > near.radius * 0.94) {
+    c.headingTarget =
+      Math.atan2(near.cz - head.position.z, near.cx - head.position.x) +
+      (Math.random() - 0.5) * 0.4;
   }
 
   // Obstacle slide — small radius since caterpillars are skinny. Pass `c`
@@ -344,21 +329,41 @@ export function stepCaterpillar(c, dt, t, heightFn) {
     c.headingTarget = slide.heading;
   }
 
-  // Post-slide water guard. The pre-step `wetAhead` test sees the straight
-  // step but obstacle slide can deflect the head onto a lake. Revert to
-  // the pre-step position and snap heading inland — combined with the
-  // spawn DRY_MARGIN, this keeps the snail above water without stepping
-  // into it.
+  // Post-slide water guard. Probe a fan of escape angles starting from
+  // the current heading; use the first one whose forward step lands on
+  // dry ground. Position advances at the safe angle (so the snail
+  // physically moves along the shoreline), but only the slew *target*
+  // is updated — c.heading itself catches up gradually, so we don't
+  // whip the head around every frame. If no probe is dry, freeze
+  // without disturbing heading so segments don't collapse onto a
+  // shaking head.
   if (state.waterMesh && heightFn(nx, nz) < WATER_AVOID_Y) {
-    const back = nearestCenter(head.position.x, head.position.z);
-    const inland = Math.atan2(
-      back.cz - head.position.z,
-      back.cx - head.position.x
-    );
-    c.heading = inland + (Math.random() - 0.5) * 0.6;
-    c.headingTarget = c.heading;
-    nx = head.position.x;
-    nz = head.position.z;
+    const probes = [0, 0.35, -0.35, 0.7, -0.7, 1.1, -1.1, 1.55, -1.55, 2.0, -2.0, 2.6];
+    let foundAngle = null;
+    let foundNx = 0, foundNz = 0;
+    for (const off of probes) {
+      const h = c.heading + off;
+      const tx = head.position.x + Math.cos(h) * step;
+      const tz = head.position.z + Math.sin(h) * step;
+      if (heightFn(tx, tz) >= WATER_AVOID_Y) {
+        foundAngle = h;
+        foundNx = tx;
+        foundNz = tz;
+        break;
+      }
+    }
+    if (foundAngle != null) {
+      c.headingTarget = foundAngle;
+      nx = foundNx;
+      nz = foundNz;
+    } else {
+      // Truly stuck — freeze position AND park the slew target on the
+      // current heading so the head doesn't keep spinning while the body
+      // is pinned. Body trail won't advance, segments stay coherent.
+      c.headingTarget = c.heading;
+      nx = head.position.x;
+      nz = head.position.z;
+    }
   }
 
   // all segments — including the head — sit at the same base offset so
