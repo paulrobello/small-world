@@ -6,6 +6,8 @@ import { makeCreature, makeCaterpillar, stepCreature, stepCaterpillar } from "./
 import { FLORA_BUILDERS, resetFloraPool } from "./flora.js";
 import { mulberry32 } from "./seed.js";
 import { jitterGeo, applyWindSway } from "./util.js";
+import { makeGrassMaterial } from "./grass.js";
+import { createNoise2D } from "simplex-noise";
 
 const _params = new URLSearchParams(window.location.search);
 export const INSPECT = _params.get("inspect") === "1";
@@ -131,6 +133,83 @@ const INSPECT_SCENERY_BUILDERS = {
     return g;
   },
 
+  grassfield(biome) {
+    // Disc-filling InstancedMesh using the production grass shader (wind
+    // noise, clump-height variation) with camera fade disabled so blades
+    // stay full-height at inspect distance. Lets us visually verify the
+    // shader and per-blade variation without orbiting the whole world.
+    const { blade, material: mat, baseCol } = makeGrassMaterial(biome, {
+      disableFade: true,
+    });
+
+    const DISC_R = 0.9;
+    const COUNT = 1000;
+
+    const mesh = new THREE.InstancedMesh(blade, mat, COUNT);
+    mesh.receiveShadow = true;
+    mesh.castShadow = false;
+    mesh.frustumCulled = false;
+
+    const clumpNoise = createNoise2D();
+    const m = new THREE.Matrix4();
+    const v = new THREE.Vector3();
+    const q = new THREE.Quaternion();
+    const s = new THREE.Vector3();
+    const e = new THREE.Euler();
+    let placed = 0;
+    let attempts = 0;
+    while (placed < COUNT && attempts < COUNT * 4) {
+      attempts++;
+      // Rejection sample inside the disc.
+      const x = (Math.random() * 2 - 1) * DISC_R;
+      const z = (Math.random() * 2 - 1) * DISC_R;
+      if (x * x + z * z > DISC_R * DISC_R) continue;
+
+      // Inspect scale is ~6× tighter than the world — match the existing
+      // tuft variant which scales blades by 2× from production size.
+      const cN = clumpNoise(x * 6.0, z * 6.0) * 0.5 + 0.5;
+      const baseScale = (0.7 + Math.random() * 0.7) * 2.0;
+      const heightMul = 0.75 + 0.7 * cN;
+
+      v.set(x, 0.001, z); // just above disc top to avoid z-fighting
+      s.set(baseScale, baseScale * heightMul, baseScale);
+      e.set(
+        (Math.random() - 0.5) * 0.18,
+        Math.random() * Math.PI * 2,
+        (Math.random() - 0.5) * 0.18
+      );
+      q.setFromEuler(e);
+      m.compose(v, q, s);
+      mesh.setMatrixAt(placed, m);
+      placed++;
+    }
+    mesh.count = placed;
+    mesh.instanceMatrix.needsUpdate = true;
+
+    const windSeeds = new Float32Array(mesh.count);
+    for (let i = 0; i < mesh.count; i++) windSeeds[i] = Math.random();
+    blade.setAttribute("aWindSeed", new THREE.InstancedBufferAttribute(windSeeds, 1));
+
+    const colors = new Float32Array(mesh.count * 3);
+    const tmp = new THREE.Color();
+    for (let i = 0; i < mesh.count; i++) {
+      tmp.copy(baseCol).offsetHSL(
+        (Math.random() - 0.5) * 0.08,
+        0,
+        (Math.random() - 0.5) * 0.10
+      );
+      colors[i * 3 + 0] = tmp.r / baseCol.r || 1;
+      colors[i * 3 + 1] = tmp.g / baseCol.g || 1;
+      colors[i * 3 + 2] = tmp.b / baseCol.b || 1;
+    }
+    mesh.instanceColor = new THREE.InstancedBufferAttribute(colors, 3);
+    mesh.instanceColor.needsUpdate = true;
+
+    const g = new THREE.Group();
+    g.add(mesh);
+    return g;
+  },
+
   pebble(biome) {
     const g = new THREE.Group();
     const pebbleGeo = jitterGeo(new THREE.IcosahedronGeometry(0.08, 0), 0.025);
@@ -183,6 +262,7 @@ const VARIANTS_BY_CATEGORY = {
   })).concat([
     { name: "wildflower", kind: "flora", build: (biome) => INSPECT_SCENERY_BUILDERS.wildflower(biome) },
     { name: "grassblade", kind: "flora", build: (biome) => INSPECT_SCENERY_BUILDERS.grassblade(biome) },
+    { name: "grassfield", kind: "flora", build: (biome) => INSPECT_SCENERY_BUILDERS.grassfield(biome) },
     { name: "pebble",     kind: "flora", build: (biome) => INSPECT_SCENERY_BUILDERS.pebble(biome) },
     { name: "water",      kind: "flora", build: (biome) => INSPECT_SCENERY_BUILDERS.water(biome) },
   ]),

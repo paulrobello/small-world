@@ -9,12 +9,13 @@ const _lowfxScale = (n) => (LOWFX ? Math.max(1, Math.round(n * LOWFX_DENSITY)) :
 const _coverScale = (n, gain = 1) =>
   _lowfxScale(Math.round(n * (state.ISLAND_SIZE / DENSITY_BASE) * gain));
 
-export function makeGrassField(biome, heightFn) {
-  // Overshoot factor covers ~35-50% density-mask rejection AND keeps a
-  // visible carpet across the entire orbit-visible area despite the
-  // camera-distance fade. LOWFX is half so the GPU budget stays sane.
-  const overshoot = LOWFX ? 3.5 : 7.0;
-  const count = _coverScale(GRASS_DENSITY[biome.id] ?? 300, overshoot);
+// Build the blade geometry + grass shader material. Shared between the
+// production world field (placed by pickGroundPoint across an island) and
+// the inspect-mode disc fill (placed by rejection-sampling a unit disc).
+// `opts.disableFade = true` pushes uFadeStart/End past any plausible
+// inspect-distance so all blades stay full-height regardless of camera.
+export function makeGrassMaterial(biome, opts = {}) {
+  const { disableFade = false } = opts;
 
   const blade = new THREE.PlaneGeometry(0.06, 0.34, 1, 3);
   const bp = blade.attributes.position;
@@ -42,26 +43,17 @@ export function makeGrassField(biome, heightFn) {
     vertexColors: true,
   });
 
-  // Per-world deterministic wind direction. Drawn inside generateWorld's
-  // seeded Math.random window so the same seed reproduces the same wind.
   const wdAngle = Math.random() * Math.PI * 2;
   const uniforms = {
-    uTime: state.windUniforms.uTime,                   // shared with rest of world
+    uTime: state.windUniforms.uTime,
     uTipColor: { value: tipCol },
     uWindScale: { value: 0.15 },
     uWindSpeed: { value: 0.6 },
     uWindDir: { value: new THREE.Vector2(Math.cos(wdAngle), Math.sin(wdAngle)) },
     uWindStrength: { value: LOWFX ? 0.8 : 1.2 },
-    // Camera fade uniforms — wired in Task 5. Carried now so the shader
-    // structure stays stable across tasks.
     uCameraXZ: { value: new THREE.Vector2(0, 0) },
-    // Distance is measured from camera XZ. Default orbit puts the camera
-    // at XZ radius ~28 from origin and the far island edge ~51 from the
-    // camera projection. Band sits past the far edge so the whole orbit
-    // view shows tall blades, with a soft taper into the void; LOD savings
-    // come from collapsing blades past the island, not on it.
-    uFadeStart: { value: LOWFX ? 30.0 : 45.0 },
-    uFadeEnd: { value: LOWFX ? 55.0 : 85.0 },
+    uFadeStart: { value: disableFade ? 1.0e6 : (LOWFX ? 30.0 : 45.0) },
+    uFadeEnd:   { value: disableFade ? 1.0e6 + 1.0 : (LOWFX ? 55.0 : 85.0) },
   };
 
   mat.onBeforeCompile = (shader) => {
@@ -146,6 +138,18 @@ export function makeGrassField(biome, heightFn) {
       );
   };
   mat.needsUpdate = true;
+
+  return { blade, material: mat, uniforms, baseCol };
+}
+
+export function makeGrassField(biome, heightFn) {
+  // Overshoot factor covers ~35-50% density-mask rejection AND keeps a
+  // visible carpet across the entire orbit-visible area despite the
+  // camera-distance fade. LOWFX is half so the GPU budget stays sane.
+  const overshoot = LOWFX ? 3.5 : 7.0;
+  const count = _coverScale(GRASS_DENSITY[biome.id] ?? 300, overshoot);
+
+  const { blade, material: mat, uniforms, baseCol } = makeGrassMaterial(biome);
 
   const mesh = new THREE.InstancedMesh(blade, mat, count);
   mesh.receiveShadow = true;
