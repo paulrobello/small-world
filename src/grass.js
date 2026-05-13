@@ -24,9 +24,13 @@ export function makeGrassMaterial(biome, opts = {}) {
   for (let i = 0; i < tipCount; i++) {
     const y = bp.getY(i) + 0.17;
     bp.setY(i, y);
-    const taper = 1 - Math.min(1, y / 0.34) * 0.6;
+    // Quadratic taper: full width at the base, pinches to a point at the tip.
+    // Wider for most of the height than a linear taper, then closes off
+    // sharply near the top so the silhouette reads as a real grass blade.
+    const t = Math.min(1, y / 0.34);
+    const taper = 1.0 - t * t;
     bp.setX(i, bp.getX(i) * taper);
-    tipFactors[i] = Math.min(1, y / 0.34);
+    tipFactors[i] = t;
   }
   blade.setAttribute("aTipFactor", new THREE.BufferAttribute(tipFactors, 1));
   blade.computeVertexNormals();
