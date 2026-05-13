@@ -1,7 +1,8 @@
 import * as THREE from "three";
+import { createNoise2D } from "simplex-noise";
 import { state, DENSITY_BASE } from "./state.js";
 import { pickGroundPoint } from "./terrain.js";
-import { GRASS_DENSITY } from "./biomes.js";
+import { GRASS_DENSITY, BALD_THRESHOLD } from "./biomes.js";
 import { LOWFX, LOWFX_DENSITY } from "./lowfx.js";
 
 const _lowfxScale = (n) => (LOWFX ? Math.max(1, Math.round(n * LOWFX_DENSITY)) : n);
@@ -9,7 +10,12 @@ const _coverScale = (n, gain = 1) =>
   _lowfxScale(Math.round(n * (state.ISLAND_SIZE / DENSITY_BASE) * gain));
 
 export function makeGrassField(biome, heightFn) {
-  const count = _coverScale(GRASS_DENSITY[biome.id] ?? 300, 2.8);
+  // Overshoot factor bumped from 2.8 → 4.4: covers ~35-50% density-mask
+  // rejection and the camera-fade savings let us draw more blades total.
+  // LOWFX uses a lower overshoot since the fade band closes in earlier
+  // and the GPU budget is tighter.
+  const overshoot = LOWFX ? 2.5 : 4.4;
+  const count = _coverScale(GRASS_DENSITY[biome.id] ?? 300, overshoot);
 
   const blade = new THREE.PlaneGeometry(0.06, 0.34, 1, 3);
   const bp = blade.attributes.position;
@@ -142,6 +148,13 @@ export function makeGrassField(biome, heightFn) {
   mesh.castShadow = false;
   mesh.frustumCulled = false;
 
+  // Density and clump noise — two independent fields, both seeded by the
+  // monkey-patched Math.random inside generateWorld so the patchwork is
+  // deterministic from the seed.
+  const densityNoise = createNoise2D();
+  const clumpNoise = createNoise2D();
+  const baldThreshold = BALD_THRESHOLD[biome.id] ?? 0.32;
+
   const m = new THREE.Matrix4();
   const v = new THREE.Vector3();
   const q = new THREE.Quaternion();
@@ -149,15 +162,28 @@ export function makeGrassField(biome, heightFn) {
   const e = new THREE.Euler();
   let placed = 0;
   let attempts = 0;
-  while (placed < count && attempts < count * 5) {
+  // Candidate budget is the configured count * overshoot to absorb the
+  // density-mask rejections. Final placed count lands around count * (1 - reject%).
+  const candidateAttempts = Math.floor(count * 5);
+  while (placed < count && attempts < candidateAttempts) {
     attempts++;
     const p = pickGroundPoint(0.88);
     const x = p.x;
     const z = p.z;
     const y = heightFn(x, z);
     if (y < -0.15) continue;
+
+    // Density rejection — simplex returns [-1, 1], remap to [0, 1].
+    const d = densityNoise(x * 0.18, z * 0.18) * 0.5 + 0.5;
+    if (d < baldThreshold) continue;
+
+    // Clump-height modulation — taller blades in lush patches, stubbier in thin.
+    const cN = clumpNoise(x * 0.35, z * 0.35) * 0.5 + 0.5;
+    const baseScale = 0.6 + Math.random() * 0.8;
+    const heightMul = 0.55 + 0.9 * cN;
+
     v.set(x, y, z);
-    s.setScalar(0.6 + Math.random() * 0.8);
+    s.set(baseScale, baseScale * heightMul, baseScale);
     e.set(
       (Math.random() - 0.5) * 0.18,
       Math.random() * Math.PI * 2,
