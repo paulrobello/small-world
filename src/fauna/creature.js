@@ -18,31 +18,36 @@ const PERSONALITIES = {
 };
 const PERSONALITY_NAMES = Object.keys(PERSONALITIES);
 
-// Shared "zZz" texture for the night-sleep sprite. Built lazily on first
-// drowsy creature, then reused for every sprite material across the session.
+// Shared single-"z" texture for the night-sleep particles. Built lazily on
+// first drowsy creature, then reused across every spawned z for the session.
 let _zTexture = null;
 function getZTexture() {
   if (_zTexture) return _zTexture;
   const c = document.createElement("canvas");
-  c.width = 96;
+  c.width = 64;
   c.height = 64;
   const ctx = c.getContext("2d");
-  ctx.clearRect(0, 0, 96, 64);
+  ctx.clearRect(0, 0, 64, 64);
   ctx.fillStyle = "#fafaf2";
-  ctx.font = "italic bold 36px 'Quicksand', sans-serif";
+  ctx.font = "italic bold 44px 'Quicksand', sans-serif";
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
-  // soft shadow for legibility against bright biomes
   ctx.shadowColor = "rgba(0,0,0,0.45)";
   ctx.shadowBlur = 4;
   ctx.shadowOffsetY = 1;
-  ctx.fillText("zZz", 48, 36);
+  ctx.fillText("z", 32, 34);
   const tex = new THREE.CanvasTexture(c);
   tex.colorSpace = THREE.SRGBColorSpace;
   _zTexture = tex;
   return tex;
 }
-function makeZSprite() {
+
+// One rising z particle. Stream is managed per-creature: spawn cadence,
+// per-particle life, sideways drift, fade in then fade out as it climbs.
+const Z_LIFE = 2.4;
+const Z_SPAWN_INTERVAL = 0.9;
+const Z_RISE = 0.9;
+function spawnZ(c) {
   const mat = new THREE.SpriteMaterial({
     map: getZTexture(),
     transparent: true,
@@ -50,9 +55,16 @@ function makeZSprite() {
     depthWrite: false,
   });
   const s = new THREE.Sprite(mat);
-  s.scale.set(0.7, 0.45, 1);
-  s.position.set(0.15, 0.85, 0);
-  return s;
+  const scale = 0.26 + Math.random() * 0.16;
+  s.scale.set(scale, scale, 1);
+  const startX = 0.15 + (Math.random() - 0.5) * 0.12;
+  s.position.set(startX, 0.85, 0);
+  s.userData.life = 0;
+  s.userData.startX = startX;
+  s.userData.driftX = (Math.random() - 0.5) * 0.25;
+  s.userData.wobblePhase = Math.random() * Math.PI * 2;
+  c.group.add(s);
+  c.zSprites.push(s);
 }
 
 // opts:
@@ -407,9 +419,11 @@ export function makeCreature(biome, opts = {}) {
     hopOffset: 0,
     hopCooldown: 1.5 + Math.random() * 3,
     // Night-sleep — 0..1 sleepiness target driven by state.nightFactor and
-    // personality.nightThresh. zSprite lazily attached when first drowsy.
+    // personality.nightThresh. zSprites is a per-creature pool of rising "z"
+    // particles spawned while sleeping; they finish their fade on wake.
     sleepiness: 0,
-    zSprite: null,
+    zSprites: [],
+    zSpawnTimer: 0,
     // Footstep dust — per-foot last sin sample for rising-edge detection,
     // and a global per-creature cooldown so multiple feet don't all kick
     // at once. Allocated for fliers/fish too (cheap) since the walker
@@ -568,17 +582,37 @@ export function stepCreature(c, dt, t, heightFn) {
     c.sleepiness += (target - c.sleepiness) * Math.min(1, dt * 0.6);
   }
 
-  // Lazily attach the zZz sprite the first time we drift into drowsy.
-  if (c.sleepiness > 0.05 && !c.zSprite && !c.flies) {
-    c.zSprite = makeZSprite();
-    c.group.add(c.zSprite);
+  // Rising-z particle stream. Spawn while actively sleeping (either a
+  // spawned-asleep isSleeper or a walker that's curled up at night); the
+  // existing particles always tick so they finish their fade after wake.
+  const sleepStrength = c.isSleeper ? 1 : c.sleepiness;
+  if (!c.flies && sleepStrength > 0.6) {
+    c.zSpawnTimer -= dt;
+    if (c.zSpawnTimer <= 0) {
+      spawnZ(c);
+      c.zSpawnTimer = Z_SPAWN_INTERVAL * (0.7 + Math.random() * 0.6);
+    }
   }
-  if (c.zSprite) {
-    const targetOpacity = c.sleepiness > 0.6 ? Math.min(0.95, (c.sleepiness - 0.6) * 2.4) : 0;
-    c.zSprite.material.opacity +=
-      (targetOpacity - c.zSprite.material.opacity) * Math.min(1, dt * 3);
-    // gentle vertical wobble so the sprite drifts up
-    c.zSprite.position.y = 0.85 + Math.sin(t * 1.4 + c.flapPhase) * 0.08;
+  if (c.zSprites.length > 0) {
+    for (let i = c.zSprites.length - 1; i >= 0; i--) {
+      const s = c.zSprites[i];
+      s.userData.life += dt;
+      const u = s.userData.life / Z_LIFE;
+      if (u >= 1) {
+        c.group.remove(s);
+        s.material.dispose();
+        c.zSprites.splice(i, 1);
+        continue;
+      }
+      const fadeIn = Math.min(1, u / 0.18);
+      const fadeOut = u > 0.55 ? 1 - (u - 0.55) / 0.45 : 1;
+      s.material.opacity = 0.95 * fadeIn * fadeOut;
+      s.position.y = 0.85 + u * Z_RISE;
+      s.position.x =
+        s.userData.startX +
+        s.userData.driftX * s.userData.life +
+        Math.sin(s.userData.wobblePhase + u * Math.PI * 2) * 0.06;
+    }
   }
 
   // Integrate the hop physics every frame so a hop in flight smoothly settles
