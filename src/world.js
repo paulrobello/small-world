@@ -199,6 +199,7 @@ export function generateWorld(seed) {
   state.flowerSpots = [];
   state.particles = null;
   state.waterMesh = null;
+  state.grass = null;
   // release any followed creature — the entity it pointed to no longer exists
   _releaseFollow();
 

@@ -11,6 +11,7 @@ import {
 import { stepCreature, stepCaterpillar, stepButterfly, stepBee } from "./src/fauna.js";
 import { stepFlock } from "./src/birds.js";
 import { stepParticles, stepWater, stepDirtPuffs, stepDustKicks } from "./src/environment.js";
+import { stepGrass } from "./src/grass.js";
 import { stepShadowDisks } from "./src/shadows.js";
 import { stepClouds } from "./src/sky.js";
 import { LOWFX } from "./src/lowfx.js";
@@ -161,6 +162,7 @@ function animate() {
   if (!paused) {
     // shared wind shader time
     state.windUniforms.uTime.value = t;
+    stepGrass(camera);
     updateDayNight(t);
   }
 
