@@ -345,22 +345,20 @@ export function stepCaterpillar(c, dt, t, heightFn) {
   }
 
   // Post-slide water guard. The pre-step `wetAhead` test sees the straight
-  // step but obstacle slide can deflect the head onto a lake. Always snap
-  // heading toward island center and take an inland step — even if the
-  // destination cell is still wet. The alternative (revert to current
-  // position) traps snails on tiny dry pads (heightFn ≈ 0) surrounded by
-  // water, since every neighbour fails the wet check and nothing ever
-  // advances the position.
+  // step but obstacle slide can deflect the head onto a lake. Revert to
+  // the pre-step position and snap heading inland — combined with the
+  // spawn DRY_MARGIN, this keeps the snail above water without stepping
+  // into it.
   if (state.waterMesh && heightFn(nx, nz) < WATER_AVOID_Y) {
     const back = nearestCenter(head.position.x, head.position.z);
     const inland = Math.atan2(
       back.cz - head.position.z,
       back.cx - head.position.x
     );
-    c.heading = inland;
-    c.headingTarget = inland;
-    nx = head.position.x + Math.cos(inland) * step;
-    nz = head.position.z + Math.sin(inland) * step;
+    c.heading = inland + (Math.random() - 0.5) * 0.6;
+    c.headingTarget = c.heading;
+    nx = head.position.x;
+    nz = head.position.z;
   }
 
   // all segments — including the head — sit at the same base offset so
