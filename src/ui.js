@@ -929,23 +929,27 @@ export function initUi({ camera, canvas, controls, renderer }) {
     _ndc.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
     _ndc.y = -(((e.clientY - rect.top) / rect.height) * 2 - 1);
     _raycaster.setFromCamera(_ndc, camera);
+    const birds = [];
+    for (const f of state.flocks) for (const b of f.birds) birds.push(b);
     const targets = [
       ...state.creatures.map((c) => c.group),
       ...state.caterpillars.map((c) => c.group),
+      ...birds.map((b) => b.group),
     ];
     const hits = _raycaster.intersectObjects(targets, true);
-    // Only creature hits count. Clicks on terrain, trees, water, or empty
-    // sky are ignored so the user can freely look around / drag the camera
-    // while selection mode is active without accidentally cancelling it.
+    // Only creature/bird hits count. Clicks on terrain, trees, water, or
+    // empty sky are ignored so the user can freely look around / drag the
+    // camera while selection mode is active without accidentally cancelling.
     if (hits.length === 0) return;
     let hitRoot = hits[0].object;
     while (hitRoot && !targets.includes(hitRoot)) hitRoot = hitRoot.parent;
     if (!hitRoot) return;
     const creature =
       state.creatures.find((c) => c.group === hitRoot) ||
-      state.caterpillars.find((c) => c.group === hitRoot);
+      state.caterpillars.find((c) => c.group === hitRoot) ||
+      birds.find((b) => b.group === hitRoot);
     if (!creature) return;
-    // brief look-at-camera response — applies to creatures, not caterpillars
+    // brief look-at-camera response — applies to creatures, not caterpillars/birds
     if (state.creatures.includes(creature)) lookAtCreature(creature);
     if (selectingCreature) {
       setFollowTarget(creature);
