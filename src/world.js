@@ -413,6 +413,7 @@ export function generateWorld(seed) {
     // most 4 in any world to keep the shader cost (and the visual chaos) down.
     if (kind === "crystal" && crystalCount >= CRYSTAL_CAP) continue;
     const f = FLORA_BUILDERS[kind](biome);
+    f.userData.inspect = { category: "flora", variant: kind };
     // Slope-plant: sample heightFn at four offsets around the trunk axis
     // and sink the base to the lowest sample minus FLORA_BURY. On a slope
     // this keeps the downhill side buried instead of floating out of the

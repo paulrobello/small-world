@@ -103,6 +103,10 @@ export function makeCreature(biome, opts = {}) {
   // creature's body frame (heading-local). stepCreature uses pitch + roll
   // to lay walkers flat against sloped terrain.
   group.rotation.order = "YXZ";
+  group.userData.inspect = {
+    category: "creature",
+    variant: opts.sleeper ? "sleeper" : opts.burrower ? "burrower" : flies ? "flier" : "walker",
+  };
   const palette = biome.creatureColors;
   const bodyCol = new THREE.Color(
     palette[Math.floor(Math.random() * palette.length)]

@@ -39,6 +39,10 @@ function findTrailPointAt(trail, distance) {
 export function makeCaterpillar(biome, opts = {}) {
   const isSnail = opts.kind === "snail";
   const group = new THREE.Group();
+  group.userData.inspect = {
+    category: "creature",
+    variant: isSnail ? "snail" : "caterpillar",
+  };
   const palette = biome.creatureColors;
   const baseCol = new THREE.Color(
     palette[Math.floor(Math.random() * palette.length)]

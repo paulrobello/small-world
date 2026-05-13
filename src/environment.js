@@ -660,6 +660,7 @@ export function makeWildflowerField(biome, heightFn) {
       tilt: 0,
     });
     if (biome.glowFlowers) inst.layers.enable(BLOOM_LAYER);
+    inst.userData.inspect = { category: "flora", variant: "wildflower" };
     meshes.push(inst);
   }
   return meshes;
@@ -677,12 +678,14 @@ export function makePebbleField(biome, heightFn) {
     flatShading: true,
     roughness: 1,
   });
-  return placeInstanced(g, m, count, heightFn, {
+  const mesh = placeInstanced(g, m, count, heightFn, {
     yOffset: 0.02,
     minScale: 0.4,
     maxScale: 1.1,
     tilt: 0.5,
   });
+  mesh.userData.inspect = { category: "flora", variant: "pebble" };
+  return mesh;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -752,6 +755,7 @@ export function makeWaterPlane(biome) {
   // cache the base XZ so we can offset Y each frame from a clean reference
   const arr = geo.attributes.position.array;
   mesh.userData.basePositions = new Float32Array(arr);
+  mesh.userData.inspect = { category: "flora", variant: "water" };
   return mesh;
 }
 

@@ -1164,6 +1164,31 @@ export function initUi({ camera, canvas, controls, renderer }) {
     _ndc.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
     _ndc.y = -(((e.clientY - rect.top) / rect.height) * 2 - 1);
     _raycaster.setFromCamera(_ndc, camera);
+    // Shift-click: open the inspector view in a new tab for whatever the
+    // ray hits (creatures, caterpillars, flora, ground cover). We walk up
+    // each hit's parent chain looking for an ancestor tagged with
+    // userData.inspect, so non-inspectable hits (terrain, sky) get skipped
+    // naturally as we move to the next-closest hit.
+    if (e.shiftKey) {
+      const hits = _raycaster.intersectObject(state.world, true);
+      for (const h of hits) {
+        let n = h.object;
+        while (n && !n.userData?.inspect) n = n.parent;
+        if (!n) continue;
+        const { category, variant } = n.userData.inspect;
+        const biomeId = state.currentBiome?.id;
+        if (!biomeId) return;
+        const sp = new URLSearchParams();
+        sp.set("inspect", "1");
+        sp.set("category", category);
+        sp.set("biome", biomeId);
+        sp.set("variant", variant);
+        const url = window.location.pathname + "?" + sp.toString();
+        window.open(url, "_blank", "noopener,noreferrer");
+        return;
+      }
+      return;
+    }
     const birds = [];
     for (const f of state.flocks) for (const b of f.birds) birds.push(b);
     const targets = [

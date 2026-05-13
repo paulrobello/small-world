@@ -344,6 +344,7 @@ export function makeGrassField(biome, heightFn) {
   uniforms.uHeightMul.value = state.userSettings.grassHeight ?? 1.0;
 
   state.grass = { mesh, uniforms, stockCount, maxPlaced };
+  mesh.userData.inspect = { category: "flora", variant: "grassfield" };
   return mesh;
 }
 
