@@ -180,11 +180,15 @@ export function makeCaterpillar(biome, opts = {}) {
     segments[segments.length - 1].add(shell);
   }
 
-  // initial placement — anywhere on solid ground (avoid water in water biomes)
+  // initial placement — anywhere on solid ground (avoid water in water biomes).
+  // Require a real dry margin, not just heightFn >= 0 — a spot at the very
+  // boundary (heightFn ≈ 0) is surrounded by water on most sides and the
+  // snail will fail to find a forward step before its wet-escape kicks in.
   let sp = pickGroundPoint(0.55);
   if (state.waterMesh && state.heightFn) {
-    for (let tries = 0; tries < 15; tries++) {
-      if (state.heightFn(sp.x, sp.z) >= WATER_AVOID_Y) break;
+    const DRY_MARGIN = 0.3;
+    for (let tries = 0; tries < 20; tries++) {
+      if (state.heightFn(sp.x, sp.z) >= WATER_AVOID_Y + DRY_MARGIN) break;
       sp = pickGroundPoint(0.55);
     }
   }
@@ -341,10 +345,12 @@ export function stepCaterpillar(c, dt, t, heightFn) {
   }
 
   // Post-slide water guard. The pre-step `wetAhead` test sees the straight
-  // step but obstacle slide can deflect the head onto a lake. Snap heading
-  // back inland and either step inland anyway (if we were already in
-  // water — otherwise we'd freeze at the shore) or revert to the pre-step
-  // position (dry shore, just don't enter the water).
+  // step but obstacle slide can deflect the head onto a lake. Always snap
+  // heading toward island center and take an inland step — even if the
+  // destination cell is still wet. The alternative (revert to current
+  // position) traps snails on tiny dry pads (heightFn ≈ 0) surrounded by
+  // water, since every neighbour fails the wet check and nothing ever
+  // advances the position.
   if (state.waterMesh && heightFn(nx, nz) < WATER_AVOID_Y) {
     const back = nearestCenter(head.position.x, head.position.z);
     const inland = Math.atan2(
@@ -353,15 +359,8 @@ export function stepCaterpillar(c, dt, t, heightFn) {
     );
     c.heading = inland;
     c.headingTarget = inland;
-    if (wetHere) {
-      // Force an inland step even if the next cell is still wet — keeps
-      // the snail moving instead of pinning it at the waterline.
-      nx = head.position.x + Math.cos(inland) * step;
-      nz = head.position.z + Math.sin(inland) * step;
-    } else {
-      nx = head.position.x;
-      nz = head.position.z;
-    }
+    nx = head.position.x + Math.cos(inland) * step;
+    nz = head.position.z + Math.sin(inland) * step;
   }
 
   // all segments — including the head — sit at the same base offset so
