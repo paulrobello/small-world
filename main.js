@@ -26,6 +26,8 @@ import {
   isStrolling,
   stepStroll,
   isPhotoMode,
+  isSelectingCreature,
+  isManualPaused,
 } from "./src/ui.js";
 import { INSPECT, setupInspect, stepInspect } from "./src/inspect.js";
 
@@ -131,11 +133,13 @@ function animate() {
       _fpsLastUpdate = rawT;
     }
   }
-  // Photo mode freezes the simulation so users can capture a still frame.
-  // We hold dt at 0 AND freeze `t` (step funcs use sin(t*speed) for idle
-  // bobbing, which would still drift if t kept advancing). Camera input
-  // and rendering keep running on the frozen state.
-  const paused = isPhotoMode();
+  // Photo mode AND creature-selection mode both freeze the simulation so
+  // users can either capture a still frame or carefully click on a moving
+  // target without it darting away. We hold dt at 0 AND freeze `t` (step
+  // funcs use sin(t*speed) for idle bobbing, which would still drift if t
+  // kept advancing). Camera input and rendering keep running on the frozen
+  // state so the user can still rotate and aim.
+  const paused = isPhotoMode() || isSelectingCreature() || isManualPaused();
   if (!paused) state.lastSimT = rawT;
   const dt = paused ? 0 : rawDt;
   const t = paused ? (state.lastSimT ?? rawT) : rawT;
@@ -224,10 +228,14 @@ function animate() {
       if (dx * dx + dz * dz < WAKE_DIST_SQ) wakeCreature(c);
     }
   } else {
-    // Smoothly track a followed creature, if any.
+    // Smoothly track a followed creature, if any. Caterpillars/snails keep
+    // their root group at the origin and animate the head + body segment
+    // meshes inside it — so for those we focus on the head's position,
+    // otherwise camera target snaps to (0,0,0) and the follow looks broken.
     const ft = getFollowTarget();
     if (ft && ft.group && ft.group.parent) {
-      const p = ft.group.position;
+      const anchor = ft.segments ? ft.segments[0] : ft.group;
+      const p = anchor.position;
       const k = Math.min(1, dt * 4);
       controls.target.x += (p.x - controls.target.x) * k;
       controls.target.y += (p.y + 0.6 - controls.target.y) * k;

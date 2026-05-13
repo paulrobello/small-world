@@ -374,6 +374,14 @@ export function makeCreature(biome, opts = {}) {
     landState: "flying", // "flying" | "descending" | "landed" | "ascending"
     landTimer: 6 + Math.random() * 14, // seconds until first landing attempt
     currentHover: hoverHeight, // animated; lerps between hoverHeight and rest
+    // Mushroom cap to land on (or null for an ordinary ground landing).
+    // Picked on flying→descending; cleared on ascending→flying.
+    perchTarget: null,
+    // Smoothed blend factor from terrain ground → perch top. Lerps toward
+    // a closeness target each frame so the floor change can never snap,
+    // even if the perch was picked at close range or the flier crosses
+    // the closeness curve quickly.
+    perchFloorWeight: 0,
     bodyBaseY,
     bodyBaseX,
     bodyBaseZ,
@@ -522,11 +530,18 @@ export function wakeCreature(c) {
 // first hit, deferring real movement to the next think cycle.
 //
 // Returns null when the path is clear — caller commits the straight step.
-function avoidObstacles(px, pz, nx, nz, heading, step, cr) {
+function avoidObstacles(px, pz, nx, nz, heading, step, cr, y, skipX, skipZ) {
   const obs = state.obstacles;
   if (!obs || obs.length === 0) return null;
+  const skipping = skipX !== undefined && skipZ !== undefined;
   for (let i = 0; i < obs.length; i++) {
     const o = obs[i];
+    // Skip the specific obstacle we're trying to land on (the perch's
+    // mushroom). Without this, a flier descending toward its own perch
+    // would get pushed away by the cap's collision disc.
+    if (skipping && Math.abs(o.x - skipX) < 0.4 && Math.abs(o.z - skipZ) < 0.4) continue;
+    // Height filter — fliers above the canopy can pass over freely.
+    if (y !== undefined && o.top !== undefined && y > o.top + 0.15) continue;
     const ox = nx - o.x;
     const oz = nz - o.z;
     const minD = o.r + cr;
@@ -547,6 +562,8 @@ function avoidObstacles(px, pz, nx, nz, heading, step, cr) {
     for (let j = 0; j < obs.length; j++) {
       if (j === i) continue;
       const o2 = obs[j];
+      if (skipping && Math.abs(o2.x - skipX) < 0.4 && Math.abs(o2.z - skipZ) < 0.4) continue;
+      if (y !== undefined && o2.top !== undefined && y > o2.top + 0.15) continue;
       const dx2 = sx - o2.x;
       const dz2 = sz - o2.z;
       const md = o2.r + cr;
@@ -561,6 +578,59 @@ function avoidObstacles(px, pz, nx, nz, heading, step, cr) {
     return { nx: sx, nz: sz, heading: Math.atan2(tz, tx) };
   }
   return null;
+}
+
+// Pick a mushroom cap within reach as the next landing target. Called
+// when a flier transitions flying→descending. Probability gate is per-call
+// so most descents still land normally on the ground; the rest steer to a
+// mushroom. Search radius is small so fliers don't fly across the island
+// just to perch — feels more natural for a perch they spot mid-cruise.
+function pickPerchForFlier(c) {
+  const perches = state.perchSpots;
+  if (!perches || perches.length === 0) return;
+  if (Math.random() >= 0.55) return;
+  const pos = c.group.position;
+  let nearest = null;
+  let nearestD2 = 36; // within 6 units
+  for (let i = 0; i < perches.length; i++) {
+    const p = perches[i];
+    const dx = p.x - pos.x;
+    const dz = p.z - pos.z;
+    const d2 = dx * dx + dz * dz;
+    if (d2 < nearestD2) {
+      nearestD2 = d2;
+      nearest = p;
+    }
+  }
+  if (nearest) c.perchTarget = nearest;
+}
+
+// Velocity-based obstacle push for fliers that steer via velocity rather
+// than heading (butterflies, bees). Mutates pos + vel in place: nudges the
+// position outside any trunk it has entered, and damps the velocity
+// component pointing into the trunk so it glances off instead of stalling.
+function pushOutOfObstacles(pos, vel, bodyR) {
+  const obs = state.obstacles;
+  if (!obs || obs.length === 0) return;
+  for (let i = 0; i < obs.length; i++) {
+    const o = obs[i];
+    if (o.top !== undefined && pos.y > o.top + 0.15) continue;
+    const dx = pos.x - o.x;
+    const dz = pos.z - o.z;
+    const minD = o.r + bodyR;
+    const d2 = dx * dx + dz * dz;
+    if (d2 >= minD * minD) continue;
+    const d = Math.sqrt(d2) || 0.001;
+    const nx = dx / d;
+    const nz = dz / d;
+    pos.x = o.x + nx * minD;
+    pos.z = o.z + nz * minD;
+    const vn = vel.x * nx + vel.z * nz;
+    if (vn < 0) {
+      vel.x -= vn * nx * 1.6;
+      vel.z -= vn * nz * 1.6;
+    }
+  }
 }
 
 export function stepCreature(c, dt, t, heightFn) {
@@ -752,18 +822,33 @@ export function stepCreature(c, dt, t, heightFn) {
     c.landTimer -= dt;
     const restH = 0.35 * c.scale;
 
+    // No landing on water — if the ground beneath us is below the waterline
+    // (or we'd already committed to landing there), bail to "flying" so the
+    // perch lookup retries somewhere on dry land next cycle.
+    const overWater =
+      state.waterMesh && heightFn(c.group.position.x, c.group.position.z) < WATER_AVOID_Y;
+    if (overWater && c.landState !== "flying") {
+      c.landState = "flying";
+      c.landTimer = 4 + Math.random() * 8;
+      c.perchTarget = null;
+    }
+
     // Drowsy fliers want down — force a descent if they're still flying,
-    // and refuse to lift off until they've slept it off.
-    if (c.sleepiness > 0.6 && c.landState === "flying") {
+    // and refuse to lift off until they've slept it off. Skip the forced
+    // descent while over water so a sleepy flier doesn't try to ditch
+    // mid-lake; it'll keep cruising until it finds land.
+    if (!overWater && c.sleepiness > 0.6 && c.landState === "flying") {
       c.landState = "descending";
       c.landTimer = 8 + Math.random() * 6;
+      pickPerchForFlier(c);
     }
-    if (c.sleepiness > 0.6 && c.landState === "ascending") {
+    if (!overWater && c.sleepiness > 0.6 && c.landState === "ascending") {
       c.landState = "descending";
     }
 
-    if (c.landState === "flying" && c.landTimer <= 0) {
+    if (!overWater && c.landState === "flying" && c.landTimer <= 0) {
       c.landState = "descending";
+      pickPerchForFlier(c);
     } else if (c.landState === "landed" && c.landTimer <= 0 && c.sleepiness < 0.5) {
       c.landState = "ascending";
     }
@@ -771,25 +856,59 @@ export function stepCreature(c, dt, t, heightFn) {
     // pull the hover ceiling down with sleepiness so a flier slowly sinks
     // toward the ground at night even before reaching the landed state.
     const hoverCeil = c.hoverHeight * (1 - 0.7 * c.sleepiness);
-    const targetH =
+    let targetH =
       c.landState === "flying" || c.landState === "ascending"
         ? hoverCeil
         : restH;
+    // While descending toward a distant perch, hold an approach altitude
+    // so the flier has time to fly over to the mushroom before it bottoms
+    // out. Once roughly over the cap, the normal restH target kicks in
+    // and the actual touchdown onto the cap happens.
+    if (c.perchTarget && c.landState === "descending") {
+      const dxp = c.perchTarget.x - c.group.position.x;
+      const dzp = c.perchTarget.z - c.group.position.z;
+      if (dxp * dxp + dzp * dzp > 1.0) {
+        targetH = Math.max(restH, Math.min(hoverCeil, 0.6 * c.hoverHeight));
+      }
+    }
     // smooth lerp for the descent/ascent
     c.currentHover += (targetH - c.currentHover) * Math.min(1, dt * 1.4);
 
-    if (
-      c.landState === "descending" &&
-      c.currentHover - restH < 0.08
-    ) {
-      c.landState = "landed";
-      c.landTimer = 4 + Math.random() * 10;
+    if (c.landState === "descending" && c.currentHover - restH < 0.08) {
+      // Only commit to "landed" once we're at the perch (or there's no
+      // perch). Otherwise the flier would freeze in mid-air partway across.
+      let canLand = true;
+      if (c.perchTarget) {
+        const dxp = c.perchTarget.x - c.group.position.x;
+        const dzp = c.perchTarget.z - c.group.position.z;
+        canLand = dxp * dxp + dzp * dzp < 0.16;
+      }
+      if (canLand) {
+        c.landState = "landed";
+        c.landTimer = 4 + Math.random() * 10;
+      }
     } else if (
       c.landState === "ascending" &&
       c.hoverHeight - c.currentHover < 0.15
     ) {
       c.landState = "flying";
       c.landTimer = 8 + Math.random() * 16;
+      // Keep perchTarget after takeoff — the floor blend uses it to ease
+      // back toward ground as the flier drifts away in XZ. Cleared lazily
+      // below once the blend has fully unwound, so the pos.y handoff from
+      // perch-relative to ground-relative is seamless.
+    }
+
+    // Lazy cleanup — once the floor blend has decayed essentially to zero
+    // (the flier is well clear of the perch), drop the reference so the
+    // next descent is free to pick a fresh perch.
+    if (
+      c.perchTarget &&
+      c.landState === "flying" &&
+      c.perchFloorWeight < 0.02
+    ) {
+      c.perchTarget = null;
+      c.perchFloorWeight = 0;
     }
   }
 
@@ -797,9 +916,11 @@ export function stepCreature(c, dt, t, heightFn) {
 
   // think — fliers never pause while airborne; walkers + landed fliers can
   if (c.nextThink <= 0) {
+    const homingToPerch =
+      c.flies && c.perchTarget && c.landState === "descending";
     if ((!c.flies || grounded) && Math.random() < c.pauseChance) {
       c.pauseUntil = t + 0.6 + Math.random() * 1.4;
-    } else {
+    } else if (!homingToPerch) {
       c.heading += (Math.random() - 0.5) * (c.flies && !grounded ? 1.2 : 1.6);
       // Herding — pull toward the nearest same-color creature (capped). Only
       // applied during the think event so it's cheap (O(creatures) per
@@ -808,6 +929,9 @@ export function stepCreature(c, dt, t, heightFn) {
         herdInfluence(c, dt);
       }
     }
+    // While homing to a perch, intentionally skip the random heading
+    // jitter — the dedicated perch-homing steering below takes the wheel,
+    // so the flier flies straight at the cap instead of curving around it.
     // Trigger a curiosity hop if a butterfly or bee is buzzing nearby. Walkers
     // and landed fliers only — airborne fliers don't need to hop.
     if (
@@ -823,6 +947,22 @@ export function stepCreature(c, dt, t, heightFn) {
       }
     }
     c.nextThink = (c.flies ? 0.7 : 1.2) + Math.random() * (c.flies ? 1.8 : 3.0);
+  }
+
+  // Perch homing — while descending toward a mushroom cap, override the
+  // random heading jitter so we actually fly to it. Steering rate is
+  // bumped (and stronger when close) so the flier resolves heading
+  // errors quickly instead of orbiting the cap on its way in.
+  if (c.flies && c.perchTarget && c.landState === "descending") {
+    const dx = c.perchTarget.x - c.group.position.x;
+    const dz = c.perchTarget.z - c.group.position.z;
+    const target = Math.atan2(dz, dx);
+    let diff = target - c.heading;
+    while (diff > Math.PI) diff -= Math.PI * 2;
+    while (diff < -Math.PI) diff += Math.PI * 2;
+    const xz2 = dx * dx + dz * dz;
+    const turnRate = xz2 < 4 ? 9 : 5;
+    c.heading += diff * Math.min(1, dt * turnRate);
   }
 
   // family kids — if we've drifted too far from the parent, bias heading
@@ -849,7 +989,18 @@ export function stepCreature(c, dt, t, heightFn) {
   const pos = c.group.position;
 
   if (moving) {
-    const step = c.speed * dt * (1 - c.sleepiness * 0.85);
+    let speedFactor = 1 - c.sleepiness * 0.85;
+    // Slow the approach when close to a perch so the flier can settle on
+    // the cap rather than zooming past it and lapping around for another
+    // pass. Falls from full speed at xzDist 2.5 down to 30% at xzDist 0.
+    if (c.flies && c.perchTarget && c.landState === "descending") {
+      const dxp = c.perchTarget.x - pos.x;
+      const dzp = c.perchTarget.z - pos.z;
+      const xzDist = Math.sqrt(dxp * dxp + dzp * dzp);
+      const k = Math.max(0, Math.min(1, xzDist / 2.5));
+      speedFactor *= 0.3 + 0.7 * k;
+    }
+    const step = c.speed * dt * speedFactor;
     const nx = pos.x + Math.cos(c.heading) * step;
     const nz = pos.z + Math.sin(c.heading) * step;
     // Edge avoidance:
@@ -881,11 +1032,24 @@ export function stepCreature(c, dt, t, heightFn) {
         Math.atan2(target.cz - pos.z, target.cx - pos.x) +
         (Math.random() - 0.5) * 0.5;
     } else {
-      // Obstacle slide — only for grounded walkers; airborne fliers pass over
-      // tree/mushroom tops so the trunk discs aren't relevant up there.
-      const slide = c.flies
-        ? null
-        : avoidObstacles(pos.x, pos.z, nx, nz, c.heading, step, 0.25 * c.scale);
+      // Obstacle slide — walkers always route around trunks; fliers route
+      // around them too, but only while below the canopy (height filter in
+      // avoidObstacles short-circuits if the flier is comfortably above).
+      // A flier targeting a mushroom passes its perch coords as skipX/skipZ
+      // so it doesn't get pushed away from the very cap it's trying to land
+      // on.
+      const slide = avoidObstacles(
+        pos.x,
+        pos.z,
+        nx,
+        nz,
+        c.heading,
+        step,
+        0.25 * c.scale,
+        c.flies ? pos.y : undefined,
+        c.perchTarget?.x,
+        c.perchTarget?.z
+      );
       if (slide) {
         pos.x = slide.nx;
         pos.z = slide.nz;
@@ -902,11 +1066,44 @@ export function stepCreature(c, dt, t, heightFn) {
 
   const ground = heightFn(pos.x, pos.z);
   if (c.flies) {
+    // Floor blends from terrain ground up to (perch top + a tiny lift) as
+    // the flier closes in on its perch in XZ. The blend uses smoothstep
+    // over a wide ~4-unit window so the rise reads as a gentle glide arc
+    // rather than a snap-up at a hard threshold. perchFloorWeight is
+    // additionally low-pass filtered so the *rate* of change is capped
+    // — guarantees smoothness even if the perch was picked close-by or
+    // the flier crosses the curve quickly. Perch lift accounts for the
+    // flier body's half-Y (≈0.39·scale) being slightly larger than restH
+    // (0.35·scale): without it the body visibly sinks into the cap.
+    let floorY = ground;
+    const restH = 0.35 * c.scale;
+    if (c.perchTarget) {
+      const dxp = c.perchTarget.x - pos.x;
+      const dzp = c.perchTarget.z - pos.z;
+      const xzDist = Math.sqrt(dxp * dxp + dzp * dzp);
+      const NEAR = 0.5;
+      const FAR = 4.0;
+      const xRaw = (FAR - xzDist) / (FAR - NEAR);
+      const xc = Math.max(0, Math.min(1, xRaw));
+      const closeness = xc * xc * (3 - 2 * xc);
+      // Always target the raw closeness — the weight lerp below handles
+      // takeoff just as naturally as approach, because as the flier rises
+      // and drifts away the closeness drops and the floor unwinds back to
+      // ground smoothly.
+      c.perchFloorWeight +=
+        (closeness - c.perchFloorWeight) * Math.min(1, dt * 1.6);
+      const weight = c.perchFloorWeight;
+      // Sit slightly into the cap so the body really touches it (negative
+      // because the flier body's half-Y is just a hair larger than restH,
+      // so a small bias is needed to keep the contact convincing).
+      const perchLift = -0.04 * c.scale;
+      floorY = ground * (1 - weight) + (c.perchTarget.y + perchLift) * weight;
+    }
     // bob amplitude scales with current hover — perched creatures only quiver
     const bobAmp = grounded
       ? 0.02
       : 0.28 * Math.min(1, c.currentHover / Math.max(0.1, c.hoverHeight));
-    pos.y = ground + c.currentHover + Math.sin(c.bob) * bobAmp * c.bobAmpMul + c.hopOffset;
+    pos.y = floorY + c.currentHover + Math.sin(c.bob) * bobAmp * c.bobAmpMul + c.hopOffset;
   } else {
     const bobAmp = (moving ? 0.08 : 0.02) * c.bobAmpMul;
     pos.y = ground + 0.35 * c.scale + Math.sin(c.bob) * bobAmp + c.hopOffset;
@@ -1478,13 +1675,28 @@ export function stepButterfly(b, dt, t, flowerSpots, heightFn) {
   pos.y += b.velocity.y * dt;
   pos.z += b.velocity.z * dt;
 
-  // don't dip below terrain
+  // Water + terrain floor — over water, stay clear of the waves; over
+  // land, stay just above the grass blades. Also steer back toward the
+  // nearest island center when we've drifted out over open water so we
+  // don't just hover above the surface forever.
   const ground = heightFn(pos.x, pos.z);
-  const minY = ground + 0.12;
+  const overWater = state.waterMesh && ground < WATER_AVOID_Y;
+  const minY = overWater ? 0.45 : ground + 0.12;
   if (pos.y < minY) {
     pos.y = minY;
     if (b.velocity.y < 0) b.velocity.y = 0.2;
   }
+  if (overWater) {
+    const near = nearestCenter(pos.x, pos.z);
+    const dx = near.cx - pos.x;
+    const dz = near.cz - pos.z;
+    const d = Math.sqrt(dx * dx + dz * dz) || 1;
+    b.velocity.x += (dx / d) * 3.2 * dt;
+    b.velocity.z += (dz / d) * 3.2 * dt;
+  }
+
+  // Route around trunks below the canopy.
+  pushOutOfObstacles(pos, b.velocity, 0.12);
 
   // orient toward velocity — Object3D.lookAt() points local +Z at the target,
   // so the larger forewing pair (placed at +Z) leads the direction of motion.
@@ -1656,11 +1868,22 @@ export function stepBee(b, dt, t, flowerSpots, heightFn) {
   pos.z += b.velocity.z * dt;
 
   const ground = heightFn(pos.x, pos.z);
-  const minY = ground + 0.18;
+  const overWater = state.waterMesh && ground < WATER_AVOID_Y;
+  const minY = overWater ? 0.5 : ground + 0.18;
   if (pos.y < minY) {
     pos.y = minY;
     if (b.velocity.y < 0) b.velocity.y = 0.3;
   }
+  if (overWater) {
+    const near = nearestCenter(pos.x, pos.z);
+    const dx = near.cx - pos.x;
+    const dz = near.cz - pos.z;
+    const d = Math.sqrt(dx * dx + dz * dz) || 1;
+    b.velocity.x += (dx / d) * 4.0 * dt;
+    b.velocity.z += (dz / d) * 4.0 * dt;
+  }
+
+  pushOutOfObstacles(pos, b.velocity, 0.1);
 
   // orient — same trick as butterflies: lookAt(pos + velocity)
   if (b.velocity.lengthSq() > 0.05) {

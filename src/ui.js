@@ -123,6 +123,23 @@ export function isPhotoMode() {
   return document.body.classList.contains("photo-mode");
 }
 
+export function isSelectingCreature() {
+  return selectingCreature;
+}
+
+let _manualPause = false;
+export function isManualPaused() {
+  return _manualPause;
+}
+function setManualPaused(on) {
+  _manualPause = on;
+  const banner = document.getElementById("pause-banner");
+  if (banner) {
+    banner.classList.toggle("visible", on);
+    banner.setAttribute("aria-hidden", on ? "false" : "true");
+  }
+}
+
 // Advance the first-person camera using accumulated WASD keys and current
 // yaw/pitch. Caller (main.js) calls this in lieu of controls.update() each
 // frame while stroll mode is active.
@@ -917,11 +934,10 @@ export function initUi({ camera, canvas, controls, renderer }) {
       ...state.caterpillars.map((c) => c.group),
     ];
     const hits = _raycaster.intersectObjects(targets, true);
-    if (hits.length === 0) {
-      // empty-space click cancels selection mode (existing UX)
-      if (selectingCreature) setSelectingCreature(false);
-      return;
-    }
+    // Only creature hits count. Clicks on terrain, trees, water, or empty
+    // sky are ignored so the user can freely look around / drag the camera
+    // while selection mode is active without accidentally cancelling it.
+    if (hits.length === 0) return;
     let hitRoot = hits[0].object;
     while (hitRoot && !targets.includes(hitRoot)) hitRoot = hitRoot.parent;
     if (!hitRoot) return;
@@ -1002,6 +1018,13 @@ export function initUi({ camera, canvas, controls, renderer }) {
     } else if (e.key === "r" || e.key === "R") {
       e.preventDefault();
       document.getElementById("regen").click();
+    } else if (e.key === " " || e.code === "Space") {
+      // Spacebar toggles a manual sim pause. Photo / stroll / selection
+      // already freeze the sim on their own, so skip the toggle in those
+      // modes to avoid surprising overlaps with their exit semantics.
+      if (_stroll || document.body.classList.contains("photo-mode") || selectingCreature) return;
+      e.preventDefault();
+      setManualPaused(!_manualPause);
     }
   });
 }

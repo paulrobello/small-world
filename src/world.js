@@ -199,6 +199,7 @@ export function generateWorld(seed) {
   state.dustKicks = [];
   state.flowerSpots = [];
   state.obstacles = [];
+  state.perchSpots = [];
   state.particles = null;
   state.waterMesh = null;
   state.grass = null;
@@ -374,6 +375,15 @@ export function generateWorld(seed) {
     "pillar", "archstone", "balloontree", "crystal",
     "lantern", "obsidianshard", "skull",
   ]);
+  // Per-kind canopy top height (local Y of the highest visible mass at
+  // scale=1). Fliers below ground + top * scale must route around the
+  // trunk; fliers above that altitude can pass over freely.
+  const OBSTACLE_TOP = {
+    tree: 2.3, pine: 2.2, deadtree: 1.8, mushroom: 1.1,
+    bigmushroom: 2.6, pillar: 2.8, archstone: 2.6, balloontree: 3.2,
+    crystal: 1.6, lantern: 1.7, obsidianshard: 2.2, skull: 1.5,
+  };
+  const OBSTACLE_TOP_DEFAULT = 2.0;
   // Extra pad on top of the slope-plant footprint so creature bodies don't
   // visually nose-clip the trunk. fp itself is already ~1.5× the trunk radius.
   const OBSTACLE_PAD = 1.15;
@@ -412,7 +422,23 @@ export function generateWorld(seed) {
     }
     state.world.add(f);
     if (OBSTACLE_KINDS.has(kind)) {
-      state.obstacles.push({ x: p.x, z: p.z, r: fp * OBSTACLE_PAD });
+      const topLocal = (OBSTACLE_TOP[kind] ?? OBSTACLE_TOP_DEFAULT) * s;
+      const topY = y0 + topLocal;
+      state.obstacles.push({
+        x: p.x,
+        z: p.z,
+        r: fp * OBSTACLE_PAD,
+        top: topY,
+      });
+      // Mushrooms (and big-mushrooms) double as landing pads for fliers —
+      // record the cap top so the perch-aware flier landing code can steer
+      // toward it. Use the builder-supplied local cap-top (accurate to the
+      // per-instance random stemH on bigmushroom) rather than the coarse
+      // OBSTACLE_TOP estimate, so fliers actually touch the cap.
+      if (kind === "mushroom" || kind === "bigmushroom") {
+        const capLocal = f.userData.capTopY ?? OBSTACLE_TOP[kind] ?? OBSTACLE_TOP_DEFAULT;
+        state.perchSpots.push({ x: p.x, z: p.z, y: y + capLocal * s });
+      }
     }
     placed++;
   }

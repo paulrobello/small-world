@@ -42,9 +42,14 @@ export const state = {
   dustKicks: [],
   // Collision discs for tall/solid flora. Populated in generateWorld during the
   // flora placement loop; consumed by stepCreature / stepCaterpillar for
-  // tangent-slide obstacle avoidance. Entries: { x, z, r }. Empty array when
-  // no obstacle-class flora exists.
+  // tangent-slide obstacle avoidance. Entries: { x, z, r, top }. Empty array
+  // when no obstacle-class flora exists. `top` is the world-Y of the canopy
+  // and lets fliers above that altitude pass through freely.
   obstacles: [],
+  // Mushroom-cap landing pads for fliers. Populated alongside obstacles
+  // during flora placement. Entries: { x, z, y } where y is the world-Y of
+  // the cap top. Cleared at the start of generateWorld.
+  perchSpots: [],
   // Set by makeGrassField in src/grass.js. Holds { mesh, uniforms } so
   // stepGrass can update uCameraXZ each frame and disposeGroup-style
   // teardown can null it out on regen. Mesh itself is parented to

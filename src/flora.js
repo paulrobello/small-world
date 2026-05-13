@@ -158,6 +158,10 @@ export const FLORA_BUILDERS = {
     underside.position.y = 0.36;
     underside.scale.set(1.4, 1.4, 1);
     g.add(underside);
+    // Local Y of the cap top so world.js can register an accurate perch
+    // spot for fliers. Sphere radius 0.22 with Y-scale 0.9 puts the apex at
+    // cap.position.y + 0.22*0.9.
+    g.userData.capTopY = 0.36 + 0.22 * 0.9;
     return g;
   },
 
@@ -490,6 +494,10 @@ export const FLORA_BUILDERS = {
     cap.scale.set(1, 0.55, 1);
     cap.castShadow = true;
     g.add(cap);
+    // Local Y of the cap top — varies with this instance's random stemH,
+    // so world.js needs to read it off userData rather than guess from a
+    // static per-kind table.
+    g.userData.capTopY = stemH + 0.8 * 0.55;
     // Underside disc — closes the hemisphere so walking under the cap in
     // first-person doesn't see through into empty space above. Uses the
     // stem material (cream) which reads as a fresh mushroom gill plate.
