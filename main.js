@@ -46,7 +46,10 @@ const renderer = new THREE.WebGLRenderer({
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, LOWFX ? 1 : 2));
 renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.shadowMap.enabled = true;
-renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+// PCFSoftShadowMap was deprecated in r180; PCFShadowMap is the supported
+// PCF path now. The visual difference at the kernel sizes we use is
+// negligible and the deprecated path internally falls back to this anyway.
+renderer.shadowMap.type = THREE.PCFShadowMap;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure = 1.05;
 renderer.outputColorSpace = THREE.SRGBColorSpace;
@@ -116,15 +119,20 @@ window.addEventListener("resize", () => {
 // ─────────────────────────────────────────────────────────────────────────────
 // Animation loop
 // ─────────────────────────────────────────────────────────────────────────────
-const clock = new THREE.Clock();
+// THREE.Timer is the post-r180 replacement for the deprecated THREE.Clock.
+// Calling `connect(document)` enables the Page Visibility API integration so
+// switching tabs doesn't return a huge delta on the first frame back.
+const timer = new THREE.Timer();
+timer.connect(document);
 // FPS counter — exponential moving average so the readout doesn't jitter.
 const _fpsEl = document.getElementById("fps-value");
 let _fpsEma = 60;
 let _fpsLastUpdate = 0;
 function animate() {
   requestAnimationFrame(animate);
-  const rawDt = Math.min(clock.getDelta(), 0.05);
-  const rawT = clock.elapsedTime;
+  timer.update();
+  const rawDt = Math.min(timer.getDelta(), 0.05);
+  const rawT = timer.getElapsed();
   if (rawDt > 0 && _fpsEl) {
     const instFps = 1 / rawDt;
     _fpsEma += (instFps - _fpsEma) * 0.08;
