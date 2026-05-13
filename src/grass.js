@@ -50,8 +50,8 @@ export function makeGrassField(biome, heightFn) {
     // Camera fade uniforms — wired in Task 5. Carried now so the shader
     // structure stays stable across tasks.
     uCameraXZ: { value: new THREE.Vector2(0, 0) },
-    uFadeStart: { value: 9999 },  // disabled in this task
-    uFadeEnd: { value: 9999 },
+    uFadeStart: { value: LOWFX ? 12.0 : 18.0 },
+    uFadeEnd: { value: LOWFX ? 18.0 : 28.0 },
   };
 
   mat.onBeforeCompile = (shader) => {
@@ -117,6 +117,11 @@ export function makeGrassField(biome, heightFn) {
                     * (0.75 + 0.5 * aWindSeed);
           transformed.x += bendDir.x * amp * 0.18;
           transformed.z += bendDir.y * amp * 0.18;
+          float dist = length(worldXZ - uCameraXZ);
+          float fade = 1.0 - smoothstep(uFadeStart, uFadeEnd, dist);
+          transformed.y *= fade;
+          transformed.x *= mix(1.0, fade, 0.5);
+          transformed.z *= mix(1.0, fade, 0.5);
         }`
       );
 
@@ -189,7 +194,9 @@ export function makeGrassField(biome, heightFn) {
   return mesh;
 }
 
-export function stepGrass(_camera) {
-  // No-op in skeleton task — uniforms aren't camera-dependent yet.
-  // Real implementation lands in Task 5.
+export function stepGrass(camera) {
+  if (!state.grass || !camera) return;
+  const u = state.grass.uniforms.uCameraXZ.value;
+  u.x = camera.position.x;
+  u.y = camera.position.z;
 }
