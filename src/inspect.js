@@ -31,8 +31,17 @@ const VARIANTS = [
   { name: "snail",       kind: "caterpillar", build: (biome) => makeCaterpillar(biome, { kind: "snail" }) },
 ];
 
+const CATEGORIES = ["creature", "flora"];
+
+function _findCategoryIdx(id) {
+  if (!id) return 0;
+  const i = CATEGORIES.indexOf(id);
+  return i >= 0 ? i : 0;
+}
+
 // Parse URL params for deterministic recreation.
 //   ?inspect=1                    — enter inspect mode (required)
+//   &category=<name>              — creature | flora (default: creature)
 //   &biome=<id>                   — biome id from BIOMES (default: first entry)
 //   &variant=<name>               — walker | flier | sleeper | burrower | caterpillar | snail
 //   &seed=<hex|int>               — specimen seed (default: derived from biome+variant)
@@ -53,6 +62,7 @@ function _parseSeed(raw) {
   return Number.isFinite(n) ? (n >>> 0) : null;
 }
 
+let _categoryIdx = _findCategoryIdx(_params.get("category"));
 let _biomeIdx = _findBiomeIdx(_params.get("biome"));
 let _variantIdx = _findVariantIdx(_params.get("variant"));
 // Explicit override; null means use the derived seed in spawnSpecimen.
@@ -75,6 +85,7 @@ function _derivedSeed() {
 function _syncUrl() {
   const sp = new URLSearchParams();
   sp.set("inspect", "1");
+  sp.set("category", CATEGORIES[_categoryIdx]);
   sp.set("biome", BIOMES[_biomeIdx].id);
   sp.set("variant", VARIANTS[_variantIdx].name);
   const seed = _seedOverride ?? _derivedSeed();
