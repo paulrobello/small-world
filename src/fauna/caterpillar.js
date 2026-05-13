@@ -293,10 +293,24 @@ export function stepCaterpillar(c, dt, t, heightFn) {
   const ndx = nx - near.cx;
   const ndz = nz - near.cz;
   const wetAhead = state.waterMesh && heightFn(nx, nz) < WATER_AVOID_Y;
+  const wetHere = state.waterMesh && heightFn(head.position.x, head.position.z) < WATER_AVOID_Y;
   if (Math.sqrt(ndx * ndx + ndz * ndz) > near.radius * 0.94 || wetAhead) {
-    c.headingTarget =
-      Math.atan2(near.cz - head.position.z, near.cx - head.position.x) +
-      (Math.random() - 0.5) * 0.4;
+    const inland = Math.atan2(
+      near.cz - head.position.z,
+      near.cx - head.position.x
+    );
+    // For water rejection, snap heading directly (not just the slew
+    // target) and recompute this frame's step. Slew-only correction at
+    // the snail's turnRate is too slow — the position-revert below would
+    // pin them at the waterline for ~1.5 seconds otherwise.
+    if (wetAhead || wetHere) {
+      c.heading = inland + (Math.random() - 0.5) * 0.2;
+      c.headingTarget = c.heading;
+      nx = head.position.x + Math.cos(c.heading) * step;
+      nz = head.position.z + Math.sin(c.heading) * step;
+    } else {
+      c.headingTarget = inland + (Math.random() - 0.5) * 0.4;
+    }
   }
 
   // Obstacle slide — small radius since caterpillars are skinny. Pass `c`
@@ -327,15 +341,27 @@ export function stepCaterpillar(c, dt, t, heightFn) {
   }
 
   // Post-slide water guard. The pre-step `wetAhead` test sees the straight
-  // step but obstacle slide can deflect the head onto a lake. Revert to the
-  // pre-step head position and aim the slew back inland so we step away
-  // from the water next frame.
+  // step but obstacle slide can deflect the head onto a lake. Snap heading
+  // back inland and either step inland anyway (if we were already in
+  // water — otherwise we'd freeze at the shore) or revert to the pre-step
+  // position (dry shore, just don't enter the water).
   if (state.waterMesh && heightFn(nx, nz) < WATER_AVOID_Y) {
-    nx = head.position.x;
-    nz = head.position.z;
-    const back = nearestCenter(nx, nz);
-    c.headingTarget =
-      Math.atan2(back.cz - nz, back.cx - nx) + (Math.random() - 0.5) * 0.4;
+    const back = nearestCenter(head.position.x, head.position.z);
+    const inland = Math.atan2(
+      back.cz - head.position.z,
+      back.cx - head.position.x
+    );
+    c.heading = inland;
+    c.headingTarget = inland;
+    if (wetHere) {
+      // Force an inland step even if the next cell is still wet — keeps
+      // the snail moving instead of pinning it at the waterline.
+      nx = head.position.x + Math.cos(inland) * step;
+      nz = head.position.z + Math.sin(inland) * step;
+    } else {
+      nx = head.position.x;
+      nz = head.position.z;
+    }
   }
 
   // all segments — including the head — sit at the same base offset so
