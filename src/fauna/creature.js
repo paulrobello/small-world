@@ -68,6 +68,10 @@ export function makeCreature(biome, opts = {}) {
   const flies = isFish ? true : forceWalk ? false : Math.random() < 0.3;
 
   const group = new THREE.Group();
+  // YXZ order so heading yaw applies first, then pitch/roll resolve in the
+  // creature's body frame (heading-local). stepCreature uses pitch + roll
+  // to lay walkers flat against sloped terrain.
+  group.rotation.order = "YXZ";
   const palette = biome.creatureColors;
   const bodyCol = new THREE.Color(
     palette[Math.floor(Math.random() * palette.length)]
@@ -1032,6 +1036,37 @@ export function stepCreature(c, dt, t, heightFn) {
     while (ldiff > Math.PI) ldiff -= Math.PI * 2;
     while (ldiff < -Math.PI) ldiff += Math.PI * 2;
     c.group.rotation.y = lcur + ldiff * Math.min(1, dt * 9);
+  }
+
+  // Terrain-normal alignment for walkers — sample the slope along heading
+  // and perpendicular to it, then ease group pitch (rotation.x) and roll
+  // (rotation.z) toward the matching angles. With YXZ Euler order these
+  // resolve in the body frame after yaw, so the creature lies flat on the
+  // hillside instead of staying world-axis-aligned and clipping into the
+  // slope. Fliers, fish, and burrowed creatures stay level.
+  if (!c.flies && !(c.isBurrower && c.burrowState === "burrowed")) {
+    const ds = 0.25 * c.scale;
+    const ch = Math.cos(c.heading);
+    const sh = Math.sin(c.heading);
+    const yF = heightFn(pos.x + ch * ds, pos.z + sh * ds);
+    const yB = heightFn(pos.x - ch * ds, pos.z - sh * ds);
+    const yR = heightFn(pos.x + sh * ds, pos.z - ch * ds);
+    const yL = heightFn(pos.x - sh * ds, pos.z + ch * ds);
+    const slopeFwd = (yF - yB) / (2 * ds);
+    const slopeRight = (yR - yL) / (2 * ds);
+    // Clamp before atan so noise spikes near cliff edges don't whip the body.
+    const cl = (v) => Math.max(-2, Math.min(2, v));
+    const pitchTarget = -Math.atan(cl(slopeFwd));
+    const rollTarget = Math.atan(cl(slopeRight));
+    const k = Math.min(1, dt * 5);
+    c.group.rotation.x += (pitchTarget - c.group.rotation.x) * k;
+    c.group.rotation.z += (rollTarget - c.group.rotation.z) * k;
+  } else if (c.flies) {
+    // Fliers stay level — ease any residual pitch/roll back to zero in case
+    // the creature was just woken from a curled walker state.
+    const k = Math.min(1, dt * 4);
+    c.group.rotation.x += (0 - c.group.rotation.x) * k;
+    c.group.rotation.z += (0 - c.group.rotation.z) * k;
   }
 
   // squash & stretch body (the wake-up unfurl owns body scale until it finishes;
