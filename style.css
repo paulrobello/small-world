@@ -1006,8 +1006,8 @@ body.photo-mode .grain {
 
 .fps-counter {
   position: fixed;
-  top: 12px;
-  right: 12px;
+  top: -2px;
+  right: -2px;
   padding: 4px 10px;
   background: rgba(20, 20, 24, 0.55);
   border: 1px solid rgba(255, 255, 255, 0.08);
@@ -1018,6 +1018,9 @@ body.photo-mode .grain {
   letter-spacing: 0.12em;
   pointer-events: none;
   z-index: 60;
+}
+.fps-counter[hidden] {
+  display: none;
 }
 .fps-counter #fps-value {
   color: #fff;

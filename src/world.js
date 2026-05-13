@@ -220,16 +220,22 @@ export function generateWorld(seed) {
   _scene.background = new THREE.Color(biome.sky);
   _scene.fog = new THREE.FogExp2(new THREE.Color(biome.fog), biome.fogDensity);
 
-  // lights
+  // darkBiome biomes need extra lift: their sky/ground/cliff hexes are
+  // near-black, so even strong lights still multiply against tiny material
+  // colours. Boost hemi/sun/accent + nudge tone-mapping exposure to lift
+  // the whole frame without changing the moody palette.
+  const dark = !!biome.darkBiome;
+  if (state.renderer) state.renderer.toneMappingExposure = dark ? 2.6 : 1.05;
+
   const hemi = new THREE.HemisphereLight(
     new THREE.Color(biome.sky),
     new THREE.Color(biome.ground[0]),
-    0.65
+    dark ? 2.2 : 0.65
   );
   state.world.add(hemi);
   state.hemiLight = hemi;
 
-  const sun = new THREE.DirectionalLight(new THREE.Color(biome.sun), 1.25);
+  const sun = new THREE.DirectionalLight(new THREE.Color(biome.sun), dark ? 2.0 : 1.25);
   sun.position.set(18, 28, 12);
   sun.castShadow = true;
   sun.shadow.mapSize.set(2048, 2048);
@@ -247,8 +253,8 @@ export function generateWorld(seed) {
 
   const accent = new THREE.PointLight(
     new THREE.Color(biome.accent),
-    0.6,
-    35,
+    dark ? 1.8 : 0.6,
+    dark ? 50 : 35,
     1.6
   );
   accent.position.set(0, 8, 0);

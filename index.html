@@ -92,7 +92,7 @@
   <div class="corner corner-bl">+</div>
   <div class="corner corner-br">+</div>
 
-  <div class="fps-counter" id="fps-counter">FPS <span id="fps-value">--</span></div>
+  <div class="fps-counter" id="fps-counter" hidden>FPS <span id="fps-value">--</span></div>
 
   <aside class="help-panel" id="help-panel" aria-hidden="true">
     <div class="settings-head">
@@ -212,6 +212,11 @@
       <label class="setting setting-checkbox">
         <input type="checkbox" id="setting-tiltshift" />
         <span class="setting-label">tilt-shift miniature</span>
+      </label>
+
+      <label class="setting setting-checkbox">
+        <input type="checkbox" id="setting-show-fps" />
+        <span class="setting-label">show fps counter</span>
       </label>
 
       <div class="biome-filter-hint" id="setting-lowfx-hint" hidden>

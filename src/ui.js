@@ -34,6 +34,7 @@ const PERSISTED_KEYS = [
   "autoRegenMinutes",
   "bloom",
   "tiltShift",
+  "showFps",
 ];
 const BOOKMARKS_KEY = "smallworld:bookmarks:v1";
 const BIOME_FILTER_KEY = "smallworld:biomefilter:v1";
@@ -492,6 +493,16 @@ export function initUi({ camera, canvas, controls, renderer }) {
   tiltEl.addEventListener("change", () => {
     state.userSettings.tiltShift = tiltEl.checked;
     if (state.postfx) state.postfx.setTiltShift(tiltEl.checked);
+    saveSettings();
+  });
+
+  const fpsToggleEl = document.getElementById("setting-show-fps");
+  const fpsCounterEl = document.getElementById("fps-counter");
+  fpsToggleEl.checked = !!state.userSettings.showFps;
+  fpsCounterEl.hidden = !state.userSettings.showFps;
+  fpsToggleEl.addEventListener("change", () => {
+    state.userSettings.showFps = fpsToggleEl.checked;
+    fpsCounterEl.hidden = !fpsToggleEl.checked;
     saveSettings();
   });
 

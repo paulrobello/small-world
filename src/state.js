@@ -68,6 +68,7 @@ export const state = {
     autoRegenMinutes: 2,
     bloom: true,
     tiltShift: false,
+    showFps: false,
   },
 };
 
