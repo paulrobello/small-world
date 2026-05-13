@@ -35,6 +35,7 @@ import {
   makeWildflowerField,
   makePebbleField,
   makeWaterPlane,
+  makeFlySwarm,
 } from "./environment.js";
 import {
   makeSkyDome,
@@ -195,6 +196,7 @@ export function generateWorld(seed) {
   state.caterpillars = [];
   state.butterflies = [];
   state.bees = [];
+  state.flySwarms = [];
   state.dirtPuffs = [];
   state.dustKicks = [];
   state.flowerSpots = [];
@@ -440,6 +442,17 @@ export function generateWorld(seed) {
         state.perchSpots.push({ x: p.x, z: p.z, y: y + capLocal * s });
       }
     }
+    // Tight, ominous fly cloud over some skulls — not every skull gets one,
+    // so the swarms read as a found detail rather than a uniform decoration.
+    // OBSTACLE_TOP for skull (1.5) is a loose obstacle-avoidance estimate, not
+    // the actual mesh top — the cranium only reaches ~0.33 locally. Place the
+    // swarm at eye-socket level so flies look like they're crawling on the
+    // skull rather than hovering somewhere above it.
+    if (kind === "skull" && Math.random() < 0.55) {
+      const swarm = makeFlySwarm(p.x, y + 0.5 * s, p.z);
+      state.world.add(swarm);
+      state.flySwarms.push(swarm);
+    }
     placed++;
   }
 
@@ -530,11 +543,15 @@ export function generateWorld(seed) {
     state.caterpillars.push(snail);
   }
 
-  // butterflies — drift between flower positions
+  // butterflies — drift between flower positions. Skipped in arid biomes
+  // where butterflies read as out-of-place (the desert gets fly swarms over
+  // skulls instead, set up during flora placement above).
   const flowerDensity = FLOWER_DENSITY[biome.id] ?? 100;
   const bMin = Math.max(2, Math.floor(flowerDensity / 30));
   const bMax = Math.max(bMin + 1, Math.floor(flowerDensity / 14));
-  const nbutterflies = bMin + Math.floor(Math.random() * (bMax - bMin + 1));
+  const nbutterflies = biome.id === "desert"
+    ? 0
+    : bMin + Math.floor(Math.random() * (bMax - bMin + 1));
   const palette = WILDFLOWER_PALETTES[biome.id] ?? ["#ffffff"];
   for (let i = 0; i < nbutterflies; i++) {
     const bf = makeButterfly(palette, biome);

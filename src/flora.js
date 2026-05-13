@@ -17,7 +17,7 @@ function addCapsuleNeedles(parent, radius, length) {
   // by the pool factory on the next world. (A module-scoped singleton would
   // hand back a stale, already-disposed geometry handle.)
   const needleGeo = pooled("cactus.needle.geo", () => {
-    const g = new THREE.ConeGeometry(0.014, NEEDLE_LENGTH, 4);
+    const g = new THREE.ConeGeometry(0.0112, NEEDLE_LENGTH, 4);
     g.translate(0, NEEDLE_LENGTH / 2, 0);
     return g;
   });

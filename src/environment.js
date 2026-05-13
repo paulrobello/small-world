@@ -19,6 +19,7 @@ const _coverScale = (n, gain = 1) =>
 const PARTICLE_KIND_ID = {
   pollen: 0, dust: 1, snow: 2, firefly: 3, ember: 4,
   lichenmote: 5, feather: 6, bubble: 7, leaf: 8, spark: 9, rain: 10,
+  sand: 11,
 };
 
 const _particleVS = `
@@ -69,6 +70,11 @@ void main() {
   float d = length(c);
   #if PARTICLE_KIND == 10
     float a = smoothstep(0.5, 0.0, abs(c.x) * 2.0) * smoothstep(0.5, 0.0, abs(c.y));
+  #elif PARTICLE_KIND == 11
+    // horizontal streak — stretched in x, tight in y
+    float a = smoothstep(0.5, 0.0, abs(c.x)) * smoothstep(0.5, 0.0, abs(c.y) * 2.6);
+    // gust pulse: vary alpha by life so individual grains breathe
+    a *= 0.55 + 0.45 * sin(vLife * 6.2831);
   #else
     float a = smoothstep(0.5, 0.0, d);
   #endif
@@ -101,6 +107,7 @@ export function makeParticles(biome) {
   const baseCount = {
     pollen: 240, dust: 320, snow: 500, firefly: 90, ember: 180,
     lichenmote: 140, feather: 120, bubble: 140, leaf: 120, spark: 240, rain: 520,
+    sand: 420,
   }[kind] || 200;
   const count = _lowfxScale(baseCount);
 
@@ -113,7 +120,8 @@ export function makeParticles(biome) {
     const r = Math.sqrt(Math.random()) * state.ISLAND_RADIUS * 1.1;
     const a = Math.random() * Math.PI * 2;
     positions[i * 3 + 0] = Math.cos(a) * r;
-    positions[i * 3 + 1] = Math.random() * 14;
+    // Sand hugs the ground — sample low so grains read as wind-swept, not airborne.
+    positions[i * 3 + 1] = kind === "sand" ? 0.1 + Math.random() * 2.4 : Math.random() * 14;
     positions[i * 3 + 2] = Math.sin(a) * r;
     velocities[i * 3 + 0] = (Math.random() - 0.5) * 0.4;
     velocities[i * 3 + 1] = (Math.random() - 0.5) * 0.4;
@@ -132,6 +140,7 @@ export function makeParticles(biome) {
     firefly: biome.accent, ember: biome.accent, lichenmote: biome.accent,
     feather: "#ffffff", bubble: biome.water || biome.sky,
     leaf: biome.accent, spark: biome.sun, rain: biome.sun,
+    sand: (biome.ground && biome.ground[2]) || biome.fog,
   };
   // Ember/spark fade toward a smokier secondary colour over life.
   const color2Map = {
@@ -149,10 +158,12 @@ export function makeParticles(biome) {
     pollen: 0.08,
     dust: 0.09,
     ember: 0.12,
+    sand: 0.16,
   };
   const opacityMap = {
     dust: 0.35, feather: 0.7, bubble: 0.55, leaf: 0.85, spark: 0.95, rain: 0.55,
     pollen: 0.85, snow: 0.85, firefly: 0.85, ember: 0.85, lichenmote: 0.85,
+    sand: 0.55,
   };
   const additive = new Set(["firefly", "ember", "lichenmote", "spark"]);
 
@@ -260,6 +271,33 @@ export function stepParticles(points, dt, t) {
         const nr = Math.random() * state.ISLAND_RADIUS * 0.4;
         x = Math.cos(a) * nr;
         z = Math.sin(a) * nr;
+      }
+    } else if (kind === "sand") {
+      // Dominant horizontal wind sweeping across the dunes, with gusts and
+      // small per-grain wobble. Grains stay near the surface; when blown past
+      // the downwind edge they wrap back to the upwind side so the stream is
+      // continuous.
+      const gust = 0.7 + 0.6 * Math.sin(t * 0.35 + s * 0.07);
+      // Slight cross-wind on Z so streaks aren't pure straight lines.
+      const cross = 0.25 * Math.sin(t * 0.5 + s * 0.13);
+      x += (5.5 * gust + Math.sin(t * 1.6 + s) * 0.6) * dt;
+      z += (cross + Math.cos(t * 0.9 + s * 1.3) * 0.4) * dt;
+      // Tiny vertical wobble — sand grains don't really climb, they skip.
+      y += Math.sin(t * 2.0 + s * 1.7) * 0.18 * dt - 0.05 * dt;
+      // Sample terrain to clamp grains close to the ground so they hug dunes.
+      const groundY = state.heightFn ? state.heightFn(x, z) : 0;
+      const floor = Math.max(0.05, groundY + 0.08);
+      const ceil = groundY + 2.4;
+      if (y < floor) y = floor;
+      else if (y > ceil) y = ceil;
+      // Wrap from downwind edge back to upwind edge.
+      if (x > state.ISLAND_RADIUS * 1.1) {
+        x = -state.ISLAND_RADIUS * 1.05 + Math.random() * 1.0;
+        z = (Math.random() - 0.5) * state.ISLAND_RADIUS * 2.0;
+        const gy = state.heightFn ? state.heightFn(x, z) : 0;
+        y = Math.max(0.1, gy + 0.1) + Math.random() * 2.0;
+      } else if (Math.abs(z) > state.ISLAND_RADIUS * 1.15) {
+        z = -Math.sign(z) * state.ISLAND_RADIUS * 1.05;
       }
     } else if (kind === "bubble") {
       // slow upward drift with a soft wobble — pops at the top
@@ -471,6 +509,59 @@ export function stepDustKicks(kicks, dt) {
       kick.material.dispose();
       kicks.splice(p, 1);
     }
+  }
+}
+
+// ─── fly swarms (dark specks hovering over a fixed prop) ───
+//
+// Tiny erratic cloud — each speck orbits a center with phase-offset sinusoids
+// so the motion reads as jittery, insect-like buzzing rather than smooth flight.
+// Used for the skull flies in the desert biome.
+const FLY_COUNT = 9;
+export function makeFlySwarm(centerX, centerY, centerZ) {
+  const count = _lowfxScale(FLY_COUNT);
+  const positions = new Float32Array(count * 3);
+  const seeds = new Float32Array(count);
+  for (let i = 0; i < count; i++) {
+    positions[i * 3 + 0] = centerX;
+    positions[i * 3 + 1] = centerY;
+    positions[i * 3 + 2] = centerZ;
+    seeds[i] = Math.random() * 100;
+  }
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute("position", new THREE.BufferAttribute(positions, 3));
+  const mat = new THREE.PointsMaterial({
+    color: 0x141014,
+    size: 0.07,
+    transparent: true,
+    opacity: 0.92,
+    depthWrite: false,
+    sizeAttenuation: true,
+  });
+  const points = new THREE.Points(geo, mat);
+  points.userData = { centerX, centerY, centerZ, seeds, count };
+  return points;
+}
+
+export function stepFlySwarms(swarms, t) {
+  if (!swarms || !swarms.length) return;
+  for (const sw of swarms) {
+    const { centerX, centerY, centerZ, seeds, count } = sw.userData;
+    const pos = sw.geometry.attributes.position.array;
+    for (let i = 0; i < count; i++) {
+      const s = seeds[i];
+      // Tight, irregular orbit: a slow circular sweep plus a faster jitter
+      // so individual flies dart and pause rather than glide.
+      const r = 0.08 + 0.045 * Math.sin(t * 1.7 + s * 1.1);
+      const ang = t * (1.5 + (s % 1) * 0.9) + s * 4.1;
+      const dx = Math.cos(ang) * r + Math.sin(t * 6.0 + s * 3.3) * 0.018;
+      const dy = Math.sin(t * 2.2 + s * 1.7) * 0.055 + Math.sin(t * 5.5 + s * 2.0) * 0.015;
+      const dz = Math.sin(ang) * r + Math.cos(t * 5.6 + s * 3.0) * 0.018;
+      pos[i * 3 + 0] = centerX + dx;
+      pos[i * 3 + 1] = centerY + dy;
+      pos[i * 3 + 2] = centerZ + dz;
+    }
+    sw.geometry.attributes.position.needsUpdate = true;
   }
 }
 

@@ -34,7 +34,7 @@ export const BIOMES = [
     sun: "#ffe5b0",
     flora: ["cactus", "cactus", "rock", "rock", "skull", "pillar"],
     floraCount: 50,
-    particle: "dust",
+    particle: "sand",
     creatureColors: ["#fefae0", "#dda15e", "#bc6c25", "#3d405b"],
     creatureCount: [6, 11],
     dusk: { sky: "#e07a4c", fog: "#b85a3a", sun: "#ff8050", ground: "#5e2828" },
