@@ -184,6 +184,8 @@ export const BIOMES = [
     accent: "#ff7a8c",
     sun: "#fffaef",
     water: "#5fc6cf",
+    cloudTint: "#ffffff",
+    cloudOpacity: 0.75,
     flora: ["coral", "coral", "coral", "rock", "reed", "fern"],
     floraCount: 70,
     particle: "bubble",
@@ -304,7 +306,7 @@ export const FLOWER_DENSITY = {
 export const CLOUD_COUNT = {
   verdant: 16, desert: 3, frozen: 10, marsh: 14,
   ashen:    5, golden: 20, mossy:  12, twilight: 14,
-  coral:   18, cloud:  30, grove:  12, obsidian:  7,
+  coral:   30, cloud:  30, grove:  12, obsidian:  7,
 };
 // Biomes that get aurora curtains at night. Tinted via AURORA_TINTS below.
 export const AURORA_BIOMES = new Set(["frozen", "twilight", "cloud"]);

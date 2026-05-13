@@ -26,6 +26,8 @@ export function makeWaterReflection(_biome) {
   let domeClone = null;
   let starfieldClone = null;
   let auroraClone = null;
+  let cloudsClone = null;
+  let cloudPairs = null;
   if (state.skyDome) {
     domeClone = state.skyDome.clone();
     // The reflection camera mirrors the main camera across y=0 by flipping
@@ -67,10 +69,28 @@ export function makeWaterReflection(_biome) {
     });
     scene.add(auroraClone);
   }
+  if (state.clouds) {
+    // Clouds are a Group of Sprites, each with its own SpriteMaterial clone
+    // (so the tint can drift per-sprite). Share each live material with its
+    // reflection-side twin so day/night tinting updates flow through. Track
+    // (live, clone) pairs so we can sync per-sprite positions each frame —
+    // each sprite drifts independently via stepClouds.
+    cloudsClone = new THREE.Group();
+    cloudPairs = [];
+    state.clouds.traverse((o) => {
+      if (o.isSprite) {
+        const s = o.clone();
+        s.material = o.material;
+        cloudsClone.add(s);
+        cloudPairs.push([o, s]);
+      }
+    });
+    scene.add(cloudsClone);
+  }
 
   const camera = new THREE.PerspectiveCamera(38, 1, 0.1, 800);
 
-  return { rt, scene, camera, domeClone, starfieldClone, auroraClone };
+  return { rt, scene, camera, domeClone, starfieldClone, auroraClone, cloudsClone, cloudPairs };
 }
 
 // Tear down a reflection target safely. The cloned scene reuses live sky
@@ -89,6 +109,8 @@ export function disposeWaterReflection(refl) {
   refl.domeClone = null;
   refl.starfieldClone = null;
   refl.auroraClone = null;
+  refl.cloudsClone = null;
+  refl.cloudPairs = null;
   if (refl.rt) refl.rt.dispose();
 }
 
@@ -155,6 +177,12 @@ export function updateWaterReflection(refl, renderer, mainCamera, controls) {
   }
   if (refl.auroraClone && state.aurora) {
     refl.auroraClone.position.copy(state.aurora.position);
+  }
+  // Each cloud sprite drifts independently in stepClouds, so sync each one.
+  if (refl.cloudPairs) {
+    for (const [live, clone] of refl.cloudPairs) {
+      clone.position.copy(live.position);
+    }
   }
 
   renderer.setRenderTarget(refl.rt);

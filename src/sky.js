@@ -190,9 +190,10 @@ export function makeCloudLayer(biome) {
     map: tex,
     color: tint,
     transparent: true,
-    // Low opacity so distant clouds don't dominate the sky — they're meant to
-    // accent the dome gradient, not replace it.
-    opacity: 0.32,
+    // Default opacity stays low so distant clouds don't dominate the sky —
+    // they're meant to accent the dome gradient, not replace it. Per-biome
+    // override via cloudOpacity for skies that want a visibly cloudy look.
+    opacity: biome.cloudOpacity ?? 0.32,
     depthWrite: false,
     fog: false,
   });
