@@ -254,9 +254,10 @@ const INSPECT_SCENERY_BUILDERS = {
 const VARIANTS_BY_CATEGORY = {
   creature: CREATURE_VARIANTS,
   flora: [
-    "tree", "pine", "mushroom", "fern", "rock", "grass", "deadtree",
-    "pillar", "archstone", "crystal", "bigmushroom", "berrybush",
-    "lantern", "coral", "balloontree", "obsidianshard",
+    "tree", "pine", "cactus", "mushroom", "fern", "rock", "reed",
+    "grass", "deadtree", "skull", "pillar", "archstone", "crystal",
+    "bigmushroom", "berrybush", "lantern", "coral", "balloontree",
+    "obsidianshard",
   ].map((name) => ({
     name,
     kind: "flora",
