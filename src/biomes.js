@@ -274,6 +274,17 @@ export const GRASS_DENSITY = {
   mossy:   650, twilight: 540, coral: 200,
   cloud:   180, grove:   400, obsidian: 80,
 };
+// Per-biome rejection threshold for the grass density noise. Blades whose
+// underlying noise sample at world XZ falls below this threshold are not
+// placed, producing bald patches. Range [0, 1]. Higher = balder. Biomes
+// without an override use 0.32. Lush biomes go lower; sparse/dry biomes
+// go higher so the field reads as patchy.
+export const BALD_THRESHOLD = {
+  verdant: 0.22,
+  twilight: 0.30,
+  ashen: 0.55,
+  obsidian: 0.50,
+};
 export const FLOWER_DENSITY = {
   verdant: 180, desert: 60, frozen: 90,
   marsh:   220, ashen:  50, golden: 200,
