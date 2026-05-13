@@ -950,7 +950,8 @@ export function stepCreature(c, dt, t, heightFn) {
         0.25 * c.scale,
         c.flies ? pos.y : undefined,
         c.perchTarget?.x,
-        c.perchTarget?.z
+        c.perchTarget?.z,
+        c
       );
       if (slide) {
         pos.x = slide.nx;

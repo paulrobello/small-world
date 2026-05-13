@@ -271,7 +271,10 @@ export function stepCaterpillar(c, dt, t, heightFn) {
     nz = head.position.z + Math.sin(c.heading) * step;
   }
 
-  // Obstacle slide — small radius since caterpillars are skinny.
+  // Obstacle slide — small radius since caterpillars are skinny. Pass `c`
+  // as selfOwner so the head doesn't try to avoid its own body segments
+  // (every segment of this caterpillar is registered in dynamicObstacles
+  // with the same owner ref).
   const slide = avoidObstacles(
     head.position.x,
     head.position.z,
@@ -279,7 +282,11 @@ export function stepCaterpillar(c, dt, t, heightFn) {
     nz,
     c.heading,
     step,
-    0.18 * c.scale
+    0.18 * c.scale,
+    undefined,
+    undefined,
+    undefined,
+    c
   );
   if (slide) {
     nx = slide.nx;

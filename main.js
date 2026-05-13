@@ -171,6 +171,29 @@ function animate() {
     updateDayNight(t);
   }
 
+  // Rebuild the per-frame mover-vs-mover collision list before any step
+  // runs (so each stepX sees an up-to-date snapshot of where everyone is).
+  // Walkers contribute one disc each; caterpillars contribute one disc per
+  // body segment (`owner = c` shared across all of them, so the head skips
+  // its own body via selfOwner in avoidObstacles). Fliers in the air are
+  // excluded — their collision with walkers below them is uninteresting
+  // and the height filter alone isn't enough since walkers pass `y=undefined`.
+  const dyn = state.dynamicObstacles;
+  dyn.length = 0;
+  for (const c of state.creatures) {
+    if (c.flies) continue;
+    const p = c.group.position;
+    const r = 0.32 * c.scale;
+    dyn.push({ x: p.x, z: p.z, r, top: p.y + 0.5 * c.scale, owner: c });
+  }
+  for (const c of state.caterpillars) {
+    const r = 0.22 * c.scale;
+    for (let i = 0; i < c.segments.length; i++) {
+      const sp = c.segments[i].position;
+      dyn.push({ x: sp.x, z: sp.z, r, top: sp.y + 0.25 * c.scale, owner: c });
+    }
+  }
+
   for (const c of state.creatures) stepCreature(c, dt, t, state.heightFn);
   for (const c of state.caterpillars) stepCaterpillar(c, dt, t, state.heightFn);
   for (const b of state.butterflies)

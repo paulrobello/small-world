@@ -46,6 +46,14 @@ export const state = {
   // when no obstacle-class flora exists. `top` is the world-Y of the canopy
   // and lets fliers above that altitude pass through freely.
   obstacles: [],
+  // Per-frame mover-vs-mover collision discs. Rebuilt at the top of each
+  // animate() tick from walker creatures and every caterpillar segment.
+  // Entries: { x, z, r, top, owner } where `owner` is the creature/caterpillar
+  // struct (so a mover skips its own entries via selfOwner in avoidObstacles)
+  // and `top` is the body's top world-Y (lets fliers above pass over). Not
+  // persistent state — purely a per-frame scratch buffer to keep alloc churn
+  // out of the inner loop.
+  dynamicObstacles: [],
   // Mushroom-cap landing pads for fliers. Populated alongside obstacles
   // during flora placement. Entries: { x, z, y } where y is the world-Y of
   // the cap top. Cleared at the start of generateWorld.
