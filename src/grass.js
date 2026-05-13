@@ -56,8 +56,12 @@ export function makeGrassField(biome, heightFn) {
     // Camera fade uniforms — wired in Task 5. Carried now so the shader
     // structure stays stable across tasks.
     uCameraXZ: { value: new THREE.Vector2(0, 0) },
-    uFadeStart: { value: LOWFX ? 12.0 : 18.0 },
-    uFadeEnd: { value: LOWFX ? 18.0 : 28.0 },
+    // Distance is measured from camera XZ. Default orbit puts the camera
+    // at XZ radius ~28 from origin, so the island's far edge sits ~51
+    // units from the camera projection. Fade band 25→50 covers the full
+    // island width and gives a clean near/far gradient across the view.
+    uFadeStart: { value: LOWFX ? 18.0 : 25.0 },
+    uFadeEnd: { value: LOWFX ? 35.0 : 50.0 },
   };
 
   mat.onBeforeCompile = (shader) => {

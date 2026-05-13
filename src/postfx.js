@@ -38,12 +38,14 @@ const _srgbOutputShader = {
 };
 
 // Hybrid tilt-shift: blur radius is max(screen-Y band, depth-from-focus).
-// 9-tap rotational disc blur — weights sum to exactly 1.0 so the in-focus
-// band is pixel-identity (no color shift). Blur happens in *perceptual*
-// (gamma-2.0) space — sqrt encode each tap, square-decode the average.
-// Blurring in linear HDR lifts dark-on-light boundaries brighter than
-// expected (a real "wash-out"); gamma-space blur matches how the eye
-// expects soft edges to look.
+// 13-tap hexagonal-disc blur (center + 6 inner hex + 6 outer hex with the
+// outer rotated 30°), with a per-pixel random rotation to dissolve any
+// residual ring alignment into film-grain noise. Weights sum to exactly
+// 1.0 so the in-focus band is pixel-identity (no color shift). Blur
+// happens in *perceptual* (gamma-2.0) space — sqrt encode each tap,
+// square-decode the average. Blurring in linear HDR lifts dark-on-light
+// boundaries brighter than expected (a real "wash-out"); gamma-space
+// blur matches how the eye expects soft edges to look.
 const _tiltShiftShader = {
   uniforms: {
     tDiffuse: { value: null },
@@ -112,18 +114,30 @@ const _tiltShiftShader = {
       }
 
       vec2 px = (1.0 / uResolution) * radius;
-      // 9-tap rotational disc, weights summing to 1.0, accumulated in
-      // gamma space.
+      // 13-tap hexagonal-disc blur: center + 6 inner hex (r=0.5) + 6 outer
+      // hex (r=1.0, rotated 30°). Hex point distribution is rotationally
+      // smoother than the old 4-cardinal + 4-diagonal pattern at the same
+      // tap count. Per-pixel random rotation breaks any residual ring
+      // alignment into film-grain noise rather than visible sample ghosts.
+      float jitter = fract(sin(dot(vUv, vec2(12.9898, 78.233))) * 43758.5453) * 6.2831853;
+      float cj = cos(jitter), sj = sin(jitter);
+      mat2 rot = mat2(cj, -sj, sj, cj);
       vec3 g = vec3(0.0);
       g += toGamma(texture2D(tDiffuse, vUv).rgb) * 0.20;
-      g += toGamma(texture2D(tDiffuse, vUv + vec2( 0.500,  0.000) * px).rgb) * 0.10;
-      g += toGamma(texture2D(tDiffuse, vUv + vec2(-0.500,  0.000) * px).rgb) * 0.10;
-      g += toGamma(texture2D(tDiffuse, vUv + vec2( 0.000,  0.500) * px).rgb) * 0.10;
-      g += toGamma(texture2D(tDiffuse, vUv + vec2( 0.000, -0.500) * px).rgb) * 0.10;
-      g += toGamma(texture2D(tDiffuse, vUv + vec2( 0.707,  0.707) * px).rgb) * 0.10;
-      g += toGamma(texture2D(tDiffuse, vUv + vec2(-0.707,  0.707) * px).rgb) * 0.10;
-      g += toGamma(texture2D(tDiffuse, vUv + vec2( 0.707, -0.707) * px).rgb) * 0.10;
-      g += toGamma(texture2D(tDiffuse, vUv + vec2(-0.707, -0.707) * px).rgb) * 0.10;
+      // inner hex, r = 0.5, weights 0.08 each → 0.48 total
+      g += toGamma(texture2D(tDiffuse, vUv + rot * vec2( 0.5000,  0.0000) * px).rgb) * 0.08;
+      g += toGamma(texture2D(tDiffuse, vUv + rot * vec2( 0.2500,  0.4330) * px).rgb) * 0.08;
+      g += toGamma(texture2D(tDiffuse, vUv + rot * vec2(-0.2500,  0.4330) * px).rgb) * 0.08;
+      g += toGamma(texture2D(tDiffuse, vUv + rot * vec2(-0.5000,  0.0000) * px).rgb) * 0.08;
+      g += toGamma(texture2D(tDiffuse, vUv + rot * vec2(-0.2500, -0.4330) * px).rgb) * 0.08;
+      g += toGamma(texture2D(tDiffuse, vUv + rot * vec2( 0.2500, -0.4330) * px).rgb) * 0.08;
+      // outer hex, r = 1.0, rotated 30°, weights 0.0533 each → 0.32 total
+      g += toGamma(texture2D(tDiffuse, vUv + rot * vec2( 0.8660,  0.5000) * px).rgb) * 0.0533;
+      g += toGamma(texture2D(tDiffuse, vUv + rot * vec2( 0.0000,  1.0000) * px).rgb) * 0.0533;
+      g += toGamma(texture2D(tDiffuse, vUv + rot * vec2(-0.8660,  0.5000) * px).rgb) * 0.0533;
+      g += toGamma(texture2D(tDiffuse, vUv + rot * vec2(-0.8660, -0.5000) * px).rgb) * 0.0533;
+      g += toGamma(texture2D(tDiffuse, vUv + rot * vec2( 0.0000, -1.0000) * px).rgb) * 0.0533;
+      g += toGamma(texture2D(tDiffuse, vUv + rot * vec2( 0.8660, -0.5000) * px).rgb) * 0.0535;
 
       gl_FragColor = vec4(fromGamma(g), 1.0);
     }
