@@ -158,12 +158,17 @@ export function makeGrassMaterial(biome, opts = {}) {
 }
 
 export function makeGrassField(biome, heightFn) {
+  // Per-biome 0 = no grass field at all (burnt/volcanic biomes). Caller
+  // handles the null and skips the .add() rather than allocating an empty
+  // InstancedMesh.
+  const density = GRASS_DENSITY[biome.id] ?? 300;
+  if (density <= 0) return null;
   // Overshoot factor produces a dense carpet visible at orbit distance.
   // Combined with the crossed-plane blade geometry, each instance now
   // contributes meaningful screen area regardless of viewing angle.
   // LOWFX trims the count to stay inside a smaller GPU budget.
   const overshoot = LOWFX ? 22.0 : 55.0;
-  const count = _coverScale(GRASS_DENSITY[biome.id] ?? 300, overshoot);
+  const count = _coverScale(density, overshoot);
 
   const { blade, material: mat, uniforms, baseCol } = makeGrassMaterial(biome);
 

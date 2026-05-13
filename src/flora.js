@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import { jitterGeo, applyWindSway, TRUNK } from "./util.js";
+import { BLOOM_LAYER } from "./postfx.js";
 
 // Per-world resource pool. Each generateWorld() call resets it via
 // resetFloraPool(), so two trees in the same biome share one trunk
@@ -450,6 +451,7 @@ export const FLORA_BUILDERS = {
       shard.rotation.y = Math.random() * Math.PI * 2;
       shard.rotation.z = (Math.random() - 0.5) * 0.35;
       shard.castShadow = true;
+      shard.layers.enable(BLOOM_LAYER);
       g.add(shard);
     }
     return g;
@@ -598,6 +600,7 @@ export const FLORA_BUILDERS = {
     });
     const orb = new THREE.Mesh(orbGeo, orbMat);
     orb.position.y = tetherH + 0.05;
+    orb.layers.enable(BLOOM_LAYER);
     g.add(orb);
     const haloGeo = pooled("lantern.halo.geo", () => new THREE.IcosahedronGeometry(0.2, 1));
     const haloMat = pooled("lantern.halo.mat", () =>
@@ -611,6 +614,7 @@ export const FLORA_BUILDERS = {
     );
     const halo = new THREE.Mesh(haloGeo, haloMat);
     halo.position.copy(orb.position);
+    halo.layers.enable(BLOOM_LAYER);
     g.add(halo);
     return g;
   },
@@ -774,6 +778,7 @@ export const FLORA_BUILDERS = {
       shard.rotation.y = Math.random() * Math.PI * 2;
       shard.rotation.z = (Math.random() - 0.5) * 0.4;
       shard.castShadow = true;
+      shard.layers.enable(BLOOM_LAYER);
       g.add(shard);
     }
     // warm halo near the base — small additive sphere reading as crack-light
@@ -790,6 +795,7 @@ export const FLORA_BUILDERS = {
     const halo = new THREE.Mesh(haloGeo, haloMat);
     halo.position.y = 0.05;
     halo.scale.set(1.2, 0.4, 1.2);
+    halo.layers.enable(BLOOM_LAYER);
     g.add(halo);
     return g;
   },

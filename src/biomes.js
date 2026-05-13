@@ -272,11 +272,12 @@ export const WILDFLOWER_PALETTES = {
   obsidian:["#ff7a2a", "#ffb060", "#fcbf49"],
 };
 
+// 0 = no grass field (burnt/volcanic biomes read wrong with grass blades).
 export const GRASS_DENSITY = {
-  verdant: 600, desert: 140, frozen: 240,
-  marsh:   500, ashen:  110, golden: 750,
+  verdant: 600, desert:   0, frozen: 240,
+  marsh:   500, ashen:    0, golden: 750,
   mossy:   650, twilight: 540, coral: 200,
-  cloud:   180, grove:   400, obsidian: 80,
+  cloud:   180, grove:   400, obsidian: 0,
 };
 // Per-biome rejection threshold for the grass density noise. Blades whose
 // underlying noise sample at world XZ falls below this threshold are not

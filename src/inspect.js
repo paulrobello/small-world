@@ -6,6 +6,7 @@ import { makeCreature, makeCaterpillar, stepCreature, stepCaterpillar } from "./
 import { FLORA_BUILDERS, resetFloraPool } from "./flora.js";
 import { mulberry32 } from "./seed.js";
 import { jitterGeo, applyWindSway } from "./util.js";
+import { BLOOM_LAYER } from "./postfx.js";
 import { makeGrassMaterial } from "./grass.js";
 import { createNoise2D } from "simplex-noise";
 
@@ -66,6 +67,7 @@ const INSPECT_SCENERY_BUILDERS = {
       const a = (i / 3) * Math.PI * 2;
       flower.position.set(Math.cos(a) * 0.18, 0, Math.sin(a) * 0.18);
       flower.castShadow = true;
+      if (biome.glowFlowers) flower.layers.enable(BLOOM_LAYER);
       g.add(flower);
     }
     return g;

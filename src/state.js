@@ -40,6 +40,11 @@ export const state = {
   waterReflection: null,
   mountainBasePos: null,
   dustKicks: [],
+  // Collision discs for tall/solid flora. Populated in generateWorld during the
+  // flora placement loop; consumed by stepCreature / stepCaterpillar for
+  // tangent-slide obstacle avoidance. Entries: { x, z, r }. Empty array when
+  // no obstacle-class flora exists.
+  obstacles: [],
   // Set by makeGrassField in src/grass.js. Holds { mesh, uniforms } so
   // stepGrass can update uCameraXZ each frame and disposeGroup-style
   // teardown can null it out on regen. Mesh itself is parented to

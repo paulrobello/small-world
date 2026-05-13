@@ -4,6 +4,7 @@ import { jitterGeo } from "./util.js";
 import { pickGroundPoint, nearestCenter } from "./terrain.js";
 import { makeDirtPuff, makeDustKick } from "./environment.js";
 import { applyShellFur } from "./fur.js";
+import { BLOOM_LAYER } from "./postfx.js";
 
 // Terrain Y below which ground creatures are considered underwater. The water
 // plane sits a touch below 0 and oscillates ~±0.08; clamping walkers to
@@ -155,6 +156,7 @@ export function makeCreature(biome, opts = {}) {
     eyeParts.push(eye);
     const pupil = new THREE.Mesh(pupilGeo, pupilMat);
     pupil.position.set(sign * 0.16, 0.17, 0.48);
+    if (biome.glowEyes) pupil.layers.enable(BLOOM_LAYER);
     group.add(pupil);
     eyeParts.push(pupil);
   }
@@ -183,6 +185,7 @@ export function makeCreature(biome, opts = {}) {
           emissive: new THREE.Color(biome.accent).multiplyScalar(0.35),
         })
       );
+      tip.layers.enable(BLOOM_LAYER);
       // Parented to the stalk so the tip rigidly tracks the stalk top
       // through any rotation. Local +Y on the cylinder is the stalk's top.
       tip.position.set(0, 0.16, 0);
@@ -508,6 +511,58 @@ export function wakeCreature(c) {
   c.nextThink = 0.3 + Math.random() * 0.6;
 }
 
+// Tangent-slide obstacle avoidance for grounded movers (walkers and
+// caterpillars). Probes state.obstacles against the candidate next step. If
+// the step would penetrate an obstacle, projects motion onto the perimeter
+// tangent that best matches the current heading and returns the slid
+// position plus a heading aligned with the tangent (so subsequent frames
+// don't keep re-tripping the same collision and wobble in place). If the
+// slide candidate is itself wedged into another obstacle, returns the
+// creature's current position with a heading pointing outward from the
+// first hit, deferring real movement to the next think cycle.
+//
+// Returns null when the path is clear — caller commits the straight step.
+function avoidObstacles(px, pz, nx, nz, heading, step, cr) {
+  const obs = state.obstacles;
+  if (!obs || obs.length === 0) return null;
+  for (let i = 0; i < obs.length; i++) {
+    const o = obs[i];
+    const ox = nx - o.x;
+    const oz = nz - o.z;
+    const minD = o.r + cr;
+    if (ox * ox + oz * oz >= minD * minD) continue;
+    const rx = px - o.x;
+    const rz = pz - o.z;
+    const rlen = Math.sqrt(rx * rx + rz * rz) || 1;
+    const nrx = rx / rlen;
+    const nrz = rz / rlen;
+    let tx = -nrz;
+    let tz = nrx;
+    if (tx * Math.cos(heading) + tz * Math.sin(heading) < 0) {
+      tx = nrz;
+      tz = -nrx;
+    }
+    const sx = px + tx * step;
+    const sz = pz + tz * step;
+    for (let j = 0; j < obs.length; j++) {
+      if (j === i) continue;
+      const o2 = obs[j];
+      const dx2 = sx - o2.x;
+      const dz2 = sz - o2.z;
+      const md = o2.r + cr;
+      if (dx2 * dx2 + dz2 * dz2 < md * md) {
+        return {
+          nx: px,
+          nz: pz,
+          heading: Math.atan2(nrz, nrx) + (Math.random() - 0.5) * 0.5,
+        };
+      }
+    }
+    return { nx: sx, nz: sz, heading: Math.atan2(tz, tx) };
+  }
+  return null;
+}
+
 export function stepCreature(c, dt, t, heightFn) {
   c.age += dt;
   c.nextThink -= dt;
@@ -826,8 +881,19 @@ export function stepCreature(c, dt, t, heightFn) {
         Math.atan2(target.cz - pos.z, target.cx - pos.x) +
         (Math.random() - 0.5) * 0.5;
     } else {
-      pos.x = nx;
-      pos.z = nz;
+      // Obstacle slide — only for grounded walkers; airborne fliers pass over
+      // tree/mushroom tops so the trunk discs aren't relevant up there.
+      const slide = c.flies
+        ? null
+        : avoidObstacles(pos.x, pos.z, nx, nz, c.heading, step, 0.25 * c.scale);
+      if (slide) {
+        pos.x = slide.nx;
+        pos.z = slide.nz;
+        c.heading = slide.heading;
+      } else {
+        pos.x = nx;
+        pos.z = nz;
+      }
     }
     c.bob += dt * c.bobSpeed;
   } else {
@@ -1055,6 +1121,7 @@ export function makeCaterpillar(biome, opts = {}) {
         emissive: new THREE.Color(biome.accent).multiplyScalar(0.4),
       })
     );
+    tip.layers.enable(BLOOM_LAYER);
     tip.position.set(0, 0.11, 0);
     stalk.add(tip);
   }
@@ -1212,6 +1279,22 @@ export function stepCaterpillar(c, dt, t, heightFn) {
       (Math.random() - 0.5) * 0.4;
     nx = head.position.x + Math.cos(c.heading) * step;
     nz = head.position.z + Math.sin(c.heading) * step;
+  }
+
+  // Obstacle slide — small radius since caterpillars are skinny.
+  const slide = avoidObstacles(
+    head.position.x,
+    head.position.z,
+    nx,
+    nz,
+    c.heading,
+    step,
+    0.18 * c.scale
+  );
+  if (slide) {
+    nx = slide.nx;
+    nz = slide.nz;
+    c.heading = slide.heading;
   }
 
   // all segments — including the head — sit at the same base offset so

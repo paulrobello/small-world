@@ -198,6 +198,7 @@ export function generateWorld(seed) {
   state.dirtPuffs = [];
   state.dustKicks = [];
   state.flowerSpots = [];
+  state.obstacles = [];
   state.particles = null;
   state.waterMesh = null;
   state.grass = null;
@@ -364,6 +365,18 @@ export function generateWorld(seed) {
   };
   const FLORA_FOOTPRINT_DEFAULT = 0.20;
   const FLORA_BURY = 0.08; // extra sink so the seam is hidden in soft fog
+  // Flora kinds tall/solid enough that walkers should route around them
+  // instead of clipping through. Low-profile or soft kinds (rocks, ferns,
+  // berrybushes, coral, reeds) are skipped — creatures can step over them
+  // visually and adding collision there reads as fussy.
+  const OBSTACLE_KINDS = new Set([
+    "tree", "pine", "deadtree", "mushroom", "bigmushroom",
+    "pillar", "archstone", "balloontree", "crystal",
+    "lantern", "obsidianshard", "skull",
+  ]);
+  // Extra pad on top of the slope-plant footprint so creature bodies don't
+  // visually nose-clip the trunk. fp itself is already ~1.5× the trunk radius.
+  const OBSTACLE_PAD = 1.15;
   while (placed < floraTarget && attempts < floraTarget * 6) {
     attempts++;
     const p = pickGroundPoint(0.88);
@@ -398,11 +411,15 @@ export function generateWorld(seed) {
       crystalCount++;
     }
     state.world.add(f);
+    if (OBSTACLE_KINDS.has(kind)) {
+      state.obstacles.push({ x: p.x, z: p.z, r: fp * OBSTACLE_PAD });
+    }
     placed++;
   }
 
   // ground cover — instanced grass / wildflowers / pebbles
-  state.world.add(makeGrassField(biome, state.heightFn));
+  const grass = makeGrassField(biome, state.heightFn);
+  if (grass) state.world.add(grass);
   for (const m of makeWildflowerField(biome, state.heightFn)) {
     state.world.add(m);
     if (m.userData.positions) state.flowerSpots.push(...m.userData.positions);

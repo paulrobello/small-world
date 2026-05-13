@@ -4,6 +4,7 @@ import { jitterGeo, applyWindSway } from "./util.js";
 import { pickGroundPoint } from "./terrain.js";
 import { WILDFLOWER_PALETTES, FLOWER_DENSITY, PEBBLE_DENSITY } from "./biomes.js";
 import { LOWFX, LOWFX_DENSITY } from "./lowfx.js";
+import { BLOOM_LAYER } from "./postfx.js";
 
 const _lowfxScale = (n) => (LOWFX ? Math.max(1, Math.round(n * LOWFX_DENSITY)) : n);
 
@@ -549,14 +550,14 @@ export function makeWildflowerField(biome, heightFn) {
       }),
       1.2
     );
-    meshes.push(
-      placeInstanced(g, m, perColor, heightFn, {
-        yOffset: 0.08,
-        minScale: 0.6,
-        maxScale: 1.5,
-        tilt: 0,
-      })
-    );
+    const inst = placeInstanced(g, m, perColor, heightFn, {
+      yOffset: 0.08,
+      minScale: 0.6,
+      maxScale: 1.5,
+      tilt: 0,
+    });
+    if (biome.glowFlowers) inst.layers.enable(BLOOM_LAYER);
+    meshes.push(inst);
   }
   return meshes;
 }

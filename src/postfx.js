@@ -6,6 +6,16 @@ import { UnrealBloomPass } from "three/addons/postprocessing/UnrealBloomPass.js"
 import { state } from "./state.js";
 import { LOWFX } from "./lowfx.js";
 
+// Selective bloom render layer. Meshes opted-in to bloom (glow eyes, glow
+// flowers, crystal cores, lantern orbs, obsidian shards) call
+// `mesh.layers.enable(BLOOM_LAYER)` at construction time. The post-fx pipeline
+// then runs a second scene render with the camera limited to this layer; the
+// bloom pass operates on that bloom-only image, and the result is added back
+// onto the main render. This decouples bloom from luminance — lit
+// cream/pastel creature bodies can be as bright as they like and still won't
+// bloom because they don't carry this layer flag.
+export const BLOOM_LAYER = 1;
+
 // Custom output: sRGB OETF only, no tone-mapping. The standard OutputPass
 // would apply ACES a second time on top of RenderPass's tone-mapped output,
 // crushing very dark biomes (obsidian) to pure black. Tone-mapping is already
@@ -33,6 +43,38 @@ const _srgbOutputShader = {
     void main() {
       vec4 t = texture2D(tDiffuse, vUv);
       gl_FragColor = vec4(linearToSRGB(t.rgb), t.a);
+    }
+  `,
+};
+
+// Additive composite of the bloom-only blurred image on top of the main
+// render. tBloom is the bloom composer's output (layer-1 scene blurred by
+// UnrealBloomPass); when bloom is disabled the strength uniform is 0 and the
+// shader passes through unchanged.
+const _bloomCompositeShader = {
+  uniforms: {
+    tDiffuse: { value: null },
+    tBloom: { value: null },
+    uStrength: { value: 1.0 },
+  },
+  vertexShader: `
+    varying vec2 vUv;
+    void main() {
+      vUv = uv;
+      gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+    }
+  `,
+  fragmentShader: `
+    precision highp float;
+    uniform sampler2D tDiffuse;
+    uniform sampler2D tBloom;
+    uniform float uStrength;
+    varying vec2 vUv;
+    void main() {
+      vec4 base = texture2D(tDiffuse, vUv);
+      if (uStrength <= 0.001) { gl_FragColor = base; return; }
+      vec3 bloom = texture2D(tBloom, vUv).rgb;
+      gl_FragColor = vec4(base.rgb + bloom * uStrength, base.a);
     }
   `,
 };
@@ -300,19 +342,83 @@ export function initPostFX(renderer, scene, camera) {
   // Expose for consumers (environment.js soft particles).
   state.depthTexture = depthTexture;
 
+  // Bloom-only composer: renders the scene with non-emissive meshes swapped
+  // to a black material (so they write depth but contribute zero color), then
+  // blurs the bright pixels with UnrealBloomPass. Threshold stays at 0 — the
+  // BLOOM_LAYER opt-in *is* the gate. Material swap (vs. camera.layers
+  // filtering) is what lets the depth buffer fill properly: foreground
+  // geometry occludes bloom emissives behind it, so glow lights don't punch
+  // through walls/rocks/trunks.
+  const bloomComposer = new EffectComposer(renderer);
+  bloomComposer.renderToScreen = false;
+  bloomComposer.setSize(size.x, size.y);
+  const bloomRenderPass = new RenderPass(scene, camera);
+  // Black background for the bloom-only pass — non-layer-1 meshes are clipped
+  // out, so we don't want the regular sky/biome BG bleeding in.
+  bloomRenderPass.clearColor = new THREE.Color(0, 0, 0);
+  bloomRenderPass.clearAlpha = 1;
+  bloomRenderPass.clear = true;
+  bloomComposer.addPass(bloomRenderPass);
+  // strength / radius / threshold — strength stays moderate; radius small so
+  // the glow halo doesn't bleed across the whole frame; threshold 0 since
+  // BLOOM_LAYER is the gate.
+  const bloomPass = new UnrealBloomPass(size.clone(), 0.6, 0.35, 0.0);
+  bloomComposer.addPass(bloomPass);
+
   const composer = new EffectComposer(renderer);
   composer.setSize(size.x, size.y);
 
   const renderPass = new RenderPass(scene, camera);
   composer.addPass(renderPass);
 
-  // Threshold 0.96: only true emissive surfaces (crystal lights, lantern orbs,
-  // glowFlowers/glowEyes, the sun) bloom. Lit creature bodies with light
-  // palette colours like cream (#fff2b3) hit ~0.93 luminance and would
-  // otherwise glow as if emissive too.
-  const bloomPass = new UnrealBloomPass(size.clone(), 0.55, 0.45, 0.96);
-  bloomPass.enabled = state.userSettings.bloom;
-  composer.addPass(bloomPass);
+  // Bloom-render masking. For each non-bloom-layer mesh:
+  //  • depth-writing materials (terrain, trunks, creature bodies, fur
+  //    shells) get swapped to a solid black material so they occlude bloom
+  //    emissives behind them but contribute zero color.
+  //  • non-depth-writing materials (sky dome, particles, cloud sprites,
+  //    additive halos that aren't on the bloom layer) are hidden — they
+  //    don't occlude anyway, and rendering their color would flood the
+  //    bloom RT with biome-sky gradient.
+  // Saved state lives on obj.userData so traversal restoration is O(1)
+  // per node and doesn't need a side map.
+  const _bloomDarkMaterial = new THREE.MeshBasicMaterial({ color: 0x000000 });
+  const _bloomLayerProbe = new THREE.Layers();
+  _bloomLayerProbe.set(BLOOM_LAYER);
+  function _darkenForBloom(obj) {
+    if (!obj.isMesh) return;
+    if (obj.layers.test(_bloomLayerProbe)) return;
+    const m = obj.material;
+    if (!m) return;
+    const dw = Array.isArray(m) ? m[0]?.depthWrite : m.depthWrite;
+    if (dw === false) {
+      obj.userData._bloomHidden = true;
+      obj.visible = false;
+    } else {
+      obj.userData._origMat = m;
+      obj.material = _bloomDarkMaterial;
+    }
+  }
+  function _restoreAfterBloom(obj) {
+    if (obj.userData._bloomHidden) {
+      obj.visible = true;
+      obj.userData._bloomHidden = false;
+    }
+    if (obj.userData._origMat) {
+      obj.material = obj.userData._origMat;
+      obj.userData._origMat = null;
+    }
+  }
+
+  // Composite the bloom-only blurred output onto the main render. Disabled
+  // (strength=0) when state.userSettings.bloom is off — also lets the bloom
+  // composer skip rendering on that path.
+  const bloomCompositePass = new ShaderPass(_bloomCompositeShader);
+  // Composite weight on top of the bloom pass's own strength. Lowish so the
+  // additive halo reads as a subtle glow rim, not a wash across the frame.
+  const BLOOM_COMPOSITE_STRENGTH = 0.45;
+  bloomCompositePass.uniforms.uStrength.value =
+    state.userSettings.bloom ? BLOOM_COMPOSITE_STRENGTH : 0.0;
+  composer.addPass(bloomCompositePass);
 
   const depthFXPass = new ShaderPass(_depthFXShader);
   depthFXPass.uniforms.tDepth.value = depthTexture;
@@ -372,7 +478,7 @@ export function initPostFX(renderer, scene, camera) {
     // composer chain — soft particles need a composer-rendered scene so
     // they read fresh depth from this frame's pre-pass, not last frame's).
     isActive: () =>
-      bloomPass.enabled ||
+      state.userSettings.bloom ||
       tiltShiftPass.enabled ||
       depthFXPass.enabled ||
       state.userSettings.softParticles,
@@ -380,10 +486,29 @@ export function initPostFX(renderer, scene, camera) {
       if (needsDepth()) renderDepthPrePass(s, cam);
       renderPass.scene = s;
       renderPass.camera = cam;
+      bloomRenderPass.scene = s;
+      bloomRenderPass.camera = cam;
+      if (state.userSettings.bloom) {
+        // Bloom render: walk the scene and swap every non-emissive mesh's
+        // material to black (preserving depth), render, then blur. Depth
+        // occlusion falls out for free — foreground geometry covers bloom
+        // emissives behind it because both write to the bloom RT's depth
+        // buffer. scene.background is the biome sky color; if left set, it
+        // renders as a full-frame fill before any geometry and dominates
+        // the bloom RT, so null it for this pass.
+        const prevBackground = s.background;
+        s.background = null;
+        s.traverse(_darkenForBloom);
+        bloomComposer.render();
+        s.traverse(_restoreAfterBloom);
+        s.background = prevBackground;
+        bloomCompositePass.uniforms.tBloom.value = bloomComposer.readBuffer.texture;
+      }
       composer.render();
     },
     onResize: (w, h) => {
       composer.setSize(w, h);
+      bloomComposer.setSize(w, h);
       bloomPass.setSize(w, h);
       tiltShiftPass.uniforms.uResolution.value.set(w, h);
       depthFXPass.uniforms.uResolution.value.set(w, h);
@@ -393,7 +518,9 @@ export function initPostFX(renderer, scene, camera) {
         Math.max(1, Math.round(h * pr))
       );
     },
-    setBloom: (on) => { bloomPass.enabled = on; },
+    setBloom: (on) => {
+      bloomCompositePass.uniforms.uStrength.value = on ? BLOOM_COMPOSITE_STRENGTH : 0.0;
+    },
     setTiltShift: (on) => { tiltShiftPass.enabled = on; },
     setSoftParticles: () => { /* particle shader reads userSettings directly */ },
     setOutline: (on) => {
