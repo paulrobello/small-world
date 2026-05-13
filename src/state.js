@@ -36,6 +36,11 @@ export const state = {
   waterReflection: null,
   mountainBasePos: null,
   dustKicks: [],
+  // Set by makeGrassField in src/grass.js. Holds { mesh, uniforms } so
+  // stepGrass can update uCameraXZ each frame and disposeGroup-style
+  // teardown can null it out on regen. Mesh itself is parented to
+  // state.world so disposeGroup handles its GPU resources.
+  grass: null,
   postfx: null,
   heightFn: () => 0,
   currentBiome: null,
