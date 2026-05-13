@@ -109,6 +109,8 @@ Regular creatures store their position on `c.group.position` — the group trans
 
 The caterpillar head mirrors the walker terrain-tilt pattern (`stepCreature`'s slope sampling): four `heightFn` samples around the head along heading × perpendicular, then eased pitch/roll into `head.rotation.x`/`.z`. `makeCaterpillar` sets `head.rotation.order = "YXZ"` once at construction so the pitch/roll resolve in the body frame after yaw — without that, a heading-changed caterpillar would roll around world-X. The idle nodding bob is folded into the pitch target so it stacks on top of the slope rather than overwriting it.
 
+Yaw is slewed, not snapped. `c.heading` is the actual direction (used for movement, slope sampling, and visual yaw); `c.headingTarget` is the aim. Random thinks and edge avoidance write `headingTarget`; each frame `c.heading` rotates toward it at `c.turnRate` rad/s (caterpillar 3.0, snail 2.0) via shortest-angle diff. Obstacle slides snap both `heading` and `headingTarget` to `slide.heading` because the slide's `nx, nz` is already deflected and the values must match this frame. Any new logic that re-aims a caterpillar should set `headingTarget`, not `heading`, unless it also commits to a same-frame position change.
+
 ### Flier landing system
 
 `makeCreature(flies=true)` creatures have a four-state landing FSM in `stepCreature`: `flying ↔ descending ↔ landed ↔ ascending`. The `landTimer` plus `c.currentHover` (lerping between `hoverCeil = hoverHeight*(1-0.7*sleepiness)` and `restH = 0.35*scale`) drive transitions. Three cross-cutting safeguards:

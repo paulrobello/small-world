@@ -236,6 +236,12 @@ export function makeCaterpillar(biome, opts = {}) {
     segSpacing,
     scale,
     heading: startHeading,
+    headingTarget: startHeading,
+    // rad/s the heading can slew toward headingTarget. Snails turn a bit
+    // more leisurely than caterpillars; both are fast enough that edge
+    // avoidance (which sets target every frame while over the buffer)
+    // doesn't let them stray past the island.
+    turnRate: isSnail ? 2.0 : 3.0,
     speed: isSnail ? 0.12 + Math.random() * 0.08 : 0.5 + Math.random() * 0.3,
     nextThink: Math.random() * 2.5,
     age: Math.random() * 100,
@@ -253,9 +259,21 @@ export function stepCaterpillar(c, dt, t, heightFn) {
   c.age += dt;
   c.nextThink -= dt;
   if (c.nextThink <= 0) {
-    c.heading += (Math.random() - 0.5) * 0.9;
+    // Random thinks aim a *target* heading; c.heading then slews toward it
+    // at c.turnRate (rad/s) so the head doesn't whip-snap before the body
+    // catches up. Movement, slope sampling, and visual yaw all read the
+    // smoothed c.heading, so they stay consistent through the turn.
+    c.headingTarget = c.heading + (Math.random() - 0.5) * 0.9;
     c.nextThink = 1.4 + Math.random() * 2.5;
   }
+
+  // Slew heading toward headingTarget via shortest-angle diff.
+  const wrapAngle = (a) =>
+    ((a + Math.PI) % (2 * Math.PI) + 2 * Math.PI) % (2 * Math.PI) - Math.PI;
+  const dHead = wrapAngle(c.headingTarget - c.heading);
+  const maxTurn = c.turnRate * dt;
+  c.heading +=
+    Math.abs(dHead) <= maxTurn ? dHead : Math.sign(dHead) * maxTurn;
 
   const head = c.segments[0];
   const step = c.speed * dt;
@@ -263,17 +281,18 @@ export function stepCaterpillar(c, dt, t, heightFn) {
   let nz = head.position.z + Math.sin(c.heading) * step;
 
   // edge avoidance — stay on the island plateau, turn back before reaching
-  // the sloped rim. Also turn back from water in water biomes.
+  // the sloped rim. Also turn back from water in water biomes. Edge fires
+  // every frame while predicted nx/nz is past the buffer, so setting the
+  // *target* and letting the slew finish over a few frames keeps the
+  // caterpillar inside the island without any visible snap.
   const near = nearestCenter(nx, nz);
   const ndx = nx - near.cx;
   const ndz = nz - near.cz;
   const wetAhead = state.waterMesh && heightFn(nx, nz) < WATER_AVOID_Y;
   if (Math.sqrt(ndx * ndx + ndz * ndz) > near.radius * 0.94 || wetAhead) {
-    c.heading =
+    c.headingTarget =
       Math.atan2(near.cz - head.position.z, near.cx - head.position.x) +
       (Math.random() - 0.5) * 0.4;
-    nx = head.position.x + Math.cos(c.heading) * step;
-    nz = head.position.z + Math.sin(c.heading) * step;
   }
 
   // Obstacle slide — small radius since caterpillars are skinny. Pass `c`
@@ -296,7 +315,11 @@ export function stepCaterpillar(c, dt, t, heightFn) {
   if (slide) {
     nx = slide.nx;
     nz = slide.nz;
+    // Slide deflections are small and must match the deflected nx/nz this
+    // frame, so snap heading directly. Also retarget so the next frame's
+    // slew doesn't drag heading back to a pre-slide aim.
     c.heading = slide.heading;
+    c.headingTarget = slide.heading;
   }
 
   // all segments — including the head — sit at the same base offset so
