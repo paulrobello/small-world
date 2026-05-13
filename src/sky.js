@@ -140,10 +140,11 @@ export function makeMountainBackdrop(biome) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Cloud layer — a ring of soft circular sprites floating beyond the mountain
-// silhouettes. Per-biome density (cloudCount) and tint live on the biome
-// config; biomes with cloudCount 0 / undefined get no clouds (desert, ashen).
-// Clouds drift slowly around the horizon via stepClouds.
+// Cloud layer — soft circular sprites floating beyond the mountain silhouettes.
+// Per-biome density (cloudCount) and tint live on the biome config; biomes with
+// cloudCount 0 / undefined get no clouds (desert, ashen). Sprites are placed in
+// loose clusters across the upper hemisphere so the sky reads as puffy clumps
+// instead of evenly-spaced dots. Clouds drift slowly via stepClouds.
 // ─────────────────────────────────────────────────────────────────────────────
 let _cloudTex = null;
 function getCloudTexture() {
@@ -198,36 +199,70 @@ export function makeCloudLayer(biome) {
     fog: false,
   });
 
-  // Distribute across the upper hemisphere — sphere radius 180-240, polar
-  // angle theta from 25° (overhead) to 82° (near horizon). Without this the
-  // clouds form a ring band that's only ever visible looking outward; the
-  // hemisphere cap puts some directly above the camera so they're in view
-  // at every orbit angle.
+  // Distribute cluster centers across the upper hemisphere — sphere radius
+  // 180-240, polar angle theta from 25° (overhead) to 82° (near horizon).
+  // The hemisphere cap keeps clouds visible from every orbit angle; clustering
+  // several sprites around each center makes them read as cottony puffs rather
+  // than a regular dotted field.
   const sprites = [];
-  for (let i = 0; i < count; i++) {
-    const phi = (i / count) * Math.PI * 2 + (Math.random() - 0.5) * 0.5;
-    // bias toward horizon (cos-weighted sampling gives uniform area, but
-    // we want a touch more overhead density than uniform sphere would give)
-    const thetaMin = 0.44; // ~25° from zenith
-    const thetaMax = 1.43; // ~82° from zenith
-    const theta = thetaMin + Math.random() * (thetaMax - thetaMin);
-    const sphereR = 180 + Math.random() * 60;
-    const xzR = sphereR * Math.sin(theta);
-    const y = sphereR * Math.cos(theta);
-    const s = new THREE.Sprite(mat.clone());
-    s.position.set(Math.cos(phi) * xzR, y, Math.sin(phi) * xzR);
-    // Small puff sizes — at sphere radius ~200 a width of 18 reads as ~5° FOV,
-    // which is what a real distant cloud occupies.
-    const scale = 10 + Math.random() * 8;
-    // Wider than tall — clouds aren't square
-    s.scale.set(scale * 1.8, scale * 0.7, 1);
-    s.userData.driftSpeed = 0.012 + Math.random() * 0.018;
-    s.userData.angle = phi;
-    s.userData.radius = xzR;
-    s.userData.height = y;
-    s.renderOrder = -30;
-    group.add(s);
-    sprites.push(s);
+  const thetaMin = 0.44; // ~25° from zenith
+  const thetaMax = 1.43; // ~82° from zenith
+  const clusterCount = Math.max(1, Math.ceil(count / 4));
+  let remaining = count;
+  for (let ci = 0; ci < clusterCount; ci++) {
+    const remainingClusters = clusterCount - ci;
+    const evenShare = Math.ceil(remaining / remainingClusters);
+    const maxThisCluster = remaining - (remainingClusters - 1);
+    const clusterSize = remainingClusters === 1
+      ? remaining
+      : Math.max(
+        1,
+        Math.min(maxThisCluster, evenShare + Math.floor(Math.random() * 3) - 1)
+      );
+    remaining -= clusterSize;
+
+    const phiStep = Math.PI * 2 / clusterCount;
+    const clusterPhi = ci * phiStep + (Math.random() - 0.5) * phiStep * 0.55;
+    const clusterTheta = thetaMin + Math.random() * (thetaMax - thetaMin);
+    const clusterSphereR = 180 + Math.random() * 60;
+    const clusterSpread = 0.024 + Math.random() * 0.026;
+    const driftSpeed = 0.012 + Math.random() * 0.018;
+
+    for (let i = 0; i < clusterSize; i++) {
+      const around = (i / clusterSize) * Math.PI * 2 + Math.random() * 0.9;
+      const offset = Math.sqrt(Math.random()) * clusterSpread;
+      const phi = clusterPhi + Math.cos(around) * offset / Math.max(0.45, Math.sin(clusterTheta));
+      const theta = Math.max(
+        thetaMin,
+        Math.min(
+          thetaMax,
+          clusterTheta + Math.sin(around) * offset * 0.8 + (Math.random() - 0.5) * 0.025
+        )
+      );
+      const sphereR = clusterSphereR + (Math.random() - 0.5) * 10;
+      const xzR = sphereR * Math.sin(theta);
+      const y = sphereR * Math.cos(theta);
+      const s = new THREE.Sprite(mat.clone());
+      s.position.set(Math.cos(phi) * xzR, y, Math.sin(phi) * xzR);
+      // Broad puffs overlap inside each cluster so separate sprites merge into
+      // one cottony mass instead of reading as individual dots. In-cluster
+      // variation keeps the silhouette soft and hand-placed.
+      const scale = 14 + Math.random() * 10;
+      s.scale.set(
+        scale * (2.0 + Math.random() * 0.65),
+        scale * (0.72 + Math.random() * 0.26),
+        1
+      );
+      s.material.opacity *= 0.72 + Math.random() * 0.3;
+      s.material.rotation = (Math.random() - 0.5) * 0.45;
+      s.userData.driftSpeed = driftSpeed;
+      s.userData.angle = phi;
+      s.userData.radius = xzR;
+      s.userData.height = y;
+      s.renderOrder = -30;
+      group.add(s);
+      sprites.push(s);
+    }
   }
   group.userData.sprites = sprites;
   group.userData.baseTint = tint.clone();
