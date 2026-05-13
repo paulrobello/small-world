@@ -24,9 +24,12 @@ export function jitterGeo(geo, amount = 0.05) {
 }
 
 export function applyWindSway(material, strength = 1.0) {
+  // Chain any prior onBeforeCompile so multiple patches on the same material
+  // compose cleanly. `prev` is the previous handler captured before reassign;
+  // it's necessarily a different function than the closure we install below.
   const prev = material.onBeforeCompile;
   material.onBeforeCompile = (shader) => {
-    if (prev && prev !== material.onBeforeCompile) prev(shader);
+    if (prev) prev(shader);
     shader.uniforms.uTime = state.windUniforms.uTime;
     shader.uniforms.uWindStrength = { value: strength };
     shader.uniforms.uFoliageWind = state.windUniforms.uFoliageWind;
@@ -41,15 +44,30 @@ export function applyWindSway(material, strength = 1.0) {
         {
           float windY = max(transformed.y, 0.0);
           float windAmp = windY * windY * uWindStrength * uFoliageWind;
+          // World-space wind: noise is sampled in world coords so neighbouring
+          // instances bend coherently. For InstancedMesh with random per-instance
+          // Y yaw (wildflowers, etc.) the world-space bend has to be inverse-
+          // rotated through the instance's XZ basis before being added to the
+          // mesh-local transformed.xz — otherwise each yawed instance bends
+          // along its own rotated local-X and the field reads as random
+          // motion instead of "wind blowing through." Same trick the grass
+          // shader uses.
           #ifdef USE_INSTANCING
             vec4 wp = modelMatrix * instanceMatrix * vec4(transformed, 1.0);
+            vec2 axW = vec2(instanceMatrix[0].x, instanceMatrix[0].z);
+            vec2 azW = vec2(instanceMatrix[2].x, instanceMatrix[2].z);
+            float invXZScaleSq = 1.0 / max(dot(axW, axW), 1e-6);
           #else
             vec4 wp = modelMatrix * vec4(transformed, 1.0);
+            vec2 axW = vec2(1.0, 0.0);
+            vec2 azW = vec2(0.0, 1.0);
+            float invXZScaleSq = 1.0;
           #endif
           float w1 = sin(uTime * 1.4 + wp.x * 0.30 + wp.z * 0.40);
           float w2 = sin(uTime * 0.9 + wp.x * 0.15 - wp.z * 0.25);
-          transformed.x += w1 * windAmp * 0.06;
-          transformed.z += w2 * windAmp * 0.05;
+          vec2 windWorld = vec2(w1 * windAmp * 0.06, w2 * windAmp * 0.05);
+          transformed.x += dot(axW, windWorld) * invXZScaleSq;
+          transformed.z += dot(azW, windWorld) * invXZScaleSq;
         }`
       );
   };

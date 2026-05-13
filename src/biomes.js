@@ -37,6 +37,9 @@ export const BIOMES = [
     particle: "sand",
     creatureColors: ["#fefae0", "#dda15e", "#bc6c25", "#3d405b"],
     creatureCount: [6, 11],
+    // Butterflies read as out-of-place over the dunes — the desert gets fly
+    // swarms over skulls instead, set up during flora placement.
+    noButterflies: true,
     dusk: { sky: "#e07a4c", fog: "#b85a3a", sun: "#ff8050", ground: "#5e2828" },
     night: { sky: "#160a18", fog: "#0d0716", sun: "#7068a8", ground: "#1a0a0e" },
   },

@@ -26,6 +26,7 @@ import {
   makeButterfly,
   makeBee,
   makeSwarm,
+  resetCreaturePool,
 } from "./fauna.js";
 import { makeFlock } from "./birds.js";
 import { makeShadowDisks } from "./shadows.js";
@@ -47,7 +48,7 @@ import {
   stepClouds,
   updateSkyColors,
 } from "./sky.js";
-import { makeWaterReflection } from "./reflection.js";
+import { makeWaterReflection, disposeWaterReflection } from "./reflection.js";
 import { LOWFX, LOWFX_DENSITY } from "./lowfx.js";
 
 let _scene = null;
@@ -166,6 +167,12 @@ export function generateWorld(seed) {
   // during world construction is deterministic. Per-frame animation
   // (stepCreature/stepFlock/stepParticles) runs after we restore, so it
   // keeps its natural variation.
+  //
+  // WARNING — synchronous only. Anything scheduled via Promise.resolve(),
+  // setTimeout, requestAnimationFrame, or a microtask queue inside this
+  // function will run AFTER the restore at the bottom and silently observe
+  // the real Math.random, breaking determinism. All builders must run
+  // synchronously between the patch and the restore.
   const originalRandom = Math.random;
   Math.random = mulberry32(seed);
 
@@ -181,11 +188,12 @@ export function generateWorld(seed) {
 
   // clear
   disposeGroup(state.world);
-  // Dispose previous reflection's WebGL render target — disposeGroup only walks
-  // state.world, and the RT lives on state.waterReflection instead.
-  if (state.waterReflection && state.waterReflection.rt) {
-    state.waterReflection.rt.dispose();
-  }
+  // Dispose previous reflection's WebGL render target + clear its cloned
+  // scene — disposeGroup only walks state.world, and the reflection lives on
+  // state.waterReflection. Clearing the scene before nulling the ref ensures
+  // a stray updateWaterReflection call between here and the new
+  // makeWaterReflection below can't sample disposed materials.
+  disposeWaterReflection(state.waterReflection);
   state.waterReflection = null;
   _scene.remove(state.world);
   state.world = new THREE.Group();
@@ -208,19 +216,20 @@ export function generateWorld(seed) {
   // release any followed creature — the entity it pointed to no longer exists
   _releaseFollow();
 
-  // reset the flora resource pool — previous-world materials/geometries were
-  // just disposed via disposeGroup, so we can't reuse them
+  // reset the flora + creature resource pools — previous-world
+  // materials/geometries were just disposed via disposeGroup, so we can't
+  // reuse them
   resetFloraPool();
+  resetCreaturePool();
 
   state.currentBiome = biome;
   state.currentSeed = seed;
 
-  // Very dark biomes (obsidian, ashen) interact poorly with UnrealBloomPass:
-  // the additive blend on a HalfFloat target loses precision against their
-  // near-zero linear values and crushes the whole scene to pure black.
-  // Force bloom off for them; the user's checkbox is unchanged so it comes
-  // back automatically on the next biome.
-  if (state.postfx) state.postfx.setBloom(state.userSettings.bloom && !biome.darkBiome);
+  // Bloom is purely additive in the custom composite (base + bloom*uStrength,
+  // see _bloomCompositeShader). It can only brighten the frame, so darkBiomes
+  // can keep bloom on — and the obsidian shard / glow eye / ember halos are
+  // exactly the visual feature those moody biomes benefit from.
+  if (state.postfx) state.postfx.setBloom(state.userSettings.bloom);
   // depth-fog post pass tints distant pixels toward the same atmosphere color
   // as the in-scene FogExp2, just with a more painterly far-field falloff.
   if (state.postfx && state.postfx.setDepthFogColor) {
@@ -554,7 +563,7 @@ export function generateWorld(seed) {
   const flowerDensity = FLOWER_DENSITY[biome.id] ?? 100;
   const bMin = Math.max(2, Math.floor(flowerDensity / 30));
   const bMax = Math.max(bMin + 1, Math.floor(flowerDensity / 14));
-  const nbutterflies = biome.id === "desert"
+  const nbutterflies = biome.noButterflies
     ? 0
     : bMin + Math.floor(Math.random() * (bMax - bMin + 1));
   const palette = WILDFLOWER_PALETTES[biome.id] ?? ["#ffffff"];

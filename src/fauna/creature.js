@@ -18,6 +18,25 @@ const PERSONALITIES = {
 };
 const PERSONALITY_NAMES = Object.keys(PERSONALITIES);
 
+// Per-regen creature resource pool — shared eye/pupil materials and the
+// constant geometries used by every creature. `resetCreaturePool()` is
+// called at the top of each generateWorld, so disposeGroup correctly tears
+// down the previous regen's pooled objects (each lives in state.world via
+// the first creature that consumed it). Without pooling, every creature
+// would allocate its own copies of identical resources.
+let _creaturePool = new Map();
+export function resetCreaturePool() {
+  _creaturePool = new Map();
+}
+function pooled(key, factory) {
+  let v = _creaturePool.get(key);
+  if (v === undefined) {
+    v = factory();
+    _creaturePool.set(key, v);
+  }
+  return v;
+}
+
 // Shared single-"z" texture for the night-sleep particles. Built lazily on
 // first drowsy creature, then reused across every spawned z for the session.
 let _zTexture = null;
@@ -133,24 +152,25 @@ export function makeCreature(biome, opts = {}) {
   belly.userData.baseScale = belly.scale.clone();
   group.add(belly);
 
-  // eyes
-  const eyeMat = new THREE.MeshStandardMaterial({
+  // eyes — material and geometry are uniform across every creature of a
+  // single regen, so they're pulled from the per-regen pool.
+  const eyeMat = pooled("eye.mat", () => new THREE.MeshStandardMaterial({
     color: 0xfafaf2,
     roughness: 0.15,
-  });
+  }));
   const pupilMat = biome.glowEyes
-    ? new THREE.MeshStandardMaterial({
+    ? pooled("pupil.mat.glow", () => new THREE.MeshStandardMaterial({
         color: new THREE.Color(biome.accent),
         emissive: new THREE.Color(biome.accent),
         emissiveIntensity: 1.4,
         roughness: 0.3,
-      })
-    : new THREE.MeshStandardMaterial({
+      }))
+    : pooled("pupil.mat", () => new THREE.MeshStandardMaterial({
         color: 0x0a0a0a,
         roughness: 0.05,
-      });
-  const eyeGeo = new THREE.SphereGeometry(0.11, 10, 8);
-  const pupilGeo = new THREE.SphereGeometry(0.05, 8, 8);
+      }));
+  const eyeGeo = pooled("eye.geo", () => new THREE.SphereGeometry(0.11, 10, 8));
+  const pupilGeo = pooled("pupil.geo", () => new THREE.SphereGeometry(0.05, 8, 8));
   const eyeParts = [];
   for (const sign of [-1, 1]) {
     const eye = new THREE.Mesh(eyeGeo, eyeMat);
@@ -283,9 +303,15 @@ export function makeCreature(biome, opts = {}) {
       color: bodyCol.clone().offsetHSL(0, 0, -0.3),
       flatShading: true,
     });
-    // cylinder of length 1 with its origin at the top so scale.y = length
-    const legGeoTemplate = new THREE.CylinderGeometry(0.045, 0.06, 1, 6);
-    legGeoTemplate.translate(0, -0.5, 0);
+    // cylinder of length 1 with its origin at the top so scale.y = length.
+    // Geometry data is identical for every leg of every creature — pool a
+    // single shared instance instead of allocating + disposing per creature.
+    const legGeo = pooled("leg.geo", () => {
+      const g = new THREE.CylinderGeometry(0.045, 0.06, 1, 6);
+      g.translate(0, -0.5, 0);
+      return g;
+    });
+    const footGeo = pooled("foot.geo", () => new THREE.SphereGeometry(0.085, 6, 6));
 
     const footPositions = [
       [-0.18, 0.18],
@@ -294,24 +320,20 @@ export function makeCreature(biome, opts = {}) {
       [0.18, -0.18],
     ];
     for (const [fx, fz] of footPositions) {
-      const leg = new THREE.Mesh(legGeoTemplate.clone(), legMat);
+      const leg = new THREE.Mesh(legGeo, legMat);
       leg.position.set(fx, -0.1, fz);
       leg.scale.y = 0.22; // resting length, updated each frame
       leg.castShadow = true;
       group.add(leg);
       legs.push(leg);
 
-      const foot = new THREE.Mesh(
-        new THREE.SphereGeometry(0.085, 6, 6),
-        footMat
-      );
+      const foot = new THREE.Mesh(footGeo, footMat);
       foot.position.set(fx, -0.32, fz);
       foot.scale.set(1.15, 0.55, 1.3);
       foot.castShadow = true;
       group.add(foot);
       feet.push(foot);
     }
-    legGeoTemplate.dispose();
   }
 
   const sizeMul = opts.sizeMul ?? 1;
@@ -642,6 +664,9 @@ export function stepCreature(c, dt, t, heightFn) {
     if (c.belly) c.belly.scale.set(0, 0, 0);
     // antennae retracted so they don't float disconnected above the body
     if (c.antennae) for (const a of c.antennae) a.scale.setScalar(0);
+    // Fur shells are children of the body and inherit its squash — they stay
+    // visible while sleeping (a curled fuzzy creature should still read as
+    // fuzzy, just compressed).
     // keep planted at ground height
     const ground = heightFn(c.group.position.x, c.group.position.z);
     c.group.position.y = ground + 0.28 * c.scale;
@@ -760,13 +785,17 @@ export function stepCreature(c, dt, t, heightFn) {
 
     // No landing on water — if the ground beneath us is below the waterline
     // (or we'd already committed to landing there), bail to "flying" so the
-    // perch lookup retries somewhere on dry land next cycle.
+    // perch lookup retries somewhere on dry land next cycle. Also snap
+    // currentHover up to the cruise ceiling so we don't visibly hover at
+    // restH-altitude over the lake while the per-frame lerp slowly climbs.
     const overWater =
       state.waterMesh && heightFn(c.group.position.x, c.group.position.z) < WATER_AVOID_Y;
     if (overWater && c.landState !== "flying") {
       c.landState = "flying";
       c.landTimer = 4 + Math.random() * 8;
       c.perchTarget = null;
+      const ceil = c.hoverHeight * (1 - 0.7 * c.sleepiness);
+      if (c.currentHover < ceil) c.currentHover = ceil;
     }
 
     // Drowsy fliers want down — force a descent if they're still flying,
@@ -937,6 +966,8 @@ export function stepCreature(c, dt, t, heightFn) {
       speedFactor *= 0.3 + 0.7 * k;
     }
     const step = c.speed * dt * speedFactor;
+    const oldPosX = pos.x;
+    const oldPosZ = pos.z;
     const nx = pos.x + Math.cos(c.heading) * step;
     const nz = pos.z + Math.sin(c.heading) * step;
     // Edge avoidance:
@@ -951,6 +982,13 @@ export function stepCreature(c, dt, t, heightFn) {
     if (c.flies && c.landState === "flying") {
       const planeBound = state.ISLAND_SIZE * 0.46;
       wouldStray = Math.sqrt(nx * nx + nz * nz) > planeBound;
+      // Fliers may cruise across water — they sit at hoverHeight above
+      // the terrain ground, so even over the deepest lake bed they stay
+      // well clear of the water surface. The FSM-side water guard (above)
+      // handles the "dip into water during a state transition" case by
+      // forcing landState=flying and snapping currentHover up the moment
+      // we're over water; this branch only blocks them from straying off
+      // the island plate altogether.
       target = nearestCenter(pos.x, pos.z);
     } else {
       const near = nearestCenter(nx, nz);
@@ -995,6 +1033,22 @@ export function stepCreature(c, dt, t, heightFn) {
         pos.x = nx;
         pos.z = nz;
       }
+    }
+    // Post-commit water guard for walkers. The pre-step water check above
+    // only sees the straight-step nx/nz — obstacle slide (slide.nx/.nz) and
+    // a herd-influence heading rotation can both deflect the committed
+    // position onto a lake without being caught upstream. Revert to the
+    // previous position and reverse heading so next frame steps back
+    // inland. Fliers handle water through their own FSM ("over water →
+    // forced flying" path), so this only applies to ground movers.
+    if (
+      !c.flies &&
+      state.waterMesh &&
+      heightFn(pos.x, pos.z) < WATER_AVOID_Y
+    ) {
+      pos.x = oldPosX;
+      pos.z = oldPosZ;
+      c.heading += Math.PI + (Math.random() - 0.5) * 0.4;
     }
     c.bob += dt * c.bobSpeed;
   } else {

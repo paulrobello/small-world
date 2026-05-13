@@ -322,6 +322,18 @@ export function stepCaterpillar(c, dt, t, heightFn) {
     c.headingTarget = slide.heading;
   }
 
+  // Post-slide water guard. The pre-step `wetAhead` test sees the straight
+  // step but obstacle slide can deflect the head onto a lake. Revert to the
+  // pre-step head position and aim the slew back inland so we step away
+  // from the water next frame.
+  if (state.waterMesh && heightFn(nx, nz) < WATER_AVOID_Y) {
+    nx = head.position.x;
+    nz = head.position.z;
+    const back = nearestCenter(nx, nz);
+    c.headingTarget =
+      Math.atan2(back.cz - nz, back.cx - nx) + (Math.random() - 0.5) * 0.4;
+  }
+
   // all segments — including the head — sit at the same base offset so
   // adjacent spheres at segSpacing = 2*radius actually touch.
   const baseOffset = c.segRadius * 0.7 * c.scale;

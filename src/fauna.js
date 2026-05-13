@@ -6,6 +6,7 @@ export {
   stepCreature,
   lookAtCreature,
   wakeCreature,
+  resetCreaturePool,
 } from "./fauna/creature.js";
 export { makeCaterpillar, stepCaterpillar } from "./fauna/caterpillar.js";
 export { makeButterfly, stepButterfly } from "./fauna/butterfly.js";

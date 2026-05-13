@@ -46,12 +46,20 @@ export function makeShadowDisks(biome) {
     fog: false,
   });
   const mesh = new THREE.InstancedMesh(geo, mat, cap);
+  // Buffer is rewritten every frame from stepShadowDisks — declare the
+  // streaming usage hint up front so the driver picks the right upload path
+  // from frame 1 instead of heuristically migrating after a few frames.
+  mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
   mesh.frustumCulled = false;
   mesh.renderOrder = -5; // sit below most flora, above the terrain
   // Start with every slot zero-scaled so nothing flashes before the first step.
   for (let i = 0; i < cap; i++) mesh.setMatrixAt(i, _ZERO);
   mesh.instanceMatrix.needsUpdate = true;
   mesh.userData.capacity = cap;
+  // High-water mark — tracks the highest active slot index written last
+  // frame. stepShadowDisks only zeros slots between the current count and
+  // this mark, instead of zero-filling every unused slot every frame.
+  mesh.userData.prevActive = 0;
   return mesh;
 }
 
@@ -99,6 +107,12 @@ export function stepShadowDisks(disks, heightFn) {
     disks.setMatrixAt(i++, _m);
   }
 
-  for (; i < cap; i++) disks.setMatrixAt(i, _ZERO);
+  // Zero only the slots that were active last frame but aren't this frame
+  // (the "newly-empty" tail). Slots beyond the previous high-water mark
+  // were already zeroed earlier and don't need rewriting.
+  const prevActive = disks.userData.prevActive ?? cap;
+  const zeroEnd = Math.min(cap, prevActive);
+  for (let j = i; j < zeroEnd; j++) disks.setMatrixAt(j, _ZERO);
+  disks.userData.prevActive = i;
   disks.instanceMatrix.needsUpdate = true;
 }

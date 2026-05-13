@@ -131,9 +131,15 @@ export function makeParticles(biome) {
   }
 
   const geo = new THREE.BufferGeometry();
-  geo.setAttribute("position", new THREE.BufferAttribute(positions, 3));
+  const posAttr = new THREE.BufferAttribute(positions, 3);
+  const lifeAttr = new THREE.BufferAttribute(lifes, 1);
+  // position + aLife are rewritten every frame in stepParticles — declare
+  // streaming usage so the driver picks the right upload path immediately.
+  posAttr.setUsage(THREE.DynamicDrawUsage);
+  lifeAttr.setUsage(THREE.DynamicDrawUsage);
+  geo.setAttribute("position", posAttr);
   geo.setAttribute("aSeed", new THREE.BufferAttribute(seeds, 1));
-  geo.setAttribute("aLife", new THREE.BufferAttribute(lifes, 1));
+  geo.setAttribute("aLife", lifeAttr);
 
   const colorMap = {
     pollen: biome.sun, dust: biome.fog, snow: "#ffffff",
@@ -411,7 +417,9 @@ export function makeDirtPuff(x, y, z, baseColor) {
     velocities[i * 3 + 2] = Math.sin(ang) * sp;
   }
   const geo = new THREE.BufferGeometry();
-  geo.setAttribute("position", new THREE.BufferAttribute(positions, 3));
+  const posAttr = new THREE.BufferAttribute(positions, 3);
+  posAttr.setUsage(THREE.DynamicDrawUsage);
+  geo.setAttribute("position", posAttr);
   const mat = new THREE.PointsMaterial({
     color: new THREE.Color(baseColor).offsetHSL(0, -0.05, 0.05),
     size: 0.14,
@@ -470,7 +478,9 @@ export function makeDustKick(x, y, z, baseColor) {
     velocities[i * 3 + 2] = Math.sin(ang) * sp;
   }
   const geo = new THREE.BufferGeometry();
-  geo.setAttribute("position", new THREE.BufferAttribute(positions, 3));
+  const posAttr = new THREE.BufferAttribute(positions, 3);
+  posAttr.setUsage(THREE.DynamicDrawUsage);
+  geo.setAttribute("position", posAttr);
   const mat = new THREE.PointsMaterial({
     color: new THREE.Color(baseColor).offsetHSL(0, -0.1, 0.12),
     size: 0.08,
@@ -529,7 +539,9 @@ export function makeFlySwarm(centerX, centerY, centerZ) {
     seeds[i] = Math.random() * 100;
   }
   const geo = new THREE.BufferGeometry();
-  geo.setAttribute("position", new THREE.BufferAttribute(positions, 3));
+  const posAttr = new THREE.BufferAttribute(positions, 3);
+  posAttr.setUsage(THREE.DynamicDrawUsage);
+  geo.setAttribute("position", posAttr);
   const mat = new THREE.PointsMaterial({
     color: 0x141014,
     size: 0.07,

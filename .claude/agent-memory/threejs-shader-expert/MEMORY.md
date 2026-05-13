@@ -1,0 +1,5 @@
+- [Project pipeline shape](pipeline-overview.md) — render order, depth prepass, bloom layer, reflection RT, key hazards
+- [applyWindSway bug](applywindsway-bug.md) — broken chain check + mesh-local bend for instanced meshes
+- [Bloom design constraints](bloom-design.md) — why HalfFloat, why shared depth attachment, why full-res
+- [darkBiome bloom gate](darkbiome-bloom-gate.md) — possibly-stale check tied to UnrealBloomPass migration
+- [LOWFX is opt-in only](lowfx-opt-in.md) — docs claim auto-detect, code only honors ?lowfx=1

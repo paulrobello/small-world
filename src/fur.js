@@ -6,9 +6,12 @@ import { LOWFX } from "./lowfx.js";
 // they don't fight each other; the rest of the uniforms are shared via
 // reference and updated once per frame from main.js.
 //
-// The shared uniforms object is mutated each frame; clone() preserves that
-// reference automatically when we call material.clone() because ShaderMaterial
-// clones uniforms shallowly.
+// ShaderMaterial.clone() runs `UniformsUtils.clone(uniforms)`, which DEEP-
+// clones — each value gets a fresh wrapper object and inner Vector3/Color
+// values are .clone()'d. That breaks the shared-reference behavior we want
+// for uLayers / uLightDir, so the consumer (applyShellFur) explicitly
+// re-binds those two uniforms back to the shared sharedFurUniforms refs
+// after the clone. uShellLayer is intentionally left as a per-shell value.
 
 const _furVS = `
 uniform float uShellLayer;

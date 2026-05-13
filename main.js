@@ -132,6 +132,8 @@ timer.connect(document);
 const _fpsEl = document.getElementById("fps-value");
 let _fpsEma = 60;
 let _fpsLastUpdate = 0;
+// Reused per-frame scratch vector for projecting the orbit target into NDC.
+const _focusProj = new THREE.Vector3();
 function animate() {
   requestAnimationFrame(animate);
   timer.update();
@@ -296,10 +298,10 @@ function animate() {
   // sharp band, and measure camera→target distance for the depth focus.
   if (postfx.isActive && postfx.isActive()) {
     const focusPoint = controls.target;
-    const v = focusPoint.clone().project(camera);
-    // v.y is in NDC [-1, 1]; convert to UV [0, 1]. Three's UV origin is at
-    // bottom-left, so (v.y * 0.5 + 0.5) gives the right vertical axis.
-    const focusY = v.y * 0.5 + 0.5;
+    _focusProj.copy(focusPoint).project(camera);
+    // _focusProj.y is in NDC [-1, 1]; convert to UV [0, 1]. Three's UV origin
+    // is at bottom-left, so (.y * 0.5 + 0.5) gives the right vertical axis.
+    const focusY = _focusProj.y * 0.5 + 0.5;
     const focusZ = camera.position.distanceTo(focusPoint);
     postfx.updateTiltShiftFocus(focusY, focusZ);
     postfx.render(scene, camera);

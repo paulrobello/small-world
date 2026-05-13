@@ -89,8 +89,9 @@ export function makeGrassMaterial(biome, opts = {}) {
     uWindDir: { value: new THREE.Vector2(Math.cos(wdAngle), Math.sin(wdAngle)) },
     uWindStrength: { value: LOWFX ? 0.8 : 1.2 },
     uCameraXZ: { value: new THREE.Vector2(0, 0) },
-    uFadeStart: { value: disableFade ? 1.0e6 : (LOWFX ? 30.0 : 45.0) },
-    uFadeEnd:   { value: disableFade ? 1.0e6 + 1.0 : (LOWFX ? 55.0 : 85.0) },
+    uFadeEnabled: { value: disableFade ? 0.0 : 1.0 },
+    uFadeStart: { value: LOWFX ? 30.0 : 45.0 },
+    uFadeEnd:   { value: LOWFX ? 55.0 : 85.0 },
     uPusherCount: { value: 0 },
     uPushers: { value: pushers },
     uHeightMul: { value: 1.0 },
@@ -104,6 +105,7 @@ export function makeGrassMaterial(biome, opts = {}) {
     shader.uniforms.uWindDir = uniforms.uWindDir;
     shader.uniforms.uWindStrength = uniforms.uWindStrength;
     shader.uniforms.uCameraXZ = uniforms.uCameraXZ;
+    shader.uniforms.uFadeEnabled = uniforms.uFadeEnabled;
     shader.uniforms.uFadeStart = uniforms.uFadeStart;
     shader.uniforms.uFadeEnd = uniforms.uFadeEnd;
     shader.uniforms.uPusherCount = uniforms.uPusherCount;
@@ -123,10 +125,11 @@ export function makeGrassMaterial(biome, opts = {}) {
         uniform vec2  uWindDir;
         uniform float uWindStrength;
         uniform vec2  uCameraXZ;
+        uniform float uFadeEnabled;
         uniform float uFadeStart;
         uniform float uFadeEnd;
         uniform float uHeightMul;
-        #define MAX_PUSHERS 40
+        #define MAX_PUSHERS ${MAX_PUSHERS}
         uniform int  uPusherCount;
         uniform vec4 uPushers[MAX_PUSHERS];
         float gHash(vec2 p) {
@@ -203,7 +206,7 @@ export function makeGrassMaterial(biome, opts = {}) {
             transformed.y -= pushAmp * 0.35;
           }
           float dist = length(worldXZ - uCameraXZ);
-          float fade = 1.0 - smoothstep(uFadeStart, uFadeEnd, dist);
+          float fade = mix(1.0, 1.0 - smoothstep(uFadeStart, uFadeEnd, dist), uFadeEnabled);
           transformed.y *= fade * uHeightMul;
           transformed.x *= mix(1.0, fade, 0.5);
           transformed.z *= mix(1.0, fade, 0.5);
