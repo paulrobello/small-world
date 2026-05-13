@@ -29,17 +29,18 @@ export function applyWindSway(material, strength = 1.0) {
     if (prev && prev !== material.onBeforeCompile) prev(shader);
     shader.uniforms.uTime = state.windUniforms.uTime;
     shader.uniforms.uWindStrength = { value: strength };
+    shader.uniforms.uFoliageWind = state.windUniforms.uFoliageWind;
     shader.vertexShader = shader.vertexShader
       .replace(
         "#include <common>",
-        "#include <common>\nuniform float uTime;\nuniform float uWindStrength;"
+        "#include <common>\nuniform float uTime;\nuniform float uWindStrength;\nuniform float uFoliageWind;"
       )
       .replace(
         "#include <begin_vertex>",
         `#include <begin_vertex>
         {
           float windY = max(transformed.y, 0.0);
-          float windAmp = windY * windY * uWindStrength;
+          float windAmp = windY * windY * uWindStrength * uFoliageWind;
           #ifdef USE_INSTANCING
             vec4 wp = modelMatrix * instanceMatrix * vec4(transformed, 1.0);
           #else

@@ -2,7 +2,6 @@ import * as THREE from "three";
 import { EffectComposer } from "three/addons/postprocessing/EffectComposer.js";
 import { RenderPass } from "three/addons/postprocessing/RenderPass.js";
 import { ShaderPass } from "three/addons/postprocessing/ShaderPass.js";
-import { UnrealBloomPass } from "three/addons/postprocessing/UnrealBloomPass.js";
 import { state } from "./state.js";
 import { LOWFX } from "./lowfx.js";
 
@@ -46,6 +45,58 @@ const _srgbOutputShader = {
     }
   `,
 };
+
+// Separable 5-tap linear-sampling Gaussian for the bloom blur. Each tap
+// between center and edge pairs two adjacent Gaussian samples by reading at
+// their weighted midpoint, letting hardware bilinear filtering sum them in
+// one fetch — same shape as a 9-tap kernel with ~half the fetches.
+//
+// Weights / base offsets derived from a 9-tap Gaussian (sigma ≈ 2):
+//   center            : 0.227
+//   pair (taps 1,2)   : combined 0.315, weighted offset ≈ 1.384
+//   pair (taps 3,4)   : combined 0.070, weighted offset ≈ 3.229
+//
+// Offsets are multiplied by `uRadius` (in physical pixels) at draw time so
+// the settings panel can scale the halo live. Weights stay sigma=2-shaped —
+// stretching the offsets is mathematically a non-Gaussian kernel, but for
+// tight isolated emissives the visual result is indistinguishable from a
+// wider sigma.
+function _blurShader(axis, radiusUniform) {
+  const dirExpr = axis === "h" ? "vec2(px.x, 0.0)" : "vec2(0.0, px.y)";
+  return {
+    uniforms: {
+      tDiffuse: { value: null },
+      uResolution: { value: new THREE.Vector2(1, 1) },
+      uStrength: { value: 1.0 },
+      uRadius: radiusUniform,
+    },
+    vertexShader: `
+      varying vec2 vUv;
+      void main() {
+        vUv = uv;
+        gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+      }
+    `,
+    fragmentShader: `
+      precision highp float;
+      uniform sampler2D tDiffuse;
+      uniform vec2 uResolution;
+      uniform float uStrength;
+      uniform float uRadius;
+      varying vec2 vUv;
+      void main() {
+        vec2 px = 1.0 / uResolution;
+        vec2 d = ${dirExpr};
+        vec3 c = texture2D(tDiffuse, vUv).rgb * 0.227;
+        c += texture2D(tDiffuse, vUv + d * 1.384 * uRadius).rgb * 0.315;
+        c += texture2D(tDiffuse, vUv - d * 1.384 * uRadius).rgb * 0.315;
+        c += texture2D(tDiffuse, vUv + d * 3.229 * uRadius).rgb * 0.070;
+        c += texture2D(tDiffuse, vUv - d * 3.229 * uRadius).rgb * 0.070;
+        gl_FragColor = vec4(c * uStrength, 1.0);
+      }
+    `,
+  };
+}
 
 // Additive composite of the bloom-only blurred image on top of the main
 // render. tBloom is the bloom composer's output (layer-1 scene blurred by
@@ -314,11 +365,19 @@ export function initPostFX(renderer, scene, camera) {
       setDepthFog: () => {},
       setDepthFogColor: () => {},
       updateTiltShiftFocus: () => {},
+      setBloomRadius: () => {},
     };
   }
 
   const size = new THREE.Vector2(window.innerWidth, window.innerHeight);
   const pixelRatio = renderer.getPixelRatio();
+
+  // Bloom is rendered at full resolution because it shares its depth
+  // attachment with the depth pre-pass (see bloomRT below) for proper depth
+  // occlusion — bloom emissives behind opaque geometry get culled by depth
+  // test rather than shining through. Shared depth attachments require
+  // matching dimensions, so we cannot downscale the bloom RT. The cost is
+  // bounded: layer-filtering means only emissive meshes get rasterized.
 
   // Depth pre-pass RT, kept OUTSIDE the composer's ping-pong. Sampling a
   // depth texture while writing to the FBO that owns it is a feedback loop
@@ -342,16 +401,44 @@ export function initPostFX(renderer, scene, camera) {
   // Expose for consumers (environment.js soft particles).
   state.depthTexture = depthTexture;
 
-  // Bloom-only composer: renders the scene with non-emissive meshes swapped
-  // to a black material (so they write depth but contribute zero color), then
-  // blurs the bright pixels with UnrealBloomPass. Threshold stays at 0 — the
-  // BLOOM_LAYER opt-in *is* the gate. Material swap (vs. camera.layers
-  // filtering) is what lets the depth buffer fill properly: foreground
-  // geometry occludes bloom emissives behind it, so glow lights don't punch
-  // through walls/rocks/trunks.
-  const bloomComposer = new EffectComposer(renderer);
+  // Bloom-only composer. The camera is layer-filtered to BLOOM_LAYER for
+  // the bloom render (see the render() body) so only emissive meshes
+  // rasterize. RT is UnsignedByte (not the EffectComposer default
+  // HalfFloat) — HalfFloat is ~2× the bandwidth per sample on integrated
+  // GPUs and bloom doesn't need HDR (emissives are near-1.0 already).
+  // depthTexture is shared with the depth pre-pass: the bloom render runs
+  // with autoClearDepth=false (see render() body) so the scene depth from
+  // the pre-pass is preserved, and emissives' depthTest culls anything
+  // behind opaque geometry. EffectComposer.clone()s the RT for its
+  // ping-pong RT2, which would clone the depth attachment too — we then
+  // re-point RT2's depthTexture back to the shared one so the final blur
+  // pass (which writes into RT2 or RT1 depending on pass count) doesn't
+  // diverge from the pre-pass depth. Custom RT pins the composer's
+  // _pixelRatio to 1, so size args here are physical pixels.
+  const bloomPhysSize = new THREE.Vector2(
+    Math.max(1, Math.round(size.x * pixelRatio)),
+    Math.max(1, Math.round(size.y * pixelRatio))
+  );
+  const bloomRT = new THREE.WebGLRenderTarget(
+    bloomPhysSize.x, bloomPhysSize.y,
+    {
+      type: THREE.UnsignedByteType,
+      format: THREE.RGBAFormat,
+      depthBuffer: true,
+      depthTexture,
+    }
+  );
+  const bloomComposer = new EffectComposer(renderer, bloomRT);
   bloomComposer.renderToScreen = false;
-  bloomComposer.setSize(size.x, size.y);
+  // EffectComposer.clone() produced an orphan DepthTexture on RT2 — dispose
+  // it and share the pre-pass depth so depth is consistent across the
+  // ping-pong.
+  if (bloomComposer.renderTarget2.depthTexture &&
+      bloomComposer.renderTarget2.depthTexture !== depthTexture) {
+    bloomComposer.renderTarget2.depthTexture.dispose();
+    bloomComposer.renderTarget2.depthTexture = depthTexture;
+  }
+
   const bloomRenderPass = new RenderPass(scene, camera);
   // Black background for the bloom-only pass — non-layer-1 meshes are clipped
   // out, so we don't want the regular sky/biome BG bleeding in.
@@ -359,11 +446,31 @@ export function initPostFX(renderer, scene, camera) {
   bloomRenderPass.clearAlpha = 1;
   bloomRenderPass.clear = true;
   bloomComposer.addPass(bloomRenderPass);
-  // strength / radius / threshold — strength stays moderate; radius small so
-  // the glow halo doesn't bleed across the whole frame; threshold 0 since
-  // BLOOM_LAYER is the gate.
-  const bloomPass = new UnrealBloomPass(size.clone(), 0.6, 0.35, 0.0);
-  bloomComposer.addPass(bloomPass);
+  // Tight halo: separable 5-tap linear-sampling Gaussian (H then V). Disable
+  // depthTest/depthWrite on the blur quads — the RTs have a preserved depth
+  // attachment, and we want the fullscreen quad to always rasterize.
+  // Shared radius uniform so both blur passes resize together. Default 1.0
+  // keeps the 5 taps overlapping (no visible "pointillist" gaps); values
+  // above ~1.5 start to space the taps apart and a sample-hit dot grid
+  // appears. The settings panel slider stays within that no-gap range.
+  //
+  // ShaderPass constructor deep-clones the supplied uniforms via
+  // UniformsUtils.clone, so each pass would get its own disconnected
+  // {value: 1.0}. After construction we re-point uRadius back at the
+  // shared reference so setBloomRadius can update both passes at once.
+  const bloomRadiusUniform = { value: state.userSettings.bloomRadius ?? 1.0 };
+  const bloomBlurH = new ShaderPass(_blurShader("h", bloomRadiusUniform));
+  const bloomBlurV = new ShaderPass(_blurShader("v", bloomRadiusUniform));
+  bloomBlurH.uniforms.uRadius = bloomRadiusUniform;
+  bloomBlurV.uniforms.uRadius = bloomRadiusUniform;
+  bloomBlurH.material.depthTest = false;
+  bloomBlurH.material.depthWrite = false;
+  bloomBlurV.material.depthTest = false;
+  bloomBlurV.material.depthWrite = false;
+  bloomBlurH.uniforms.uResolution.value.copy(bloomPhysSize);
+  bloomBlurV.uniforms.uResolution.value.copy(bloomPhysSize);
+  bloomComposer.addPass(bloomBlurH);
+  bloomComposer.addPass(bloomBlurV);
 
   const composer = new EffectComposer(renderer);
   composer.setSize(size.x, size.y);
@@ -371,53 +478,21 @@ export function initPostFX(renderer, scene, camera) {
   const renderPass = new RenderPass(scene, camera);
   composer.addPass(renderPass);
 
-  // Bloom-render masking. For each non-bloom-layer mesh:
-  //  • depth-writing materials (terrain, trunks, creature bodies, fur
-  //    shells) get swapped to a solid black material so they occlude bloom
-  //    emissives behind them but contribute zero color.
-  //  • non-depth-writing materials (sky dome, particles, cloud sprites,
-  //    additive halos that aren't on the bloom layer) are hidden — they
-  //    don't occlude anyway, and rendering their color would flood the
-  //    bloom RT with biome-sky gradient.
-  // Saved state lives on obj.userData so traversal restoration is O(1)
-  // per node and doesn't need a side map.
-  const _bloomDarkMaterial = new THREE.MeshBasicMaterial({ color: 0x000000 });
-  const _bloomLayerProbe = new THREE.Layers();
-  _bloomLayerProbe.set(BLOOM_LAYER);
-  function _darkenForBloom(obj) {
-    if (!obj.isMesh) return;
-    if (obj.layers.test(_bloomLayerProbe)) return;
-    const m = obj.material;
-    if (!m) return;
-    const dw = Array.isArray(m) ? m[0]?.depthWrite : m.depthWrite;
-    if (dw === false) {
-      obj.userData._bloomHidden = true;
-      obj.visible = false;
-    } else {
-      obj.userData._origMat = m;
-      obj.material = _bloomDarkMaterial;
-    }
-  }
-  function _restoreAfterBloom(obj) {
-    if (obj.userData._bloomHidden) {
-      obj.visible = true;
-      obj.userData._bloomHidden = false;
-    }
-    if (obj.userData._origMat) {
-      obj.material = obj.userData._origMat;
-      obj.userData._origMat = null;
-    }
-  }
-
-  // Composite the bloom-only blurred output onto the main render. Disabled
-  // (strength=0) when state.userSettings.bloom is off — also lets the bloom
-  // composer skip rendering on that path.
+  // Composite the bloom-only blurred output onto the main render. Whole
+  // pass is `enabled = false` when bloom is off so the composer skips it.
   const bloomCompositePass = new ShaderPass(_bloomCompositeShader);
-  // Composite weight on top of the bloom pass's own strength. Lowish so the
-  // additive halo reads as a subtle glow rim, not a wash across the frame.
-  const BLOOM_COMPOSITE_STRENGTH = 0.45;
+  // Composite weight. The halo brightness depends on this AND on
+  // BLOOM_RADIUS_PX in the blur shader (wider radius = energy spread thinner
+  // = each halo pixel dimmer). Dial pair as needed: if halos look washed
+  // out, lower strength; if invisible, raise it. Reference: the original
+  // UnrealBloom + composite combo here was 0.6 × 0.45 = 0.27 raw, but its
+  // 5-mip chain accumulated brightness across scales for an effective ~1.5×.
+  const BLOOM_COMPOSITE_STRENGTH = 2.0;
   bloomCompositePass.uniforms.uStrength.value =
     state.userSettings.bloom ? BLOOM_COMPOSITE_STRENGTH : 0.0;
+  // Skip the composite pass entirely when bloom is off — one fewer
+  // fullscreen pass and ping-pong copy every frame.
+  bloomCompositePass.enabled = !!state.userSettings.bloom;
   composer.addPass(bloomCompositePass);
 
   const depthFXPass = new ShaderPass(_depthFXShader);
@@ -450,7 +525,11 @@ export function initPostFX(renderer, scene, camera) {
     return (
       tiltShiftPass.enabled ||
       depthFXPass.enabled ||
-      state.userSettings.softParticles
+      state.userSettings.softParticles ||
+      // Bloom shares the pre-pass depth attachment for depth-occluded
+      // emissives (a glow eye behind a tree gets culled), so it needs the
+      // pre-pass to fill depth before the bloom render runs.
+      state.userSettings.bloom
     );
   }
 
@@ -471,7 +550,6 @@ export function initPostFX(renderer, scene, camera) {
 
   return {
     composer,
-    bloomPass,
     tiltShiftPass,
     depthFXPass,
     // Anything that reads depth keeps the depth pre-pass alive (and the
@@ -489,18 +567,20 @@ export function initPostFX(renderer, scene, camera) {
       bloomRenderPass.scene = s;
       bloomRenderPass.camera = cam;
       if (state.userSettings.bloom) {
-        // Bloom render: walk the scene and swap every non-emissive mesh's
-        // material to black (preserving depth), render, then blur. Depth
-        // occlusion falls out for free — foreground geometry covers bloom
-        // emissives behind it because both write to the bloom RT's depth
-        // buffer. scene.background is the biome sky color; if left set, it
-        // renders as a full-frame fill before any geometry and dominates
-        // the bloom RT, so null it for this pass.
+        // Bloom render: restrict the camera to BLOOM_LAYER so only emissive
+        // meshes are rasterized, and freeze the depth attachment (shared
+        // with the depth pre-pass) so emissives behind opaque geometry get
+        // culled by depthTest. scene.background would render as a full-frame
+        // fill otherwise, so null it for this pass.
         const prevBackground = s.background;
+        const prevLayerMask = cam.layers.mask;
+        const prevAutoClearDepth = renderer.autoClearDepth;
         s.background = null;
-        s.traverse(_darkenForBloom);
+        cam.layers.set(BLOOM_LAYER);
+        renderer.autoClearDepth = false;
         bloomComposer.render();
-        s.traverse(_restoreAfterBloom);
+        renderer.autoClearDepth = prevAutoClearDepth;
+        cam.layers.mask = prevLayerMask;
         s.background = prevBackground;
         bloomCompositePass.uniforms.tBloom.value = bloomComposer.readBuffer.texture;
       }
@@ -508,19 +588,24 @@ export function initPostFX(renderer, scene, camera) {
     },
     onResize: (w, h) => {
       composer.setSize(w, h);
-      bloomComposer.setSize(w, h);
-      bloomPass.setSize(w, h);
+      const pr = renderer.getPixelRatio();
+      // Bloom RT shares depth with depthRT — keep them locked at the same
+      // physical-pixel size. Custom RT pins the composer's _pixelRatio to 1,
+      // so we pass physical pixels directly.
+      const pw = Math.max(1, Math.round(w * pr));
+      const ph = Math.max(1, Math.round(h * pr));
+      bloomComposer.setSize(pw, ph);
+      bloomBlurH.uniforms.uResolution.value.set(pw, ph);
+      bloomBlurV.uniforms.uResolution.value.set(pw, ph);
       tiltShiftPass.uniforms.uResolution.value.set(w, h);
       depthFXPass.uniforms.uResolution.value.set(w, h);
-      const pr = renderer.getPixelRatio();
-      depthRT.setSize(
-        Math.max(1, Math.round(w * pr)),
-        Math.max(1, Math.round(h * pr))
-      );
+      depthRT.setSize(pw, ph);
     },
     setBloom: (on) => {
       bloomCompositePass.uniforms.uStrength.value = on ? BLOOM_COMPOSITE_STRENGTH : 0.0;
+      bloomCompositePass.enabled = !!on;
     },
+    setBloomRadius: (r) => { bloomRadiusUniform.value = r; },
     setTiltShift: (on) => { tiltShiftPass.enabled = on; },
     setSoftParticles: () => { /* particle shader reads userSettings directly */ },
     setOutline: (on) => {

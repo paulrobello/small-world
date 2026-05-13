@@ -76,7 +76,11 @@ export const state = {
   sunLight: null,
   hemiLight: null,
   dayNight: null,
-  windUniforms: { uTime: { value: 0 } },
+  // Shared uniforms for foliage wind sway. uTime is advanced every frame in
+  // main.js (frozen when wind is globally off). uFoliageWind is a 0/1
+  // multiplier applied to applyWindSway materials so trees/mushrooms can be
+  // stilled independently of grass.
+  windUniforms: { uTime: { value: 0 }, uFoliageWind: { value: 1 } },
   revealStart: 0,
   lastSimT: 0,
   // Camera ref, set in main.js on boot. Read by stepCreature for the
@@ -114,7 +118,13 @@ export const state = {
     grassDensity: 2.0,
     grassHeight: 1.2,
     grassPanelOpen: false,
+    terrainSmoothShading: true,
+    foliageWindEnabled: true,
+    bloomRadius: 1.0,
   },
+  // Set by world.js after makeTerrain. Used by the smooth-shading toggle in
+  // ui.js to flip mat.flatShading at runtime without rebuilding geometry.
+  terrainMesh: null,
   // Set by initPostFX; environment.js reads it to enable soft-particle depth
   // testing. Null under LOWFX (no composer, no depth capture).
   depthTexture: null,

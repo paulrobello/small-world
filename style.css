@@ -482,10 +482,11 @@ body.photo-mode .help-panel {
   bottom: 90px;
   right: 14px;
   z-index: 11;
-  width: 280px;
+  width: 320px;
   max-width: calc(100vw - 28px);
   max-height: calc(100vh - 220px);
   overflow-y: auto;
+  overflow-x: hidden;
   padding: 16px 18px 14px;
   background: rgba(14, 14, 18, 0.82);
   border: 1px solid var(--ink-dim);
@@ -575,6 +576,7 @@ body.photo-mode .help-panel {
 .setting .setting-label {
   grid-column: 1;
   color: var(--ink-dim);
+  min-width: 0;
 }
 .setting input[type="range"] {
   grid-column: 1 / span 2;

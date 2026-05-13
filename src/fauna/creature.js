@@ -606,7 +606,7 @@ export function stepCreature(c, dt, t, heightFn) {
       }
       const fadeIn = Math.min(1, u / 0.18);
       const fadeOut = u > 0.55 ? 1 - (u - 0.55) / 0.45 : 1;
-      s.material.opacity = 0.95 * fadeIn * fadeOut;
+      s.material.opacity = 0.7125 * fadeIn * fadeOut;
       s.position.y = 0.85 + u * Z_RISE;
       s.position.x =
         s.userData.startX +

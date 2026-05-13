@@ -33,6 +33,7 @@ const PERSISTED_KEYS = [
   "autoRegen",
   "autoRegenMinutes",
   "bloom",
+  "bloomRadius",
   "tiltShift",
   "softParticles",
   "outline",
@@ -44,10 +45,12 @@ const PERSISTED_KEYS = [
   "windStrength",
   "windNoiseScale",
   "windPanelOpen",
+  "foliageWindEnabled",
   "grassEnabled",
   "grassDensity",
   "grassHeight",
   "grassPanelOpen",
+  "terrainSmoothShading",
 ];
 const BOOKMARKS_KEY = "smallworld:bookmarks:v1";
 const BIOME_FILTER_KEY = "smallworld:biomefilter:v1";
@@ -273,11 +276,6 @@ export function initUi({ camera, canvas, controls, renderer }) {
   // Hand world.js a release callback so generateWorld() can drop a stale follow.
   setFollowReleaseCallback(() => setFollowTarget(null));
 
-  settingsToggle.addEventListener("click", () =>
-    setSettingsOpen(!_settingsPanel.classList.contains("open"))
-  );
-  settingsClose.addEventListener("click", () => setSettingsOpen(false));
-
   const helpPanel = document.getElementById("help-panel");
   const helpToggle = document.getElementById("help-toggle");
   const helpClose = document.getElementById("help-close");
@@ -285,9 +283,21 @@ export function initUi({ camera, canvas, controls, renderer }) {
     helpPanel.classList.toggle("open", open);
     helpPanel.setAttribute("aria-hidden", open ? "false" : "true");
   }
-  helpToggle.addEventListener("click", () =>
-    setHelpOpen(!helpPanel.classList.contains("open"))
-  );
+
+  // Settings and help share the same bottom-right corner — opening one
+  // closes the other so the back panel isn't hidden behind the front one.
+  settingsToggle.addEventListener("click", () => {
+    const opening = !_settingsPanel.classList.contains("open");
+    if (opening) setHelpOpen(false);
+    setSettingsOpen(opening);
+  });
+  settingsClose.addEventListener("click", () => setSettingsOpen(false));
+
+  helpToggle.addEventListener("click", () => {
+    const opening = !helpPanel.classList.contains("open");
+    if (opening) setSettingsOpen(false);
+    setHelpOpen(opening);
+  });
   helpClose.addEventListener("click", () => setHelpOpen(false));
 
   _followButton.addEventListener("click", () => {
@@ -542,12 +552,19 @@ export function initUi({ camera, canvas, controls, renderer }) {
   const windStrengthValueEl = document.getElementById("setting-wind-strength-value");
   const windNoiseEl = document.getElementById("setting-wind-noise");
   const windNoiseValueEl = document.getElementById("setting-wind-noise-value");
+  const foliageWindEl = document.getElementById("setting-foliage-wind");
 
   // Base grass uniform values, snapshotted on first apply so sliders compose
   // against the engine's per-LOWFX defaults rather than overwriting them.
   let _grassWindBase = null;
 
   function applyWindSettings() {
+    const on = !!state.userSettings.windEnabled;
+    // Trees / mushrooms / other applyWindSway foliage share one multiplier.
+    // Master windEnabled also freezes uTime in main.js — this just zeroes the
+    // bend amplitude so they read upright instead of stuck mid-sway.
+    const foliageOn = on && !!state.userSettings.foliageWindEnabled;
+    state.windUniforms.uFoliageWind.value = foliageOn ? 1 : 0;
     const g = state.grass;
     if (!g) return;
     if (_grassWindBase === null) {
@@ -556,7 +573,6 @@ export function initUi({ camera, canvas, controls, renderer }) {
         scale: g.uniforms.uWindScale.value,
       };
     }
-    const on = !!state.userSettings.windEnabled;
     const ks = on ? (state.userSettings.windStrength ?? 1) : 0;
     const kn = state.userSettings.windNoiseScale ?? 1;
     g.uniforms.uWindStrength.value = _grassWindBase.strength * ks;
@@ -574,6 +590,7 @@ export function initUi({ camera, canvas, controls, renderer }) {
 
   windDetailsEl.open = !!state.userSettings.windPanelOpen;
   windEnabledEl.checked = !!state.userSettings.windEnabled;
+  foliageWindEl.checked = state.userSettings.foliageWindEnabled !== false;
   windStrengthEl.value = String(Math.round((state.userSettings.windStrength ?? 1) * 100));
   windStrengthValueEl.textContent = windStrengthEl.value + "%";
   windNoiseEl.value = String(Math.round((state.userSettings.windNoiseScale ?? 1) * 100));
@@ -582,8 +599,10 @@ export function initUi({ camera, canvas, controls, renderer }) {
     const dis = !state.userSettings.windEnabled;
     windStrengthEl.disabled = dis;
     windNoiseEl.disabled = dis;
+    foliageWindEl.disabled = dis;
     windStrengthEl.style.opacity = dis ? "0.4" : "";
     windNoiseEl.style.opacity = dis ? "0.4" : "";
+    foliageWindEl.style.opacity = dis ? "0.4" : "";
   }
   syncWindSliderEnabledState();
 
@@ -608,6 +627,11 @@ export function initUi({ camera, canvas, controls, renderer }) {
     const v = Number(windNoiseEl.value);
     state.userSettings.windNoiseScale = v / 100;
     windNoiseValueEl.textContent = v + "%";
+    applyWindSettings();
+    saveSettings();
+  });
+  foliageWindEl.addEventListener("change", () => {
+    state.userSettings.foliageWindEnabled = foliageWindEl.checked;
     applyWindSettings();
     saveSettings();
   });
@@ -709,20 +733,30 @@ export function initUi({ camera, canvas, controls, renderer }) {
   const outlineEl = document.getElementById("setting-outline");
   const aoEl = document.getElementById("setting-ao");
   const depthFogEl = document.getElementById("setting-depthfog");
+  const terrainSmoothEl = document.getElementById("setting-terrain-smooth");
+  const bloomRadiusEl = document.getElementById("setting-bloom-radius");
+  const bloomRadiusValueEl = document.getElementById("setting-bloom-radius-value");
   const lowfxHint = document.getElementById("setting-lowfx-hint");
 
   fxDetailsEl.open = !!state.userSettings.fxPanelOpen;
   bloomEl.checked = state.userSettings.bloom;
+  // Slider range 0-150% maps to 0.0-1.5 radius — staying inside the no-gap
+  // zone for the 5-tap kernel (above ~1.5 the taps separate enough to form
+  // a visible pointillist grid around each bright source).
+  const bloomRadius = state.userSettings.bloomRadius ?? 1.0;
+  bloomRadiusEl.value = String(Math.round(bloomRadius * 100));
+  bloomRadiusValueEl.textContent = bloomRadiusEl.value + "%";
   tiltEl.checked = state.userSettings.tiltShift;
   softParticlesEl.checked = state.userSettings.softParticles;
   outlineEl.checked = state.userSettings.outline;
   aoEl.checked = state.userSettings.ao;
   depthFogEl.checked = state.userSettings.depthFog;
+  terrainSmoothEl.checked = state.userSettings.terrainSmoothShading;
 
   if (LOWFX) {
     // The depth pre-pass and composer are stubbed out under LOWFX, so every
     // FX in this section is a no-op there.
-    for (const el of [bloomEl, tiltEl, softParticlesEl, outlineEl, aoEl, depthFogEl]) {
+    for (const el of [bloomEl, bloomRadiusEl, tiltEl, softParticlesEl, outlineEl, aoEl, depthFogEl]) {
       el.disabled = true;
     }
     lowfxHint.hidden = false;
@@ -740,6 +774,15 @@ export function initUi({ camera, canvas, controls, renderer }) {
     // world.js applies the same gate after every regen.
     const allowBloom = bloomEl.checked && !state.currentBiome?.darkBiome;
     if (state.postfx) state.postfx.setBloom(allowBloom);
+    saveSettings();
+  });
+  bloomRadiusEl.addEventListener("input", () => {
+    const v = Number(bloomRadiusEl.value);
+    state.userSettings.bloomRadius = v / 100;
+    bloomRadiusValueEl.textContent = v + "%";
+    if (state.postfx && state.postfx.setBloomRadius) {
+      state.postfx.setBloomRadius(state.userSettings.bloomRadius);
+    }
     saveSettings();
   });
   tiltEl.addEventListener("change", () => {
@@ -770,6 +813,15 @@ export function initUi({ camera, canvas, controls, renderer }) {
   depthFogEl.addEventListener("change", () => {
     state.userSettings.depthFog = depthFogEl.checked;
     if (state.postfx) state.postfx.setDepthFog(depthFogEl.checked);
+    saveSettings();
+  });
+  terrainSmoothEl.addEventListener("change", () => {
+    state.userSettings.terrainSmoothShading = terrainSmoothEl.checked;
+    const mesh = state.terrainMesh;
+    if (mesh) {
+      mesh.material.flatShading = !terrainSmoothEl.checked;
+      mesh.material.needsUpdate = true;
+    }
     saveSettings();
   });
 

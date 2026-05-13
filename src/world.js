@@ -319,6 +319,11 @@ export function generateWorld(seed) {
   state.heightFn = makeHeightFn(noise2D, layout, 3.2);
   const terrain = makeTerrain(biome, state.heightFn);
   state.world.add(terrain);
+  state.terrainMesh = terrain;
+  if (state.userSettings.terrainSmoothShading) {
+    terrain.material.flatShading = false;
+    terrain.material.needsUpdate = true;
+  }
 
   // water plane (biomes that opt in)
   if (biome.water) {
