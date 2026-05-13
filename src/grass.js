@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import { createNoise2D } from "simplex-noise";
+import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 import { state, DENSITY_BASE } from "./state.js";
 import { pickGroundPoint } from "./terrain.js";
 import { GRASS_DENSITY, BALD_THRESHOLD } from "./biomes.js";
@@ -17,22 +18,32 @@ const _coverScale = (n, gain = 1) =>
 export function makeGrassMaterial(biome, opts = {}) {
   const { disableFade = false } = opts;
 
-  const blade = new THREE.PlaneGeometry(0.06, 0.34, 1, 3);
-  const bp = blade.attributes.position;
-  const tipCount = bp.count;
-  const tipFactors = new Float32Array(tipCount);
-  for (let i = 0; i < tipCount; i++) {
-    const y = bp.getY(i) + 0.17;
-    bp.setY(i, y);
-    // Quadratic taper: full width at the base, pinches to a point at the tip.
-    // Wider for most of the height than a linear taper, then closes off
-    // sharply near the top so the silhouette reads as a real grass blade.
-    const t = Math.min(1, y / 0.34);
-    const taper = 1.0 - t * t;
-    bp.setX(i, bp.getX(i) * taper);
-    tipFactors[i] = t;
+  // Build a single tapered blade plane, then merge two copies rotated 90°
+  // apart into a single "crossed" geometry. Each instance draws both
+  // planes, so the blade reads as a thick silhouette from any side angle
+  // (a single plane disappears edge-on at orbit distance).
+  function makeBladePlane() {
+    const g = new THREE.PlaneGeometry(0.10, 0.34, 1, 3);
+    const pos = g.attributes.position;
+    const tipFactors = new Float32Array(pos.count);
+    for (let i = 0; i < pos.count; i++) {
+      const y = pos.getY(i) + 0.17;
+      pos.setY(i, y);
+      // Quadratic taper: full width at base, pinches to a point at the tip.
+      const t = Math.min(1, y / 0.34);
+      const taper = 1.0 - t * t;
+      pos.setX(i, pos.getX(i) * taper);
+      tipFactors[i] = t;
+    }
+    g.setAttribute("aTipFactor", new THREE.BufferAttribute(tipFactors, 1));
+    return g;
   }
-  blade.setAttribute("aTipFactor", new THREE.BufferAttribute(tipFactors, 1));
+  const planeA = makeBladePlane();
+  const planeB = makeBladePlane();
+  planeB.rotateY(Math.PI / 2);
+  const blade = mergeGeometries([planeA, planeB], false);
+  planeA.dispose();
+  planeB.dispose();
   blade.computeVertexNormals();
 
   const baseCol = new THREE.Color(biome.ground[1]).offsetHSL(
@@ -147,10 +158,11 @@ export function makeGrassMaterial(biome, opts = {}) {
 }
 
 export function makeGrassField(biome, heightFn) {
-  // Overshoot factor covers ~35-50% density-mask rejection AND keeps a
-  // visible carpet across the entire orbit-visible area despite the
-  // camera-distance fade. LOWFX is half so the GPU budget stays sane.
-  const overshoot = LOWFX ? 3.5 : 7.0;
+  // Overshoot factor produces a dense carpet visible at orbit distance.
+  // Combined with the crossed-plane blade geometry, each instance now
+  // contributes meaningful screen area regardless of viewing angle.
+  // LOWFX trims the count to stay inside a smaller GPU budget.
+  const overshoot = LOWFX ? 5.0 : 11.0;
   const count = _coverScale(GRASS_DENSITY[biome.id] ?? 300, overshoot);
 
   const { blade, material: mat, uniforms, baseCol } = makeGrassMaterial(biome);
