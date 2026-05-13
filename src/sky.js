@@ -198,24 +198,32 @@ export function makeCloudLayer(biome) {
     fog: false,
   });
 
-  // Distribute around a ring at radius ~190 (pushed past the far mountain ring
-  // at 220 to feel distant). Random vertical band keeps them off a single line.
+  // Distribute across the upper hemisphere — sphere radius 180-240, polar
+  // angle theta from 25° (overhead) to 82° (near horizon). Without this the
+  // clouds form a ring band that's only ever visible looking outward; the
+  // hemisphere cap puts some directly above the camera so they're in view
+  // at every orbit angle.
   const sprites = [];
   for (let i = 0; i < count; i++) {
-    const ang = (i / count) * Math.PI * 2 + (Math.random() - 0.5) * 0.5;
-    const r = 170 + Math.random() * 60;
-    const y = 28 + Math.random() * 26;
+    const phi = (i / count) * Math.PI * 2 + (Math.random() - 0.5) * 0.5;
+    // bias toward horizon (cos-weighted sampling gives uniform area, but
+    // we want a touch more overhead density than uniform sphere would give)
+    const thetaMin = 0.44; // ~25° from zenith
+    const thetaMax = 1.43; // ~82° from zenith
+    const theta = thetaMin + Math.random() * (thetaMax - thetaMin);
+    const sphereR = 180 + Math.random() * 60;
+    const xzR = sphereR * Math.sin(theta);
+    const y = sphereR * Math.cos(theta);
     const s = new THREE.Sprite(mat.clone());
-    s.position.set(Math.cos(ang) * r, y, Math.sin(ang) * r);
-    // Small puff sizes — at distance ~190 a width of 18 reads as ~5° FOV,
-    // which is what a real distant cloud occupies. Old values (44-100) looked
-    // like enormous translucent disks parked just past the mountains.
+    s.position.set(Math.cos(phi) * xzR, y, Math.sin(phi) * xzR);
+    // Small puff sizes — at sphere radius ~200 a width of 18 reads as ~5° FOV,
+    // which is what a real distant cloud occupies.
     const scale = 10 + Math.random() * 8;
     // Wider than tall — clouds aren't square
     s.scale.set(scale * 1.8, scale * 0.7, 1);
     s.userData.driftSpeed = 0.012 + Math.random() * 0.018;
-    s.userData.angle = ang;
-    s.userData.radius = r;
+    s.userData.angle = phi;
+    s.userData.radius = xzR;
     s.userData.height = y;
     s.renderOrder = -30;
     group.add(s);
