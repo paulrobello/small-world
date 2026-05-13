@@ -147,6 +147,16 @@ export const FLORA_BUILDERS = {
     cap.scale.set(1.4, 0.9, 1.4);
     cap.castShadow = true;
     g.add(cap);
+    // Underside disc — closes the hemisphere so looking up under the cap
+    // from first-person stroll doesn't see through into empty space.
+    const undersideGeo = pooled("mushroom.underside.geo", () =>
+      new THREE.CircleGeometry(0.22, 8)
+    );
+    const underside = new THREE.Mesh(undersideGeo, stemMat);
+    underside.rotation.x = Math.PI / 2; // face down (normal -Y)
+    underside.position.y = 0.36;
+    underside.scale.set(1.4, 1.4, 1);
+    g.add(underside);
     return g;
   },
 
@@ -261,9 +271,11 @@ export const FLORA_BUILDERS = {
     const trunkGeo = pooled("deadtree.trunk.geo", () =>
       new THREE.CylinderGeometry(0.06, 0.13, 1.2, 5)
     );
-    const branchGeo = pooled("deadtree.branch.geo", () =>
-      new THREE.CylinderGeometry(0.025, 0.04, 0.45, 4)
-    );
+    const branchGeo = pooled("deadtree.branch.geo", () => {
+      const geo = new THREE.CylinderGeometry(0.025, 0.04, 0.45, 4);
+      geo.translate(0, 0.225, 0);
+      return geo;
+    });
     const trunk = new THREE.Mesh(trunkGeo, mat);
     trunk.position.y = 0.6;
     trunk.rotation.z = (Math.random() - 0.5) * 0.15;
@@ -271,9 +283,11 @@ export const FLORA_BUILDERS = {
     g.add(trunk);
     for (let i = 0; i < 4; i++) {
       const branch = new THREE.Mesh(branchGeo, mat);
+      const yaw = Math.random() * Math.PI * 2;
+      const tilt = 0.5 + Math.random() * 0.7;
       branch.position.set(0, 0.9 + i * 0.08, 0);
-      branch.rotation.z = (Math.random() - 0.5) * 1.6;
-      branch.rotation.x = (Math.random() - 0.5) * 1.6;
+      branch.rotation.set(0, yaw, 0);
+      branch.rotateX(tilt);
       branch.castShadow = true;
       g.add(branch);
     }
@@ -474,22 +488,39 @@ export const FLORA_BUILDERS = {
     cap.scale.set(1, 0.55, 1);
     cap.castShadow = true;
     g.add(cap);
+    // Underside disc — closes the hemisphere so walking under the cap in
+    // first-person doesn't see through into empty space above. Uses the
+    // stem material (cream) which reads as a fresh mushroom gill plate.
+    const undersideGeo = pooled("bigmushroom.underside.geo", () =>
+      new THREE.CircleGeometry(0.8, 12)
+    );
+    const underside = new THREE.Mesh(undersideGeo, stemMat);
+    underside.rotation.x = Math.PI / 2;
+    underside.position.y = stemH;
+    g.add(underside);
     const spotMat = pooled("bigmushroom.spot.mat", () =>
       new THREE.MeshStandardMaterial({ color: "#fbf3df", flatShading: true, roughness: 0.9 })
     );
     const spots = 3 + Math.floor(Math.random() * 3);
+    const capR = 0.8;
+    const capSY = 0.55;
+    const capA2 = capR * capR;
+    const capB2 = (capR * capSY) * (capR * capSY);
+    const up = new THREE.Vector3(0, 1, 0);
     for (let i = 0; i < spots; i++) {
       const a = Math.random() * Math.PI * 2;
       const r = 0.25 + Math.random() * 0.4;
+      const x = Math.cos(a) * r;
+      const z = Math.sin(a) * r;
+      const yLocal = Math.sqrt(Math.max(0, capA2 - r * r)) * capSY;
+      const n = new THREE.Vector3(x / capA2, yLocal / capB2, z / capA2).normalize();
       const spot = new THREE.Mesh(
         new THREE.SphereGeometry(0.08 + Math.random() * 0.05, 6, 5),
         spotMat
       );
-      spot.position.set(
-        Math.cos(a) * r,
-        stemH + Math.sqrt(Math.max(0, 0.64 - r * r)) * 0.55 - 0.02,
-        Math.sin(a) * r
-      );
+      const sink = 0.02;
+      spot.position.set(x - n.x * sink, stemH + yLocal - n.y * sink, z - n.z * sink);
+      spot.quaternion.setFromUnitVectors(up, n);
       spot.scale.y = 0.35;
       g.add(spot);
     }

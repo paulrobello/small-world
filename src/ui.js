@@ -153,7 +153,9 @@ export function stepStroll(dt) {
   // Lock camera to terrain height + eye offset, but never sink below the
   // base plane so walking off an island just hovers at minimum height.
   const groundY = Math.max(0, state.heightFn(camera.position.x, camera.position.z));
-  const targetY = groundY + 1.5;
+  // Eye height clears tall grass clumps (max ~0.7 with current scale) and
+  // sits at small-flora head-height so you can look around naturally.
+  const targetY = groundY + 1.9;
   // smooth Y so cresting bumps doesn't jolt
   camera.position.y += (targetY - camera.position.y) * Math.min(1, dt * 8);
 
