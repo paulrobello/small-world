@@ -338,8 +338,10 @@ const _depthFXShader = {
 
       // ── painterly far-field fog: smoothstep mix toward uFogColor based
       // on linear view-distance. Augments the existing FogExp2 with a
-      // tunable, more aggressive far-field tint.
-      if (uFogStrength > 0.001) {
+      // tunable, more aggressive far-field tint. Gated on skyMask so it
+      // doesn't smother distant sky-layer geometry (cloud sprites,
+      // mountain backdrop) by replacing their color with fog tint.
+      if (uFogStrength > 0.001 && skyMask > 0.5) {
         float f = smoothstep(uFogNear, uFogFar, depth) * uFogStrength;
         base.rgb = mix(base.rgb, uFogColor, f);
       }
