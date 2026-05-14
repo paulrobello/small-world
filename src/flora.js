@@ -1073,7 +1073,7 @@ export const FLORA_BUILDERS = {
     const coreMat = pooled("lavafissure.core.mat", () =>
       new THREE.MeshBasicMaterial({ color: hot })
     );
-    const segmentCount = 11 + Math.floor(Math.random() * 5);
+    const segmentCount = 17 + Math.floor(Math.random() * 7);
     const totalLen = 3.3 + Math.random() * 1.1;
     const step = totalLen / segmentCount;
     const points = [];
@@ -1093,11 +1093,11 @@ export const FLORA_BUILDERS = {
       const dz = b.z - a.z;
       const midX = (a.x + b.x) * 0.5;
       const midZ = (a.z + b.z) * 0.5;
-      const segLen = Math.sqrt(dx * dx + dz * dz) * (1.55 + Math.random() * 0.18);
+      const segLen = Math.sqrt(dx * dx + dz * dz) * (2.35 + Math.random() * 0.25);
       const angle = Math.atan2(dz, dx);
 
       const rim = new THREE.Mesh(
-        new THREE.BoxGeometry(segLen + 0.22, 0.022, 0.17 + Math.random() * 0.03),
+        new THREE.BoxGeometry(segLen + 0.30, 0.022, 0.18 + Math.random() * 0.035),
         rimMat
       );
       rim.position.set(midX, 0.046, midZ);
@@ -1106,7 +1106,7 @@ export const FLORA_BUILDERS = {
       g.add(rim);
 
       const seam = new THREE.Mesh(
-        new THREE.BoxGeometry(segLen, 0.026, 0.064 + Math.random() * 0.018),
+        new THREE.BoxGeometry(segLen, 0.026, 0.078 + Math.random() * 0.018),
         lavaMat
       );
       seam.position.set(midX, 0.064, midZ);
@@ -1117,7 +1117,7 @@ export const FLORA_BUILDERS = {
 
       if (i > 0 && i < segmentCount - 1) {
         const core = new THREE.Mesh(
-          new THREE.BoxGeometry(segLen * 0.70, 0.028, 0.028),
+          new THREE.BoxGeometry(segLen * 0.82, 0.028, 0.032),
           coreMat
         );
         core.position.set(midX, 0.079, midZ);
@@ -1128,9 +1128,9 @@ export const FLORA_BUILDERS = {
       }
     }
 
-    const jointRimGeo = pooled("lavafissure.joint.rim.geo", () => new THREE.BoxGeometry(0.30, 0.023, 0.22));
-    const jointLavaGeo = pooled("lavafissure.joint.lava.geo", () => new THREE.BoxGeometry(0.22, 0.027, 0.12));
-    const jointCoreGeo = pooled("lavafissure.joint.core.geo", () => new THREE.BoxGeometry(0.12, 0.029, 0.045));
+    const jointRimGeo = pooled("lavafissure.joint.rim.geo", () => new THREE.BoxGeometry(0.52, 0.023, 0.28));
+    const jointLavaGeo = pooled("lavafissure.joint.lava.geo", () => new THREE.BoxGeometry(0.42, 0.027, 0.18));
+    const jointCoreGeo = pooled("lavafissure.joint.core.geo", () => new THREE.BoxGeometry(0.26, 0.029, 0.065));
     for (let i = 1; i < points.length - 1; i++) {
       const prev = points[i - 1];
       const next = points[i + 1];
