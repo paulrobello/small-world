@@ -632,17 +632,19 @@ export function makeIslandEdgeMist(biome) {
         if (uPattern > 0.5) {
           float angle = atan(vLocalXZ.y, vLocalXZ.x);
           float radial = d - uRadius;
-          float gust = fbm(vec2(angle * 2.8 + uTime * 0.035 * uWindStrength, radial * 0.10));
-          float bladeWave = sin(angle * uStreakScale + radial * 0.82 + gust * 4.5 + uTime * 0.42 * uWindStrength);
-          float bladeMask = smoothstep(0.28, 0.95, bladeWave * 0.5 + 0.5);
-          float fine = smoothstep(0.40, 0.86, fbm(vec2(angle * 34.0, radial * 0.18) + domainWarp * 1.6));
+          float innerFade = smoothstep(-uInnerSoft, -0.05, radial);
+          float outerFade = 1.0 - smoothstep(uOuterSoft * 0.08, uOuterSoft, radial);
+          float grassBand = innerFade * outerFade;
+          float gust = fbm(vec2(angle * 3.4 + uTime * 0.030 * uWindStrength, radial * 0.16));
+          float bladeWave = sin(angle * uStreakScale + radial * 1.35 + gust * 5.2 + uTime * 0.34 * uWindStrength);
+          float bladeMask = smoothstep(0.72, 0.98, bladeWave * 0.5 + 0.5);
+          float fine = smoothstep(0.58, 0.92, fbm(vec2(angle * 48.0, radial * 0.32) + domainWarp * 1.2));
           float highlight = bladeMask * fine;
-          float tufts = smoothstep(0.18, 0.78, n + highlight * 0.22);
-          float overlapBoost = 1.0 - smoothstep(0.0, uInnerSoft * 1.5, max(0.0, uRadius - d));
-          float a = (edge * mix(0.32, 0.82, tufts) + seam * 0.24 + highlight * edge * 0.26) * overlapBoost * uAlpha;
+          float tufts = smoothstep(0.24, 0.82, n + highlight * 0.16);
+          float a = (grassBand * mix(0.08, 0.45, tufts) + seam * 0.12 + highlight * grassBand * 0.24) * uAlpha;
           if (a < 0.006) discard;
-          vec3 fieldCol = mix(uColA, uColB, tufts * 0.62 + highlight * 0.18);
-          fieldCol = mix(fieldCol, uColC, highlight * 0.38 + seam * 0.08);
+          vec3 fieldCol = mix(uColA, uColB, tufts * 0.55 + highlight * 0.16);
+          fieldCol = mix(fieldCol, uColC, highlight * 0.32 + seam * 0.06);
           gl_FragColor = vec4(fieldCol, a);
           return;
         }
