@@ -1073,26 +1073,16 @@ export const FLORA_BUILDERS = {
     const coreMat = pooled("lavafissure.core.mat", () =>
       new THREE.MeshBasicMaterial({ color: hot })
     );
-    const haloMat = pooled("lavafissure.halo.mat", () =>
-      new THREE.MeshBasicMaterial({
-        color: ember,
-        transparent: true,
-        opacity: 0.08,
-        blending: THREE.AdditiveBlending,
-        depthWrite: false,
-      })
-    );
-
-    const segmentCount = 7 + Math.floor(Math.random() * 4);
+    const segmentCount = 11 + Math.floor(Math.random() * 5);
     const totalLen = 3.3 + Math.random() * 1.1;
     const step = totalLen / segmentCount;
     const points = [];
     let wanderZ = (Math.random() - 0.5) * 0.10;
     for (let i = 0; i <= segmentCount; i++) {
-      if (i > 0) wanderZ += (Math.random() - 0.5) * 0.72;
+      if (i > 0) wanderZ += (Math.random() - 0.5) * 0.48;
       points.push({
         x: -totalLen * 0.5 + step * i,
-        z: Math.max(-0.75, Math.min(0.75, wanderZ)),
+        z: Math.max(-0.85, Math.min(0.85, wanderZ)),
       });
     }
 
@@ -1103,7 +1093,7 @@ export const FLORA_BUILDERS = {
       const dz = b.z - a.z;
       const midX = (a.x + b.x) * 0.5;
       const midZ = (a.z + b.z) * 0.5;
-      const segLen = Math.sqrt(dx * dx + dz * dz) * (1.16 + Math.random() * 0.18);
+      const segLen = Math.sqrt(dx * dx + dz * dz) * (1.34 + Math.random() * 0.16);
       const angle = Math.atan2(dz, dx);
 
       const rim = new THREE.Mesh(
@@ -1112,6 +1102,7 @@ export const FLORA_BUILDERS = {
       );
       rim.position.set(midX, 0.046, midZ);
       rim.rotation.y = -angle;
+      rim.userData.surfaceLift = 0.046;
       g.add(rim);
 
       const seam = new THREE.Mesh(
@@ -1120,6 +1111,7 @@ export const FLORA_BUILDERS = {
       );
       seam.position.set(midX, 0.064, midZ);
       seam.rotation.y = -angle;
+      seam.userData.surfaceLift = 0.064;
       seam.layers.enable(BLOOM_LAYER);
       g.add(seam);
 
@@ -1130,6 +1122,7 @@ export const FLORA_BUILDERS = {
         );
         core.position.set(midX, 0.079, midZ);
         core.rotation.y = -angle;
+        core.userData.surfaceLift = 0.079;
         core.layers.enable(BLOOM_LAYER);
         g.add(core);
       }
@@ -1144,18 +1137,12 @@ export const FLORA_BUILDERS = {
       const edge = side * (0.16 + Math.random() * 0.18);
       const s = 0.45 + Math.random() * 0.65;
       stone.position.set(along, 0.04, edge);
+      stone.userData.surfaceLift = 0.04;
       stone.scale.set(s * (1.0 + Math.random() * 0.65), 0.30 + Math.random() * 0.35, s * 0.75);
       stone.rotation.set(Math.random() * 0.35, Math.random() * Math.PI * 2, Math.random() * 0.35);
       stone.castShadow = true;
       g.add(stone);
     }
-
-    const haloGeo = pooled("lavafissure.halo.geo", () => new THREE.IcosahedronGeometry(0.24, 1));
-    const halo = new THREE.Mesh(haloGeo, haloMat);
-    halo.position.y = 0.026;
-    halo.scale.set(totalLen * 0.82, 0.10, 0.22);
-    halo.layers.enable(BLOOM_LAYER);
-    g.add(halo);
 
     return g;
   },

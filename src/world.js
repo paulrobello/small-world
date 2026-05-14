@@ -455,6 +455,20 @@ export function generateWorld(seed) {
     }
     return false;
   }
+  function conformSurfaceChildrenToTerrain(group) {
+    const c = Math.cos(group.rotation.y);
+    const s = Math.sin(group.rotation.y);
+    const scale = group.scale.x || 1;
+    for (const child of group.children) {
+      const lift = child.userData.surfaceLift;
+      if (lift === undefined) continue;
+      const lx = child.position.x * scale;
+      const lz = child.position.z * scale;
+      const wx = group.position.x + c * lx + s * lz;
+      const wz = group.position.z - s * lx + c * lz;
+      child.position.y = (state.heightFn(wx, wz) - group.position.y) / scale + lift;
+    }
+  }
   // Water-plane surface Y — matches makeWaterPlane in environment.js. Used to
   // separate underwater coral spawns from above-water flora in water biomes.
   const WATER_SURFACE_Y = -0.12;
@@ -527,6 +541,7 @@ export function generateWorld(seed) {
     f.position.set(p.x, y, p.z);
     f.rotation.y = Math.random() * Math.PI * 2;
     f.scale.setScalar(s);
+    if (kind === "lavafissure") conformSurfaceChildrenToTerrain(f);
     if (kind === "crystal") {
       const glow = new THREE.PointLight(new THREE.Color(biome.accent), 1.4, 6.5, 1.8);
       glow.position.set(0, 0.6, 0); // sits inside the cluster
