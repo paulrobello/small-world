@@ -384,8 +384,10 @@ export function generateWorld(seed) {
   let placed = 0;
   let attempts = 0;
   let crystalCount = 0;
+  let fissureLightCount = 0;
   let coralPlaced = 0;
   const CRYSTAL_CAP = 4;
+  const FISSURE_LIGHT_CAP = LOWFX ? 2 : 5;
   // Density compensation: biome counts were tuned against a 38-unit base; the
   // current ISLAND_SIZE may be larger. Scale linearly with width so a bigger
   // world still feels populated rather than empty.
@@ -403,7 +405,7 @@ export function generateWorld(seed) {
     balloontree: 0.22, crystal: 0.30, obsidianshard: 0.28, skull: 0.22,
     berrybush: 0.30, coral: 0.25, braincoral: 0.26, cupcoral: 0.22,
     fern: 0.18, rock: 0.30, limestonerock: 0.30, reed: 0.10,
-    seaweed: 0.12, beachsucculent: 0.20,
+    seaweed: 0.12, beachsucculent: 0.20, lavafissure: 0.34,
   };
   const FLORA_FOOTPRINT_DEFAULT = 0.20;
   const FLORA_BURY = 0.08; // extra sink so the seam is hidden in soft fog
@@ -414,7 +416,7 @@ export function generateWorld(seed) {
   const OBSTACLE_KINDS = new Set([
     "tree", "pine", "deadtree", "mushroom", "bigmushroom",
     "pillar", "archstone", "balloontree", "crystal",
-    "lantern", "obsidianshard", "skull",
+    "lantern", "obsidianshard", "skull", "lavafissure",
   ]);
   // Per-kind canopy top height (local Y of the highest visible mass at
   // scale=1). Fliers below ground + top * scale must route around the
@@ -423,6 +425,7 @@ export function generateWorld(seed) {
     tree: 2.3, pine: 2.2, deadtree: 1.8, mushroom: 1.1,
     bigmushroom: 2.6, pillar: 2.8, archstone: 2.6, balloontree: 3.2,
     crystal: 1.6, lantern: 1.7, obsidianshard: 2.2, skull: 1.5,
+    lavafissure: 0.28,
   };
   const OBSTACLE_TOP_DEFAULT = 2.0;
   // Extra pad on top of the slope-plant footprint so creature bodies don't
@@ -503,6 +506,12 @@ export function generateWorld(seed) {
       glow.position.set(0, 0.6, 0); // sits inside the cluster
       f.add(glow);
       crystalCount++;
+    }
+    if (kind === "lavafissure" && fissureLightCount < FISSURE_LIGHT_CAP) {
+      const glow = new THREE.PointLight(new THREE.Color(biome.accent), 0.85, 4.2, 2.0);
+      glow.position.set(0, 0.22, 0);
+      f.add(glow);
+      fissureLightCount++;
     }
     state.world.add(f);
     if (OBSTACLE_KINDS.has(kind)) {
