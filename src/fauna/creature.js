@@ -101,7 +101,8 @@ function spawnZ(c) {
 //   sleeper      — spawn in sleeping state (walkers only)
 //   burrower     — spawn as burrower variant (walkers only)
 export function makeCreature(biome, opts = {}) {
-  const isFish = biome.creatureKind === "fish";
+  const isAngler = !!opts.angler;
+  const isFish = biome.creatureKind === "fish" || isAngler;
   // sleepers and burrowers must be walkers — sleeping fliers in mid-air look broken
   const forceWalk = !!(opts.sleeper || opts.burrower);
   const flies = isFish ? true : forceWalk ? false : Math.random() < 0.3;
@@ -117,11 +118,13 @@ export function makeCreature(biome, opts = {}) {
       ? "sleeper"
       : opts.burrower
         ? "burrower"
-        : isFish
-          ? "fish"
-          : flies
-            ? "flier"
-            : "walker",
+        : isAngler
+          ? "angler"
+          : isFish
+            ? "fish"
+            : flies
+              ? "flier"
+              : "walker",
   };
   const palette = biome.creatureColors;
   const bodyCol = new THREE.Color(
@@ -251,6 +254,8 @@ export function makeCreature(biome, opts = {}) {
   const legs = [];
   const wings = [];
   let tailFin = null;
+  let lureStalk = null;
+  let lureOrb = null;
 
   if (flies) {
     if (isFish) {
@@ -283,6 +288,35 @@ export function makeCreature(biome, opts = {}) {
       tailFin.position.set(0, 0.02, -0.58);
       tailFin.castShadow = true;
       group.add(tailFin);
+
+      if (isAngler) {
+        const lureMat = new THREE.MeshStandardMaterial({
+          color: new THREE.Color(biome.accent),
+          emissive: new THREE.Color(biome.accent),
+          emissiveIntensity: 1.55,
+          roughness: 0.25,
+        });
+        const stalkMat = new THREE.MeshStandardMaterial({
+          color: bodyCol.clone().offsetHSL(0, -0.08, -0.08),
+          roughness: 0.65,
+          flatShading: true,
+        });
+        lureStalk = new THREE.Mesh(
+          new THREE.CylinderGeometry(0.012, 0.018, 0.52, 6),
+          stalkMat
+        );
+        lureStalk.position.set(0, 0.38, 0.2);
+        lureStalk.rotation.x = -0.72;
+        group.add(lureStalk);
+
+        lureOrb = new THREE.Mesh(
+          new THREE.SphereGeometry(0.07, 10, 8),
+          lureMat
+        );
+        lureOrb.position.set(0, 0.27, 0);
+        lureOrb.layers.enable(BLOOM_LAYER);
+        lureStalk.add(lureOrb);
+      }
     } else {
       // wings — flattened ellipsoid icospheres on hinge groups
       const wingMat = new THREE.MeshStandardMaterial({
@@ -414,6 +448,9 @@ export function makeCreature(biome, opts = {}) {
     legs,
     wings,
     tailFin,
+    lureStalk,
+    lureOrb,
+    isAngler,
     eyeParts,
     flies,
     isFish,
@@ -1256,6 +1293,10 @@ export function stepCreature(c, dt, t, heightFn) {
       }
       if (c.tailFin) c.tailFin.rotation.y = Math.sin(phase * 1.15) * 0.55;
       c.body.rotation.z = wave * 0.04;
+      if (c.isAngler && c.lureStalk && c.lureOrb) {
+        c.lureStalk.rotation.z = Math.sin(t * 1.9 + c.flapPhase) * 0.12;
+        c.lureOrb.scale.setScalar(1 + Math.sin(t * 3.1 + c.flapPhase) * 0.12);
+      }
     } else if (grounded) {
       // Wings mostly tucked, but with a small idle twitch so the bird never
       // looks completely lifeless. Period ~2s, amplitude small.
