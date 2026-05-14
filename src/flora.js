@@ -1086,10 +1086,11 @@ export const FLORA_BUILDERS = {
           float hash(float n) { return fract(sin(n) * 43758.5453123); }
           void main() {
             float edge = smoothstep(0.78, 0.98, vAcross);
-            float lavaMask = 1.0 - smoothstep(0.58, 0.78, vAcross);
-            float coreMask = 1.0 - smoothstep(0.16, 0.34, vAcross);
+            float redBand = smoothstep(0.09, 0.62, vAcross);
+            float coreMask = 1.0 - smoothstep(0.05, 0.15, vAcross);
             float flicker = 0.82 + 0.18 * hash(floor(vAlong * 34.0) + vHeat * 19.0);
-            vec3 lava = mix(uLava * flicker, uCore, coreMask * 0.85);
+            vec3 redGlow = uLava * vec3(0.95, 0.28, 0.16);
+            vec3 lava = mix(uCore, redGlow * flicker, redBand);
             vec3 col = mix(lava, uRim, edge);
             float alpha = smoothstep(1.0, 0.92, vAcross);
             gl_FragColor = vec4(col, alpha);
@@ -1111,7 +1112,7 @@ export const FLORA_BUILDERS = {
       centers.push({
         x: -totalLen * 0.5 + step * i,
         z: Math.max(-0.85, Math.min(0.85, wanderZ)),
-        halfW: 0.16 + Math.random() * 0.07,
+        halfW: 0.144 + Math.random() * 0.063,
         heat: Math.random(),
       });
     }
@@ -1154,6 +1155,12 @@ export const FLORA_BUILDERS = {
         indices.push(a, c, b, b, c, d);
       }
     }
+
+    g.userData.fissureObstaclePoints = centers.map(({ x, z, halfW }) => ({
+      x,
+      z,
+      r: Math.max(0.22, halfW * 1.5),
+    }));
 
     const geo = new THREE.BufferGeometry();
     geo.setAttribute("position", new THREE.BufferAttribute(new Float32Array(positions), 3));

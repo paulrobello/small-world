@@ -571,14 +571,33 @@ export function generateWorld(seed) {
     floraPlacementBlocks.push({ kind, x: p.x, z: p.z, r: fp * 1.2 });
     if (OBSTACLE_KINDS.has(kind)) {
       const topLocal = (OBSTACLE_TOP[kind] ?? OBSTACLE_TOP_DEFAULT) * s;
-      const topY = y0 + topLocal;
-      state.obstacles.push({
-        kind,
-        x: p.x,
-        z: p.z,
-        r: fp * OBSTACLE_PAD,
-        top: topY,
-      });
+      const fissurePts = kind === "lavafissure" ? f.userData.fissureObstaclePoints : null;
+      if (Array.isArray(fissurePts) && fissurePts.length) {
+        const c = Math.cos(f.rotation.y);
+        const sy = Math.sin(f.rotation.y);
+        for (const pt of fissurePts) {
+          const lx = pt.x * s;
+          const lz = pt.z * s;
+          const wx = p.x + c * lx + sy * lz;
+          const wz = p.z - sy * lx + c * lz;
+          state.obstacles.push({
+            kind,
+            x: wx,
+            z: wz,
+            r: (pt.r ?? 0.24) * s * OBSTACLE_PAD,
+            top: state.heightFn(wx, wz) + topLocal,
+          });
+        }
+      } else {
+        const topY = y0 + topLocal;
+        state.obstacles.push({
+          kind,
+          x: p.x,
+          z: p.z,
+          r: fp * OBSTACLE_PAD,
+          top: topY,
+        });
+      }
       // Mushrooms (and big-mushrooms) double as landing pads for fliers —
       // record the cap top so the perch-aware flier landing code can steer
       // toward it. Use the builder-supplied local cap-top (accurate to the
