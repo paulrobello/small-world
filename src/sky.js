@@ -635,16 +635,39 @@ export function makeIslandEdgeMist(biome) {
           float innerFade = smoothstep(-uInnerSoft, -0.05, radial);
           float outerFade = 1.0 - smoothstep(uOuterSoft * 0.08, uOuterSoft, radial);
           float grassBand = innerFade * outerFade;
-          float gust = fbm(vec2(angle * 3.4 + uTime * 0.030 * uWindStrength, radial * 0.16));
-          float bladeWave = sin(angle * uStreakScale + radial * 1.35 + gust * 5.2 + uTime * 0.34 * uWindStrength);
-          float bladeMask = smoothstep(0.72, 0.98, bladeWave * 0.5 + 0.5);
-          float fine = smoothstep(0.58, 0.92, fbm(vec2(angle * 48.0, radial * 0.32) + domainWarp * 1.2));
-          float highlight = bladeMask * fine;
-          float tufts = smoothstep(0.24, 0.82, n + highlight * 0.16);
-          float a = (grassBand * mix(0.08, 0.45, tufts) + seam * 0.12 + highlight * grassBand * 0.24) * uAlpha;
+          float gust = fbm(vec2(angle * 4.0 + uTime * 0.028 * uWindStrength, radial * 0.20));
+
+          // Arc-length coordinates keep the pattern density stable around the
+          // ring. The grass effect is built from many short diagonal strokes,
+          // not low-frequency FBM opacity, so it reads as a field instead of
+          // transparent cloud blobs.
+          float arc = angle * uRadius;
+          vec2 windSlide = vec2(uTime * 0.38, uTime * 0.10) * uWindStrength;
+          vec2 grassUv = vec2(arc * 1.15 + gust * 1.8, radial * 1.85) + windSlide;
+          vec2 cellId = floor(grassUv * vec2(uStreakScale * 0.10, 0.95));
+          vec2 cellUv = fract(grassUv * vec2(uStreakScale * 0.10, 0.95)) - 0.5;
+          float rnd = hash(cellId);
+          float lean = (rnd - 0.5) * 0.90 + (gust - 0.5) * 0.55;
+          float lineDist = abs(cellUv.x + cellUv.y * lean);
+          float strokeLen = smoothstep(0.50, 0.16, abs(cellUv.y));
+          float grassStroke = smoothstep(0.070, 0.014, lineDist) * strokeLen * smoothstep(0.22, 0.62, rnd);
+
+          vec2 fineUv = vec2(arc * 2.55 - gust * 1.1, radial * 3.10) - windSlide * 0.65;
+          vec2 fineCellId = floor(fineUv * vec2(uStreakScale * 0.12, 1.20));
+          vec2 fineCellUv = fract(fineUv * vec2(uStreakScale * 0.12, 1.20)) - 0.5;
+          float fineRnd = hash(fineCellId + 19.7);
+          float fineLineDist = abs(fineCellUv.x + fineCellUv.y * ((fineRnd - 0.5) * 0.75));
+          float fineStroke = smoothstep(0.050, 0.010, fineLineDist)
+            * smoothstep(0.48, 0.18, abs(fineCellUv.y))
+            * smoothstep(0.30, 0.72, fineRnd);
+
+          float fieldDensity = smoothstep(0.16, 0.82, fbm(vec2(angle * 9.0, radial * 0.45) + driftA));
+          float strokes = max(grassStroke, fineStroke * 0.70) * mix(0.55, 1.0, fieldDensity);
+          float baseWeave = grassBand * mix(0.018, 0.060, fieldDensity);
+          float a = (baseWeave + strokes * grassBand * 0.58 + seam * 0.035) * uAlpha;
           if (a < 0.006) discard;
-          vec3 fieldCol = mix(uColA, uColB, tufts * 0.55 + highlight * 0.16);
-          fieldCol = mix(fieldCol, uColC, highlight * 0.32 + seam * 0.06);
+          vec3 fieldCol = mix(uColA, uColB, fieldDensity * 0.45 + strokes * 0.35);
+          fieldCol = mix(fieldCol, uColC, strokes * 0.26 + seam * 0.035);
           gl_FragColor = vec4(fieldCol, a);
           return;
         }
