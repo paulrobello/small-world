@@ -648,21 +648,22 @@ export const FLORA_BUILDERS = {
     const shards = 3 + Math.floor(Math.random() * 3); // 3–5
     for (let i = 0; i < shards; i++) {
       const r = 0.1 + Math.random() * 0.12;
-      const shard = new THREE.Mesh(
-        new THREE.IcosahedronGeometry(r, 0),
-        mat
-      );
+      const geo = new THREE.IcosahedronGeometry(r, 0);
+      geo.translate(0, r, 0); // pivot at the base so tilted shards stay rooted together
+      const shard = new THREE.Mesh(geo, mat);
       const a = (i / shards) * Math.PI * 2 + Math.random() * 0.5;
-      const off = 0.05 + Math.random() * 0.1;
-      shard.position.set(
-        Math.cos(a) * off,
-        r * (0.9 + Math.random() * 1.4),
-        Math.sin(a) * off
-      );
-      // stretch upward — shard-like silhouette
-      shard.scale.set(0.55, 1.5 + Math.random() * 0.8, 0.55);
-      shard.rotation.y = Math.random() * Math.PI * 2;
-      shard.rotation.z = (Math.random() - 0.5) * 0.35;
+      const isCenter = i === 0;
+      const tilt = isCenter ? 0.04 : 0.34 + Math.random() * 0.32;
+      const rootOff = isCenter ? 0 : 0.025 + Math.random() * 0.035;
+      const heightScale = isCenter ? 1.95 + Math.random() * 0.45 : 1.35 + Math.random() * 0.65;
+      // Tilt side shards outward from nearby shared roots so the bases touch
+      // and the whole cluster reads as one faceted crystal instead of posts.
+      shard.position.set(Math.cos(a) * rootOff, 0.02, Math.sin(a) * rootOff);
+      shard.scale.set(0.55, heightScale, 0.55);
+      shard.rotation.order = "YXZ";
+      shard.rotation.y = a;
+      shard.rotation.x = -tilt;
+      shard.rotation.z = (Math.random() - 0.5) * 0.10;
       shard.castShadow = true;
       shard.layers.enable(BLOOM_LAYER);
       g.add(shard);
