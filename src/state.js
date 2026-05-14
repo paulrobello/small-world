@@ -41,6 +41,9 @@ export const state = {
   // Null on every other biome. Parented to state.world; disposeGroup handles
   // teardown.
   cloudSwirl: null,
+  // Round-layout island edge cloud ring, parented to state.world so disposeGroup
+  // handles teardown on regen.
+  islandCloudRing: null,
   shadowDisks: null,
   waterReflection: null,
   mountainBasePos: null,

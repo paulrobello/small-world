@@ -149,6 +149,8 @@ export function makeTerrain(biome, heightFn) {
   const c1 = new THREE.Color(biome.ground[1]);
   const c2 = new THREE.Color(biome.ground[2]);
   const cliffCol = new THREE.Color(biome.cliff);
+  const cloudlike = !!biome.cloudlike;
+  const cloudGlow = new THREE.Color(0xffffff);
 
   // first pass — set heights
   for (let i = 0; i < pos.count; i++) {
@@ -161,7 +163,9 @@ export function makeTerrain(biome, heightFn) {
 
   const tmp = new THREE.Color();
   for (let i = 0; i < pos.count; i++) {
+    const x = pos.getX(i);
     const y = pos.getY(i);
+    const z = pos.getZ(i);
     const nx = geo.attributes.normal.getX(i);
     const nz = geo.attributes.normal.getZ(i);
     const slope = 1 - Math.abs(geo.attributes.normal.getY(i));
@@ -173,11 +177,25 @@ export function makeTerrain(biome, heightFn) {
     } else {
       tmp.copy(c1).lerp(c2, smoothstep(0.5, 1, t));
     }
-    // mix in cliff colour for steep slopes
-    tmp.lerp(cliffCol, Math.min(slope * 1.6, 0.85));
+    if (cloudlike) {
+      // Cloud terrain should stay soft on slopes. Instead of dark cliff bands,
+      // add broad cottony highlights and a lavender-blue low tint.
+      const puff =
+        0.5 +
+        0.5 * Math.sin(x * 0.34 + z * 0.19) *
+        Math.sin(x * 0.12 - z * 0.31);
+      tmp.lerp(cloudGlow, 0.28 + puff * 0.2);
+      tmp.lerp(cliffCol, Math.min(slope * 0.28, 0.18));
+    } else {
+      // mix in cliff colour for steep slopes
+      tmp.lerp(cliffCol, Math.min(slope * 1.6, 0.85));
+    }
 
-    // subtle noise speckle
-    const speckle = 0.92 + Math.random() * 0.16;
+    // subtle noise speckle; cloud terrain gets less contrast so it reads as
+    // airy cotton instead of rocky dirt.
+    const speckle = cloudlike
+      ? 0.98 + Math.random() * 0.05
+      : 0.92 + Math.random() * 0.16;
     colors[i * 3 + 0] = tmp.r * speckle;
     colors[i * 3 + 1] = tmp.g * speckle;
     colors[i * 3 + 2] = tmp.b * speckle;
@@ -187,9 +205,11 @@ export function makeTerrain(biome, heightFn) {
 
   const mat = new THREE.MeshStandardMaterial({
     vertexColors: true,
-    flatShading: true,
-    roughness: 0.92,
+    flatShading: !cloudlike,
+    roughness: cloudlike ? 0.78 : 0.92,
     metalness: 0,
+    emissive: cloudlike ? new THREE.Color(biome.fog).lerp(cloudGlow, 0.35) : 0x000000,
+    emissiveIntensity: cloudlike ? 0.08 : 0,
   });
 
   const mesh = new THREE.Mesh(geo, mat);

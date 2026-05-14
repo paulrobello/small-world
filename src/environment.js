@@ -672,8 +672,38 @@ export function makeWildflowerField(biome, heightFn) {
   return meshes;
 }
 
+export function makeCloudPuffField(biome, heightFn) {
+  if (!biome.cloudlike) return null;
+
+  const count = _coverScale(LOWFX ? 38 : 64);
+  const geo = new THREE.IcosahedronGeometry(0.34, 1);
+  geo.scale(1.7, 0.32, 1.25);
+  const glow = new THREE.Color(0xffffff);
+  const mat = new THREE.MeshStandardMaterial({
+    color: new THREE.Color(biome.fog).lerp(glow, 0.7),
+    emissive: new THREE.Color(biome.sky).lerp(glow, 0.55),
+    emissiveIntensity: 0.1,
+    flatShading: false,
+    roughness: 0.82,
+    metalness: 0,
+  });
+  const mesh = placeInstanced(geo, mat, count, heightFn, {
+    yOffset: 0.08,
+    minScale: 0.7,
+    maxScale: 2.0,
+    tilt: 0.12,
+    maxRadiusFrac: 0.82,
+    minHeight: -0.25,
+  });
+  mesh.castShadow = false;
+  mesh.receiveShadow = true;
+  mesh.userData.inspect = { category: "flora", variant: "cloudpuff" };
+  return mesh;
+}
+
 export function makePebbleField(biome, heightFn) {
   const count = _coverScale(PEBBLE_DENSITY[biome.id] ?? 80);
+  if (count <= 0) return null;
   const g = jitterGeo(new THREE.IcosahedronGeometry(0.08, 0), 0.025);
   g.scale(1.3, 0.45, 1.3);
   const col = new THREE.Color(biome.cliff).offsetHSL(

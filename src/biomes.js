@@ -285,7 +285,7 @@ export const GRASS_DENSITY = {
   verdant: 600, desert:   0, frozen: 240,
   marsh:   500, ashen:    0, golden: 750,
   mossy:   650, twilight: 540, coral: 0,
-  cloud:   180, grove:   400, obsidian: 0,
+  cloud:     0, grove:   400, obsidian: 0,
 };
 // Per-biome rejection threshold for the grass density noise. Blades whose
 // underlying noise sample at world XZ falls below this threshold are not
@@ -323,7 +323,7 @@ export const PEBBLE_DENSITY = {
   verdant: 80, desert: 130, frozen: 100,
   marsh:   70, ashen:  140, golden: 90,
   mossy:  120, twilight: 70, coral: 55,
-  cloud:  40, grove:    80, obsidian: 160,
+  cloud:   0, grove:    80, obsidian: 160,
 };
 
 export const BEACHCOMB_DENSITY = {

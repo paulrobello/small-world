@@ -130,6 +130,21 @@ export function isStrolling() {
   return _stroll !== null;
 }
 
+function applyStrollVisualComfort(on) {
+  // Big surrounding cloud halos look lovely from orbit but wash out the view
+  // when the camera is inside them. Hide them only during first-person stroll;
+  // ground-level cloud puffs still provide close-up texture.
+  if (state.currentBiome?.cloudlike && state.cloudSwirl) {
+    state.cloudSwirl.visible = !on;
+  }
+  if (state.currentBiome?.cloudlike && state.mountains) {
+    state.mountains.visible = !on;
+  }
+  if (state.islandCloudRing) {
+    state.islandCloudRing.visible = !on;
+  }
+}
+
 export function isPhotoMode() {
   return document.body.classList.contains("photo-mode");
 }
@@ -156,6 +171,7 @@ function setManualPaused(on) {
 // frame while stroll mode is active.
 export function stepStroll(dt) {
   if (!_stroll) return;
+  applyStrollVisualComfort(true);
   const { camera, keys, savedTarget } = _stroll;
   // Move speed scales with the world — at higher worldScale the island is
   // bigger in world coords, so a fixed-units speed feels slower. Multiply
@@ -438,6 +454,7 @@ export function initUi({ camera, canvas, controls, renderer }) {
     window.addEventListener("keyup", onKeyUp);
     document.addEventListener("pointerlockchange", onLockChange);
     _stroll.handlers = { onMove, onKeyDown, onKeyUp, onLockChange };
+    applyStrollVisualComfort(true);
     syncStrollButton();
   }
   function exitStroll() {
@@ -455,6 +472,7 @@ export function initUi({ camera, canvas, controls, renderer }) {
     controls.autoRotate = savedCam.autoRotate && state.userSettings.autoRotate;
     controls.enabled = true;
     _stroll = null;
+    applyStrollVisualComfort(false);
     syncStrollButton();
   }
   strollBtn.addEventListener("click", () => {

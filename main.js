@@ -251,6 +251,12 @@ function animate() {
 
   if (isStrolling()) {
     stepStroll(dt);
+    if (state.currentBiome?.cloudlike && scene.fog) {
+      // Cloud fog is tuned for orbit mode; from eye level it can flatten the
+      // whole frame. Pull it back only while strolling so nearby puffs and
+      // hills keep readable depth.
+      scene.fog.density *= 0.55;
+    }
     // Walk-up wake: any sleeping creature within ~2.5 mesh-local units of
     // the player pops awake. Camera lives in world space; creatures live
     // inside state.world (scaled by worldScale), so convert camera XZ to

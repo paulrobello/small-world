@@ -35,6 +35,7 @@ import {
   makeGrassField,
   makeWildflowerField,
   makePebbleField,
+  makeCloudPuffField,
   makeBeachcombField,
   makeWaterPlane,
   makeFlySwarm,
@@ -46,6 +47,7 @@ import {
   makeStarfield,
   makeAurora,
   makeCloudSwirl,
+  makeIslandCloudRing,
   stepClouds,
   updateSkyColors,
 } from "./sky.js";
@@ -214,6 +216,7 @@ export function generateWorld(seed) {
   state.particles = null;
   state.waterMesh = null;
   state.grass = null;
+  state.islandCloudRing = null;
   // release any followed creature — the entity it pointed to no longer exists
   _releaseFollow();
 
@@ -305,6 +308,9 @@ export function generateWorld(seed) {
   state.cloudSwirl = makeCloudSwirl(biome);
   if (state.cloudSwirl) state.world.add(state.cloudSwirl);
 
+  state.islandCloudRing = makeIslandCloudRing(biome);
+  if (state.islandCloudRing) state.world.add(state.islandCloudRing);
+
   const nightP = biome.night ?? {};
   const duskP = biome.dusk ?? null;
   state.dayNight = {
@@ -326,7 +332,11 @@ export function generateWorld(seed) {
 
   // terrain
   const noise2D = createNoise2D();
-  const baseHeightFn = makeHeightFn(noise2D, layout, 3.2);
+  // Cloud islands should read as soft puffs rather than rocky mountains.
+  // Lowering the amplitude keeps the silhouette pillowy while preserving the
+  // seeded terrain function for creature placement and HUD elevation.
+  const terrainAmp = biome.cloudlike ? 2.15 : 3.2;
+  const baseHeightFn = makeHeightFn(noise2D, layout, terrainAmp);
   state.heightFn = biome.water
     ? (x, z) => {
       const h = baseHeightFn(x, z);
@@ -574,9 +584,12 @@ export function generateWorld(seed) {
     state.world.add(m);
     if (m.userData.positions) state.flowerSpots.push(...m.userData.positions);
   }
+  const cloudPuffs = makeCloudPuffField(biome, state.heightFn);
+  if (cloudPuffs) state.world.add(cloudPuffs);
   const beachcomb = makeBeachcombField(biome, state.heightFn);
   if (beachcomb) state.world.add(beachcomb);
-  state.world.add(makePebbleField(biome, state.heightFn));
+  const pebbles = makePebbleField(biome, state.heightFn);
+  if (pebbles) state.world.add(pebbles);
 
   // creatures — fish biomes don't get sleepers/burrowers (they float).
   // We treat ncreatures as a budget; family parents consume +1 per kid,
