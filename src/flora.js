@@ -1086,8 +1086,8 @@ export const FLORA_BUILDERS = {
           float hash(float n) { return fract(sin(n) * 43758.5453123); }
           void main() {
             float edge = smoothstep(0.78, 0.98, vAcross);
-            float redBand = smoothstep(0.09, 0.62, vAcross);
-            float coreMask = 1.0 - smoothstep(0.05, 0.15, vAcross);
+            float redBand = smoothstep(0.045, 0.50, vAcross);
+            float coreMask = 1.0 - smoothstep(0.025, 0.075, vAcross);
             float flicker = 0.82 + 0.18 * hash(floor(vAlong * 34.0) + vHeat * 19.0);
             vec3 redGlow = uLava * vec3(0.95, 0.28, 0.16);
             vec3 lava = mix(uCore, redGlow * flicker, redBand);
