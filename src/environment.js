@@ -42,7 +42,9 @@ void main() {
   vec4 mv = modelViewMatrix * vec4(position, 1.0);
   vViewZ = -mv.z; // positive distance in front of camera, matches readViewDist in postfx.js
   float size = uBaseSize;
-  #if PARTICLE_KIND == 4 || PARTICLE_KIND == 9 || PARTICLE_KIND == 12
+  #if PARTICLE_KIND == 12
+    size *= (0.45 + 1.35 * fract(aSeed * 17.173)) * (1.0 - aLife * 0.7);
+  #elif PARTICLE_KIND == 4 || PARTICLE_KIND == 9
     size *= 1.0 - aLife * 0.7;
   #elif PARTICLE_KIND == 2
     size *= 0.7 + 0.3 * fract(aSeed);
