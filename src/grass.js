@@ -16,6 +16,7 @@ import { LOWFX, LOWFX_DENSITY } from "./lowfx.js";
 // "toggle" bending on and off as the array reshuffles (e.g. fliers taking
 // off frees a slot for a previously-skipped walker).
 const MAX_PUSHERS = 40;
+const PUSH_RADIUS_SCALE = 0.9;
 
 // Upper bound on the user's grass-density slider. Sets how much headroom
 // makeGrassField pre-allocates so the slider can go past 100% without
@@ -375,7 +376,7 @@ export function stepGrass(camera) {
     // than before so the trampled patch matches the creature's footprint
     // rather than reading as a wide invisible bubble. Min radius keeps
     // tiny creatures from pushing a sub-unit halo at default zoom.
-    const r = Math.max(1.0 * ws, 1.3 * c.scale * ws);
+    const r = Math.max(1.0 * ws, 1.3 * c.scale * ws) * PUSH_RADIUS_SCALE;
     pushers[n].set(p.x * ws, p.z * ws, r, 0.5 * c.scale * ws);
     n++;
   }
@@ -386,7 +387,7 @@ export function stepGrass(camera) {
     // reads as a flattened narrow trail rather than a wide swath. Slot
     // budget is high enough (MAX_PUSHERS=40) that every segment of every
     // caterpillar fits without competing with walkers.
-    const r = Math.max(0.45 * ws, 0.6 * c.scale * ws);
+    const r = Math.max(0.45 * ws, 0.6 * c.scale * ws) * PUSH_RADIUS_SCALE;
     const str = 0.4 * c.scale * ws;
     for (let i = 0; i < c.segments.length; i++) {
       if (n >= MAX) break;
