@@ -686,6 +686,21 @@ export function generateWorld(seed) {
     }
   }
 
+  if (biome.anglerFish && biome.water) {
+    const nAnglers = 2 + Math.floor(Math.random() * 3);
+    let anglersPlaced = 0;
+    let anglerAttempts = 0;
+    while (anglersPlaced < nAnglers && anglerAttempts < nAnglers * 20) {
+      anglerAttempts++;
+      const angler = makeCreature(biome, { angler: true });
+      if (placeFishUnderwater(angler)) {
+        anglersPlaced++;
+      } else {
+        disposeGroup(angler.group);
+      }
+    }
+  }
+
   // caterpillars — multi-segment crawlers, occasionally swapped for snails
   const ncats = 1 + Math.floor(Math.random() * 3); // 1–3
   for (let i = 0; i < ncats; i++) {

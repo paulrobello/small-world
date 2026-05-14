@@ -77,6 +77,7 @@ export const BIOMES = [
     accent: "#ffba08",
     sun: "#d4b3ff",
     water: "#1b1230",
+    anglerFish: true,
     flora: ["reed", "reed", "reed", "mushroom", "mushroom", "rock", "lantern", "lantern", "archstone"],
     floraCount: 100,
     particle: "rain",
