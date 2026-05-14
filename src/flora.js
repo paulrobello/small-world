@@ -1053,125 +1053,121 @@ export const FLORA_BUILDERS = {
     const g = new THREE.Group();
     const ember = new THREE.Color(biome.accent);
     const hot = new THREE.Color("#ffd166");
-    const rimMat = pooled("lavafissure.rim.mat", () =>
-      new THREE.MeshStandardMaterial({
-        color: new THREE.Color(biome.underside).offsetHSL(0, 0.02, 0.08),
-        flatShading: true,
-        roughness: 0.88,
+    const rim = new THREE.Color(biome.underside).offsetHSL(0, 0.04, 0.06);
+    const ribbonMat = pooled("lavafissure.ribbon.mat", () =>
+      new THREE.ShaderMaterial({
+        uniforms: {
+          uRim: { value: rim },
+          uLava: { value: ember.clone().lerp(hot, 0.25) },
+          uCore: { value: hot },
+        },
+        vertexShader: `
+          attribute float aAcross;
+          attribute float aAlong;
+          attribute float aHeat;
+          varying float vAcross;
+          varying float vAlong;
+          varying float vHeat;
+          void main() {
+            vAcross = abs(aAcross);
+            vAlong = aAlong;
+            vHeat = aHeat;
+            gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+          }
+        `,
+        fragmentShader: `
+          precision highp float;
+          uniform vec3 uRim;
+          uniform vec3 uLava;
+          uniform vec3 uCore;
+          varying float vAcross;
+          varying float vAlong;
+          varying float vHeat;
+          float hash(float n) { return fract(sin(n) * 43758.5453123); }
+          void main() {
+            float edge = smoothstep(0.78, 0.98, vAcross);
+            float lavaMask = 1.0 - smoothstep(0.58, 0.78, vAcross);
+            float coreMask = 1.0 - smoothstep(0.16, 0.34, vAcross);
+            float flicker = 0.82 + 0.18 * hash(floor(vAlong * 34.0) + vHeat * 19.0);
+            vec3 lava = mix(uLava * flicker, uCore, coreMask * 0.85);
+            vec3 col = mix(lava, uRim, edge);
+            float alpha = smoothstep(1.0, 0.92, vAcross);
+            gl_FragColor = vec4(col, alpha);
+          }
+        `,
+        transparent: true,
+        depthWrite: false,
+        side: THREE.DoubleSide,
       })
     );
-    const stoneMat = pooled("lavafissure.stone.mat", () =>
-      new THREE.MeshStandardMaterial({
-        color: new THREE.Color(biome.cliff).offsetHSL(0, -0.05, 0.04),
-        flatShading: true,
-        roughness: 0.9,
-      })
-    );
-    const lavaMat = pooled("lavafissure.lava.mat", () =>
-      new THREE.MeshBasicMaterial({ color: ember.clone().lerp(hot, 0.28) })
-    );
-    const coreMat = pooled("lavafissure.core.mat", () =>
-      new THREE.MeshBasicMaterial({ color: hot })
-    );
-    const segmentCount = 17 + Math.floor(Math.random() * 7);
-    const totalLen = 3.3 + Math.random() * 1.1;
-    const step = totalLen / segmentCount;
-    const points = [];
-    let wanderZ = (Math.random() - 0.5) * 0.10;
-    for (let i = 0; i <= segmentCount; i++) {
-      if (i > 0) wanderZ += (Math.random() - 0.5) * 0.48;
-      points.push({
+
+    const pointCount = 18 + Math.floor(Math.random() * 8);
+    const totalLen = 3.4 + Math.random() * 1.2;
+    const step = totalLen / (pointCount - 1);
+    const centers = [];
+    let wanderZ = (Math.random() - 0.5) * 0.08;
+    for (let i = 0; i < pointCount; i++) {
+      if (i > 0) wanderZ += (Math.random() - 0.5) * 0.42;
+      centers.push({
         x: -totalLen * 0.5 + step * i,
         z: Math.max(-0.85, Math.min(0.85, wanderZ)),
+        halfW: 0.16 + Math.random() * 0.07,
+        heat: Math.random(),
       });
     }
 
-    for (let i = 0; i < segmentCount; i++) {
-      const a = points[i];
-      const b = points[i + 1];
-      const dx = b.x - a.x;
-      const dz = b.z - a.z;
-      const midX = (a.x + b.x) * 0.5;
-      const midZ = (a.z + b.z) * 0.5;
-      const segLen = Math.sqrt(dx * dx + dz * dz) * (2.35 + Math.random() * 0.25);
-      const angle = Math.atan2(dz, dx);
-
-      const rim = new THREE.Mesh(
-        new THREE.BoxGeometry(segLen + 0.30, 0.022, 0.18 + Math.random() * 0.035),
-        rimMat
-      );
-      rim.position.set(midX, 0.046, midZ);
-      rim.rotation.y = -angle;
-      rim.userData.surfaceLift = 0.046;
-      g.add(rim);
-
-      const seam = new THREE.Mesh(
-        new THREE.BoxGeometry(segLen, 0.026, 0.078 + Math.random() * 0.018),
-        lavaMat
-      );
-      seam.position.set(midX, 0.064, midZ);
-      seam.rotation.y = -angle;
-      seam.userData.surfaceLift = 0.064;
-      seam.layers.enable(BLOOM_LAYER);
-      g.add(seam);
-
-      if (i > 0 && i < segmentCount - 1) {
-        const core = new THREE.Mesh(
-          new THREE.BoxGeometry(segLen * 0.82, 0.028, 0.032),
-          coreMat
+    const across = [-1, -0.72, -0.38, -0.14, 0, 0.14, 0.38, 0.72, 1];
+    const positions = [];
+    const acrossAttr = [];
+    const alongAttr = [];
+    const heatAttr = [];
+    for (let i = 0; i < pointCount; i++) {
+      const prev = centers[Math.max(0, i - 1)];
+      const next = centers[Math.min(pointCount - 1, i + 1)];
+      const tx = next.x - prev.x;
+      const tz = next.z - prev.z;
+      const tl = Math.max(0.001, Math.sqrt(tx * tx + tz * tz));
+      const nx = -tz / tl;
+      const nz = tx / tl;
+      const taper = Math.sin((i / (pointCount - 1)) * Math.PI);
+      const halfW = centers[i].halfW * (0.45 + 0.55 * taper);
+      for (const a of across) {
+        positions.push(
+          centers[i].x + nx * a * halfW,
+          0.07,
+          centers[i].z + nz * a * halfW
         );
-        core.position.set(midX, 0.079, midZ);
-        core.rotation.y = -angle;
-        core.userData.surfaceLift = 0.079;
-        core.layers.enable(BLOOM_LAYER);
-        g.add(core);
+        acrossAttr.push(a);
+        alongAttr.push(i / (pointCount - 1));
+        heatAttr.push(centers[i].heat);
       }
     }
 
-    const jointRimGeo = pooled("lavafissure.joint.rim.geo", () => new THREE.BoxGeometry(0.52, 0.023, 0.28));
-    const jointLavaGeo = pooled("lavafissure.joint.lava.geo", () => new THREE.BoxGeometry(0.42, 0.027, 0.18));
-    const jointCoreGeo = pooled("lavafissure.joint.core.geo", () => new THREE.BoxGeometry(0.26, 0.029, 0.065));
-    for (let i = 1; i < points.length - 1; i++) {
-      const prev = points[i - 1];
-      const next = points[i + 1];
-      const angle = Math.atan2(next.z - prev.z, next.x - prev.x);
-      const rim = new THREE.Mesh(jointRimGeo, rimMat);
-      rim.position.set(points[i].x, 0.047, points[i].z);
-      rim.rotation.y = -angle + (Math.random() - 0.5) * 0.25;
-      rim.userData.surfaceLift = 0.047;
-      g.add(rim);
-
-      const lava = new THREE.Mesh(jointLavaGeo, lavaMat);
-      lava.position.set(points[i].x, 0.066, points[i].z);
-      lava.rotation.y = rim.rotation.y;
-      lava.userData.surfaceLift = 0.066;
-      lava.layers.enable(BLOOM_LAYER);
-      g.add(lava);
-
-      const core = new THREE.Mesh(jointCoreGeo, coreMat);
-      core.position.set(points[i].x, 0.081, points[i].z);
-      core.rotation.y = rim.rotation.y;
-      core.userData.surfaceLift = 0.081;
-      core.layers.enable(BLOOM_LAYER);
-      g.add(core);
+    const cols = across.length;
+    const indices = [];
+    for (let i = 0; i < pointCount - 1; i++) {
+      for (let j = 0; j < cols - 1; j++) {
+        const a = i * cols + j;
+        const b = a + 1;
+        const c = (i + 1) * cols + j;
+        const d = c + 1;
+        indices.push(a, c, b, b, c, d);
+      }
     }
 
-    const stoneGeo = pooled("lavafissure.stone.geo", () => new THREE.IcosahedronGeometry(0.08, 0));
-    const stones = 8 + Math.floor(Math.random() * 5);
-    for (let i = 0; i < stones; i++) {
-      const stone = new THREE.Mesh(stoneGeo, stoneMat);
-      const along = (Math.random() - 0.5) * totalLen;
-      const side = Math.random() < 0.5 ? -1 : 1;
-      const edge = side * (0.16 + Math.random() * 0.18);
-      const s = 0.45 + Math.random() * 0.65;
-      stone.position.set(along, 0.04, edge);
-      stone.userData.surfaceLift = 0.04;
-      stone.scale.set(s * (1.0 + Math.random() * 0.65), 0.30 + Math.random() * 0.35, s * 0.75);
-      stone.rotation.set(Math.random() * 0.35, Math.random() * Math.PI * 2, Math.random() * 0.35);
-      stone.castShadow = true;
-      g.add(stone);
-    }
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute("position", new THREE.BufferAttribute(new Float32Array(positions), 3));
+    geo.setAttribute("aAcross", new THREE.BufferAttribute(new Float32Array(acrossAttr), 1));
+    geo.setAttribute("aAlong", new THREE.BufferAttribute(new Float32Array(alongAttr), 1));
+    geo.setAttribute("aHeat", new THREE.BufferAttribute(new Float32Array(heatAttr), 1));
+    geo.setIndex(indices);
+    geo.computeVertexNormals();
 
+    const ribbon = new THREE.Mesh(geo, ribbonMat);
+    ribbon.userData.surfaceLift = 0.07;
+    ribbon.userData.surfaceConformVertices = true;
+    ribbon.layers.enable(BLOOM_LAYER);
+    g.add(ribbon);
     return g;
   },
 

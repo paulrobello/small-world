@@ -462,6 +462,19 @@ export function generateWorld(seed) {
     for (const child of group.children) {
       const lift = child.userData.surfaceLift;
       if (lift === undefined) continue;
+      if (child.userData.surfaceConformVertices && child.geometry?.attributes?.position) {
+        const pos = child.geometry.attributes.position;
+        for (let i = 0; i < pos.count; i++) {
+          const lx = (child.position.x + pos.getX(i)) * scale;
+          const lz = (child.position.z + pos.getZ(i)) * scale;
+          const wx = group.position.x + c * lx + s * lz;
+          const wz = group.position.z - s * lx + c * lz;
+          pos.setY(i, (state.heightFn(wx, wz) - group.position.y) / scale + lift - child.position.y);
+        }
+        pos.needsUpdate = true;
+        child.geometry.computeVertexNormals();
+        continue;
+      }
       const lx = child.position.x * scale;
       const lz = child.position.z * scale;
       const wx = group.position.x + c * lx + s * lz;
