@@ -806,6 +806,9 @@ export function makeWaterPlane(biome) {
     opacity: 0.55,
     roughness: 0.32,
     metalness: 0.18,
+    // Transparent water should tint underwater glows, not depth-occlude them
+    // out of the shared bloom/depth pre-pass.
+    depthWrite: false,
   });
 
   // Reflection patch — only kicks in if state.waterReflection is set later
