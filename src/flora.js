@@ -1053,7 +1053,7 @@ export const FLORA_BUILDERS = {
     const g = new THREE.Group();
     const ember = new THREE.Color(biome.accent);
     const hot = new THREE.Color("#ffd166");
-    const rim = new THREE.Color(biome.underside).offsetHSL(0, 0.04, 0.06);
+    const rim = new THREE.Color("#000000");
     const ribbonMat = pooled("lavafissure.ribbon.mat", () =>
       new THREE.ShaderMaterial({
         uniforms: {
