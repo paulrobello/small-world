@@ -18,7 +18,7 @@ const PERSONALITIES = {
 };
 const PERSONALITY_NAMES = Object.keys(PERSONALITIES);
 
-const FISH_MIN_GROUND_Y = -3.0;
+const FISH_MIN_GROUND_Y = -4.2;
 
 function fishMaxGroundY(scale) {
   // Water plane is around y=-0.12 and can wave downward; keep the fish body's
@@ -371,7 +371,7 @@ export function makeCreature(biome, opts = {}) {
   const baseScale = 0.65 + Math.random() * 0.6;
   // burrowers are notably smaller; kids inherit sizeMul on top
   const burrowScale = opts.burrower ? 0.55 : 1;
-  const scale = baseScale * sizeMul * burrowScale;
+  const scale = baseScale * sizeMul * burrowScale * (isFish ? 0.75 : 1);
   group.scale.setScalar(scale);
 
   const hoverHeight = 1.4 + Math.random() * 1.8;
@@ -1022,13 +1022,9 @@ export function stepCreature(c, dt, t, heightFn) {
     } else if (c.flies && c.landState === "flying") {
       const planeBound = state.ISLAND_SIZE * 0.46;
       wouldStray = Math.sqrt(nx * nx + nz * nz) > planeBound;
-      // Fliers may cruise across water — they sit at hoverHeight above
-      // the terrain ground, so even over the deepest lake bed they stay
-      // well clear of the water surface. The FSM-side water guard (above)
-      // handles the "dip into water during a state transition" case by
-      // forcing landState=flying and snapping currentHover up the moment
-      // we're over water; this branch only blocks them from straying off
-      // the island plate altogether.
+      // Fliers may cruise across water. The Y-position block below raises
+      // their floor to water-surface + body clearance; this branch only blocks
+      // them from straying off the island plate altogether.
       target = nearestCenter(pos.x, pos.z);
     } else {
       const near = nearestCenter(nx, nz);
@@ -1107,17 +1103,26 @@ export function stepCreature(c, dt, t, heightFn) {
 
   const ground = heightFn(pos.x, pos.z);
   if (c.isFish && state.waterMesh) {
-    const topY = WATER_AVOID_Y - 0.24 - 0.34 * c.scale;
-    const bottomY = ground + 0.32 * c.scale;
+    const halfBodyY = 0.42 * c.bodyBaseY * c.scale;
+    const topY = WATER_AVOID_Y - 0.2 - halfBodyY;
+    const bottomY = ground + halfBodyY + 0.04;
     if (bottomY > topY) {
       c.heading += Math.PI + (Math.random() - 0.5) * 0.5;
       pos.y += (topY - pos.y) * Math.min(1, dt * 4.0);
     } else {
       const band = topY - bottomY;
-      const cruise = bottomY + band * (0.48 + Math.sin(t * 0.45 + c.flapPhase) * 0.18);
-      const swimBob = Math.sin(c.bob) * 0.055 * c.bobAmpMul;
+      const swimT = THREE.MathUtils.clamp(
+        0.5 +
+          Math.sin(t * 0.7 + c.flapPhase) * 0.34 +
+          Math.sin(t * 0.23 + c.age) * 0.12,
+        0.08,
+        0.92
+      );
+      const cruise = bottomY + band * swimT;
+      const swimBob = Math.sin(c.bob) * Math.min(0.08, band * 0.08) * c.bobAmpMul;
       const targetY = Math.max(bottomY, Math.min(topY, cruise + swimBob));
       pos.y += (targetY - pos.y) * Math.min(1, dt * 3.5);
+      pos.y = Math.max(bottomY, Math.min(topY, pos.y));
     }
   } else if (c.flies) {
     // Floor blends from terrain ground up to (perch top + a tiny lift) as
@@ -1130,13 +1135,14 @@ export function stepCreature(c, dt, t, heightFn) {
     // flier body's half-Y (≈0.39·scale) being slightly larger than restH
     // (0.35·scale): without it the body visibly sinks into the cap.
     //
-    // Non-fish fliers over water: raise the floor to the water surface
-    // (WATER_AVOID_Y) so hover-above-terrain doesn't put them below the
-    // lakebed-relative waterline. Without this, deep underwater terrain
-    // (-2 to -3) drags pos.y well below the surface even at full hover.
+    // Non-fish fliers over water: raise the floor to the water surface plus
+    // body clearance so hover-above-terrain can never put their belly below
+    // the waterline. This matters more now that water basins are deeper.
     let floorY = ground;
+    let waterClearanceY = null;
     if (!c.isFish && state.waterMesh && ground < WATER_AVOID_Y) {
-      floorY = WATER_AVOID_Y;
+      waterClearanceY = WATER_AVOID_Y + 0.42 * c.bodyBaseY * c.scale + 0.08;
+      floorY = waterClearanceY;
     }
     const restH = 0.35 * c.scale;
     if (c.perchTarget) {
@@ -1166,6 +1172,7 @@ export function stepCreature(c, dt, t, heightFn) {
       ? 0.02
       : 0.28 * Math.min(1, c.currentHover / Math.max(0.1, c.hoverHeight));
     pos.y = floorY + c.currentHover + Math.sin(c.bob) * bobAmp * c.bobAmpMul + c.hopOffset;
+    if (waterClearanceY !== null && pos.y < waterClearanceY) pos.y = waterClearanceY;
   } else {
     const bobAmp = (moving ? 0.08 : 0.02) * c.bobAmpMul;
     pos.y = ground + 0.35 * c.scale + Math.sin(c.bob) * bobAmp + c.hopOffset;

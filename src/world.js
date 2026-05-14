@@ -326,7 +326,18 @@ export function generateWorld(seed) {
 
   // terrain
   const noise2D = createNoise2D();
-  state.heightFn = makeHeightFn(noise2D, layout, 3.2);
+  const baseHeightFn = makeHeightFn(noise2D, layout, 3.2);
+  state.heightFn = biome.water
+    ? (x, z) => {
+      const h = baseHeightFn(x, z);
+      const waterY = -0.12;
+      const depth = waterY - h;
+      if (depth <= 0) return h;
+      const wet = Math.min(1, depth / 1.6);
+      const smoothWet = wet * wet * (3 - 2 * wet);
+      return h - smoothWet * (0.45 + depth * 0.28);
+    }
+    : baseHeightFn;
   const terrain = makeTerrain(biome, state.heightFn);
   state.world.add(terrain);
   state.terrainMesh = terrain;
@@ -579,7 +590,7 @@ export function generateWorld(seed) {
   // and their step logic keeps them swimming below the surface.
   const groundMinY = biome.water ? 0.05 : 0;
   const fishSurfaceY = -0.24;
-  const fishMinGroundY = -3.0;
+  const fishMinGroundY = -4.2;
   function fishMaxGroundY(scale) {
     return fishSurfaceY - 0.66 * scale;
   }
@@ -596,8 +607,9 @@ export function generateWorld(seed) {
       }
     }
     if (!found) return false;
-    const topY = fishSurfaceY - 0.34 * c.scale;
-    const bottomY = y + 0.32 * c.scale;
+    const halfBodyY = 0.42 * c.bodyBaseY * c.scale;
+    const topY = fishSurfaceY + 0.04 - halfBodyY;
+    const bottomY = y + halfBodyY + 0.04;
     const swimY = bottomY + (topY - bottomY) * (0.4 + Math.random() * 0.25);
     c.group.position.set(p.x, swimY, p.z);
     state.world.add(c.group);
