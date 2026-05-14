@@ -352,9 +352,10 @@ export function makeAurora(biome) {
 
   // A few overlapping curtains at different angles around the horizon.
   const group = new THREE.Group();
-  const tints = AURORA_TINTS[biome.id] ?? ["#7df0c8", "#a98cff"];
+  const tints = AURORA_TINTS[biome.id] ?? ["#7df0c8", "#a98cff", biome.accent];
   const tintA = new THREE.Color(tints[0]);
   const tintB = new THREE.Color(tints[1]);
+  const tintC = new THREE.Color(tints[2]).lerp(new THREE.Color(biome.sky), 0.12);
 
   for (let i = 0; i < 3; i++) {
     const w = 220;
@@ -363,14 +364,16 @@ export function makeAurora(biome) {
     const mat = new THREE.ShaderMaterial({
       transparent: true,
       depthWrite: false,
-      depthTest: false,
+      depthTest: true,
       fog: false,
       side: THREE.DoubleSide,
+      blending: THREE.AdditiveBlending,
       uniforms: {
         uAlpha: { value: 0 },
         uTime: { value: 0 },
         uA: { value: tintA },
         uB: { value: tintB },
+        uC: { value: tintC },
         uSeed: { value: i * 1.7 },
       },
       vertexShader: `
@@ -391,15 +394,45 @@ export function makeAurora(biome) {
         uniform float uSeed;
         uniform vec3 uA;
         uniform vec3 uB;
+        uniform vec3 uC;
         varying vec2 vUv;
+
+        float hash(vec2 p) {
+          return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453123);
+        }
+
+        float valueNoise(vec2 p) {
+          vec2 i = floor(p);
+          vec2 f = fract(p);
+          vec2 u = f * f * (3.0 - 2.0 * f);
+          return mix(
+            mix(hash(i), hash(i + vec2(1.0, 0.0)), u.x),
+            mix(hash(i + vec2(0.0, 1.0)), hash(i + vec2(1.0, 1.0)), u.x),
+            u.y
+          );
+        }
+
         void main() {
-          // vertical fade — bright at top, transparent at bottom
-          float vfade = smoothstep(0.0, 0.4, vUv.y) * smoothstep(1.0, 0.6, vUv.y);
-          // horizontal bands wobble over time so the curtain seems to ripple
-          float band = 0.5 + 0.5 * sin(vUv.x * 22.0 + uTime * 0.7 + uSeed * 3.1);
-          band = smoothstep(0.3, 0.9, band);
-          vec3 col = mix(uA, uB, vUv.x + 0.2 * sin(uTime * 0.5 + uSeed));
-          float a = vfade * band * 0.55 * uAlpha;
+          // Feather all plane edges so the curtain dissolves into the sky.
+          float edgeFade = smoothstep(0.0, 0.18, vUv.x) * smoothstep(1.0, 0.82, vUv.x);
+          float vfade = smoothstep(0.02, 0.34, vUv.y) * smoothstep(1.0, 0.68, vUv.y);
+
+          float n = valueNoise(vec2(vUv.x * 7.0 + uTime * 0.05, vUv.y * 4.0 + uSeed));
+          float fine = valueNoise(vec2(vUv.x * 18.0 - uTime * 0.09, vUv.y * 9.0 + uSeed * 2.0));
+
+          // Layered, drifting rays read as shimmer instead of flat columns.
+          float rayA = 0.5 + 0.5 * sin(vUv.x * 22.0 + uTime * 0.65 + uSeed * 3.1 + n * 2.4);
+          float rayB = 0.5 + 0.5 * sin(vUv.x * 37.0 - uTime * 0.42 + uSeed * 1.9 + fine * 1.8);
+          float band = smoothstep(0.18, 0.86, rayA) * 0.72 + smoothstep(0.55, 0.98, rayB) * 0.38;
+          float shimmer = 0.74 + 0.26 * sin(uTime * 2.4 + uSeed + n * 6.2831);
+          float breakup = smoothstep(0.10, 0.78, n * 0.7 + fine * 0.3);
+
+          float colorFlow = fract(vUv.x * 0.85 + 0.12 * sin(uTime * 0.35 + uSeed) + n * 0.18);
+          vec3 col = mix(uA, uB, smoothstep(0.05, 0.95, colorFlow));
+          col = mix(col, uC, smoothstep(0.35, 1.0, rayB) * 0.45);
+          col *= 1.05 + 0.22 * shimmer;
+
+          float a = edgeFade * vfade * band * breakup * shimmer * 0.48 * uAlpha;
           gl_FragColor = vec4(col, a);
         }
       `,

@@ -331,9 +331,9 @@ export const CLOUD_COUNT = {
 // Biomes that get aurora curtains at night. Tinted via AURORA_TINTS below.
 export const AURORA_BIOMES = new Set(["frozen", "twilight", "cloud"]);
 export const AURORA_TINTS = {
-  frozen:   ["#7df0c8", "#a98cff"],
-  twilight: ["#ffd97a", "#c9a8e8"],
-  cloud:    ["#a8e0ff", "#ffd0e8"],
+  frozen:   ["#7df0c8", "#a98cff", "#f6d6ff"],
+  twilight: ["#ffd97a", "#c9a8e8", "#8fe9ff"],
+  cloud:    ["#a8e0ff", "#ffd0e8", "#fff6b8"],
 };
 
 export const PEBBLE_DENSITY = {
