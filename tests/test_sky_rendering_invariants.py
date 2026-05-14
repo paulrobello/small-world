@@ -7,6 +7,7 @@ import unittest
 ROOT = Path(__file__).resolve().parents[1]
 SKY_JS = ROOT / "src" / "sky.js"
 BIOMES_JS = ROOT / "src" / "biomes.js"
+TERRAIN_JS = ROOT / "src" / "terrain.js"
 
 
 def _function_body(source: str, name: str) -> str:
@@ -25,7 +26,7 @@ def _function_body(source: str, name: str) -> str:
     raise AssertionError(f"Could not find end of {name}()")
 
 
-class SkyRenderingInvariantsTest(unittest.TestCase):
+class RenderingInvariantsTest(unittest.TestCase):
     def test_aurora_respects_scene_depth_without_writing_depth(self) -> None:
         sky_source = SKY_JS.read_text()
         aurora_body = _function_body(sky_source, "makeAurora")
@@ -58,6 +59,16 @@ class SkyRenderingInvariantsTest(unittest.TestCase):
         self.assertIn('frozen:   ["#7df0c8", "#a98cff",', biomes_source)
         self.assertIn('twilight: ["#ffd97a", "#c9a8e8",', biomes_source)
         self.assertIn('cloud:    ["#a8e0ff", "#ffd0e8",', biomes_source)
+
+    def test_terrain_does_not_assign_null_custom_depth_material(self) -> None:
+        terrain_source = TERRAIN_JS.read_text()
+
+        self.assertNotIn(
+            "customDepthMaterial = makeRoundTerrainDepthMaterial",
+            terrain_source,
+            "Three r184 crashes if customDepthMaterial is explicitly null; only assign it when a material exists.",
+        )
+        self.assertIn("if (terrainDepthMat)", terrain_source)
 
 
 if __name__ == "__main__":

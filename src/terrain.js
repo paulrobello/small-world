@@ -264,7 +264,8 @@ export function makeTerrain(biome, heightFn) {
   const mesh = new THREE.Mesh(geo, mat);
   mesh.receiveShadow = true;
   mesh.castShadow = true;
-  mesh.customDepthMaterial = makeRoundTerrainDepthMaterial(clipCenter);
+  const terrainDepthMat = makeRoundTerrainDepthMaterial(clipCenter);
+  if (terrainDepthMat) mesh.customDepthMaterial = terrainDepthMat;
   return mesh;
 }
 
