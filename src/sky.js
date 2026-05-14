@@ -515,6 +515,99 @@ export function makeCloudSwirl(biome) {
   return mesh;
 }
 
+function makeGrassAuraLineSegments(radius, innerRadius, outerRadius, aura, colors) {
+  const count = (LOWFX ? 1100 : 3200) * 100;
+  const positions = new Float32Array(count * 2 * 3);
+  const tipFactors = new Float32Array(count * 2);
+  const seeds = new Float32Array(count * 2);
+  const y = (aura.y ?? 0.26) + 0.06;
+  const span = Math.max(0.1, outerRadius - innerRadius);
+
+  for (let i = 0; i < count; i++) {
+    const angle = Math.random() * Math.PI * 2;
+    const r = innerRadius + Math.pow(Math.random(), 0.72) * span;
+    const x = Math.cos(angle) * r;
+    const z = Math.sin(angle) * r;
+    const tangent = angle + Math.PI / 2;
+    const outward = angle;
+    const h = (0.46 + Math.random() * 1.05) * 0.375;
+    const lean = (Math.random() - 0.5) * 0.34;
+    const outLean = (Math.random() - 0.35) * 0.14;
+    const tipX = x + Math.cos(tangent) * lean + Math.cos(outward) * outLean;
+    const tipZ = z + Math.sin(tangent) * lean + Math.sin(outward) * outLean;
+    const base = i * 6;
+    positions[base + 0] = x;
+    positions[base + 1] = y;
+    positions[base + 2] = z;
+    positions[base + 3] = tipX;
+    positions[base + 4] = y + h;
+    positions[base + 5] = tipZ;
+    tipFactors[i * 2] = 0;
+    tipFactors[i * 2 + 1] = 1;
+    const seed = Math.random() * 1000;
+    seeds[i * 2] = seed;
+    seeds[i * 2 + 1] = seed;
+  }
+
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute("position", new THREE.BufferAttribute(positions, 3));
+  geo.setAttribute("aTipFactor", new THREE.BufferAttribute(tipFactors, 1));
+  geo.setAttribute("aSeed", new THREE.BufferAttribute(seeds, 1));
+
+  const mat = new THREE.ShaderMaterial({
+    transparent: false,
+    depthWrite: true,
+    depthTest: true,
+    fog: false,
+    uniforms: {
+      uTime: state.windUniforms.uTime,
+      uWindStrength: { value: aura.windStrength ?? 0.85 },
+      uColRoot: { value: colors.root.clone().multiplyScalar(0.46) },
+      uColTip: { value: colors.tip.clone().multiplyScalar(0.78) },
+      uColLight: { value: colors.light.clone().multiplyScalar(0.88) },
+    },
+    vertexShader: `
+      precision highp float;
+      attribute float aTipFactor;
+      attribute float aSeed;
+      uniform float uTime;
+      uniform float uWindStrength;
+      varying float vTip;
+      varying float vSeed;
+      void main() {
+        vec3 p = position;
+        float phase = aSeed * 6.2831;
+        float sway = sin(uTime * 0.72 + phase) * 0.18 + sin(uTime * 1.17 + phase * 0.37) * 0.08;
+        vec2 radial = normalize(p.xz + vec2(0.001, 0.0));
+        vec2 tangent = vec2(-radial.y, radial.x);
+        p.xz += (tangent * sway + radial * sway * 0.32) * aTipFactor * uWindStrength;
+        vTip = aTipFactor;
+        vSeed = fract(aSeed * 0.173);
+        gl_Position = projectionMatrix * modelViewMatrix * vec4(p, 1.0);
+      }
+    `,
+    fragmentShader: `
+      precision highp float;
+      uniform vec3 uColRoot;
+      uniform vec3 uColTip;
+      uniform vec3 uColLight;
+      varying float vTip;
+      varying float vSeed;
+      void main() {
+        vec3 col = mix(uColRoot, uColTip, vTip);
+        col = mix(col, uColLight, smoothstep(0.72, 1.0, vTip) * smoothstep(0.45, 1.0, vSeed) * 0.45);
+        gl_FragColor = vec4(col, 1.0);
+      }
+    `,
+  });
+
+  const lines = new THREE.LineSegments(geo, mat);
+  lines.name = "island-edge-grass-lines";
+  lines.frustumCulled = false;
+  lines.renderOrder = -14;
+  return lines;
+}
+
 // Low perimeter aura for round layouts. By default this preserves the soft
 // island-edge mist, while biomes can tune `edgeAura` for reusable variants such
 // as grass, water, swamp, or denser fog without adding extra per-frame state.
@@ -610,12 +703,6 @@ export function makeIslandEdgeMist(biome) {
         float c = vnoise(p * 4.03 + vec2(-2.6, 3.1));
         return a * 0.55 + b * 0.30 + c * 0.15;
       }
-      float sdSegment(vec2 p, vec2 a, vec2 b) {
-        vec2 pa = p - a;
-        vec2 ba = b - a;
-        float h = clamp(dot(pa, ba) / max(dot(ba, ba), 0.0001), 0.0, 1.0);
-        return length(pa - ba * h);
-      }
 
       void main() {
         float d = length(vLocalXZ);
@@ -642,47 +729,10 @@ export function makeIslandEdgeMist(biome) {
           float innerFade = smoothstep(-uInnerSoft, -0.05, radial);
           float outerFade = 1.0 - smoothstep(uOuterSoft * 0.86, uOuterSoft, radial);
           float grassBand = innerFade * outerFade;
-          float gust = fbm(vec2(angle * 4.0 + uTime * 0.028 * uWindStrength, radial * 0.20));
-
-          // Arc-length coordinates keep density stable around the ring. This
-          // opaque variant paints an actual ground-colored field first, then
-          // draws many tiny pseudo-3D grass blade segments on top.
-          float arc = angle * uRadius;
-          vec2 windSlide = vec2(uTime * 0.34, uTime * 0.09) * uWindStrength;
           float fieldDensity = smoothstep(0.12, 0.82, fbm(vec2(angle * 9.0, radial * 0.45) + driftA));
-          vec3 fieldCol = mix(uColA, uColB, 0.34 + fieldDensity * 0.32);
-          fieldCol = mix(fieldCol, uColC, smoothstep(0.60, 1.0, fieldDensity) * 0.16);
-          fieldCol *= mix(0.72, 1.0, grassBand);
-
-          vec2 grassUv = vec2(arc * 1.08 + gust * 1.4, radial * 1.35) + windSlide;
-          vec2 cellId = floor(grassUv * vec2(uStreakScale * 0.055, 0.56));
-          vec2 cellUv = fract(grassUv * vec2(uStreakScale * 0.055, 0.56));
-          float rnd = hash(cellId);
-          vec2 bladeBase = vec2(0.16 + hash(cellId + 2.1) * 0.68, 0.08 + hash(cellId + 5.3) * 0.18);
-          float bladeHeight = 0.42 + hash(cellId + 9.7) * 0.48;
-          float lean = (rnd - 0.5) * 0.50 + (gust - 0.5) * 0.38;
-          vec2 bladeDir = normalize(vec2(lean, bladeHeight));
-          vec2 bladeTip = bladeBase + bladeDir * bladeHeight;
-          float lineDist = sdSegment(cellUv, bladeBase, bladeTip);
-          float bladeMask = smoothstep(0.070, 0.018, lineDist) * smoothstep(0.20, 0.55, rnd);
-          float bladeShadow = smoothstep(0.090, 0.028, sdSegment(cellUv + vec2(-0.030, 0.018), bladeBase, bladeTip)) * 0.50;
-          float bladeLit = smoothstep(0.040, 0.008, sdSegment(cellUv - vec2(0.022, 0.014), bladeBase, bladeTip));
-
-          vec2 fineUv = vec2(arc * 1.95 - gust, radial * 2.20) - windSlide * 0.55;
-          vec2 fineCellId = floor(fineUv * vec2(uStreakScale * 0.075, 0.82));
-          vec2 fineCellUv = fract(fineUv * vec2(uStreakScale * 0.075, 0.82));
-          float fineRnd = hash(fineCellId + 19.7);
-          vec2 fineBase = vec2(0.12 + hash(fineCellId + 4.7) * 0.76, 0.08 + hash(fineCellId + 8.4) * 0.18);
-          float fineHeight = 0.32 + hash(fineCellId + 12.9) * 0.38;
-          vec2 fineDir = normalize(vec2((fineRnd - 0.5) * 0.58, fineHeight));
-          vec2 fineTip = fineBase + fineDir * fineHeight;
-          float fineStroke = smoothstep(0.050, 0.012, sdSegment(fineCellUv, fineBase, fineTip)) * smoothstep(0.26, 0.70, fineRnd);
-
-          float strokes = max(bladeMask, fineStroke * 0.78) * grassBand;
-          vec3 bladeCol = mix(uColA * 0.34, uColB * 0.62, fieldDensity * 0.35);
-          fieldCol = mix(fieldCol, uColA * 0.42, bladeShadow * grassBand);
-          fieldCol = mix(fieldCol, bladeCol, strokes * 0.86);
-          fieldCol = mix(fieldCol, uColC, bladeLit * bladeMask * grassBand * 0.24);
+          vec3 fieldCol = uColA;
+          fieldCol *= mix(0.92, 1.04, fieldDensity);
+          fieldCol *= mix(0.90, 1.0, grassBand);
           gl_FragColor = vec4(fieldCol, 1.0);
           return;
         }
@@ -698,12 +748,29 @@ export function makeIslandEdgeMist(biome) {
   });
 
   const mesh = new THREE.Mesh(geo, mat);
-  mesh.name = pattern === "grass" ? "island-edge-grass-aura" : "island-edge-mist";
+  mesh.name = pattern === "grass" ? "island-edge-grass-ground" : "island-edge-mist";
   mesh.userData.inspect = { category: "atmosphere", variant: mesh.name };
   mesh.rotation.x = -Math.PI / 2;
-  mesh.position.set(center.cx, aura.y ?? 0.38, center.cz);
   mesh.frustumCulled = false;
   mesh.renderOrder = aura.renderOrder ?? -16;
+
+  if (isGrassAura) {
+    const group = new THREE.Group();
+    group.name = "island-edge-grass-aura";
+    group.userData.inspect = { category: "atmosphere", variant: group.name };
+    group.position.set(center.cx, 0, center.cz);
+    mesh.position.y = aura.y ?? 0.26;
+    group.add(mesh);
+    group.add(makeGrassAuraLineSegments(radius, innerRadius, outerRadius, aura, {
+      root: colA,
+      tip: colB,
+      light: colC,
+    }));
+    group.frustumCulled = false;
+    return group;
+  }
+
+  mesh.position.set(center.cx, aura.y ?? 0.38, center.cz);
   return mesh;
 }
 
