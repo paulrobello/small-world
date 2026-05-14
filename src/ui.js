@@ -1176,6 +1176,7 @@ export function initUi({ camera, canvas, controls, renderer }) {
         while (n && !n.userData?.inspect) n = n.parent;
         if (!n) continue;
         const { category, variant } = n.userData.inspect;
+        if (category === "flora" && variant === "water") continue;
         const biomeId = state.currentBiome?.id;
         if (!biomeId) return;
         const sp = new URLSearchParams();
