@@ -315,6 +315,28 @@ export const FLORA_BUILDERS = {
     return mesh;
   },
 
+  limestonerock(biome) {
+    const g = new THREE.Group();
+    const r = 0.2 + Math.random() * 0.32;
+    const geo = jitterGeo(new THREE.IcosahedronGeometry(r, 0), r * 0.25);
+    const baseCol = new THREE.Color(biome.ground[0])
+      .lerp(new THREE.Color("#fff4dc"), 0.45)
+      .offsetHSL(0.02, -0.08, Math.random() * 0.08);
+    const mesh = new THREE.Mesh(
+      geo,
+      new THREE.MeshStandardMaterial({
+        color: baseCol,
+        flatShading: true,
+        roughness: 1,
+      })
+    );
+    mesh.scale.set(1.15, 0.45 + Math.random() * 0.25, 0.9 + Math.random() * 0.35);
+    mesh.rotation.y = Math.random() * Math.PI * 2;
+    mesh.castShadow = true;
+    g.add(mesh);
+    return g;
+  },
+
   reed() {
     const g = new THREE.Group();
     const mat = pooled("reed.mat", () =>
@@ -336,6 +358,46 @@ export const FLORA_BUILDERS = {
         (Math.random() - 0.5) * 0.18
       );
       blade.rotation.z = (Math.random() - 0.5) * 0.3;
+      g.add(blade);
+    }
+    return g;
+  },
+
+  seaweed(biome) {
+    const g = new THREE.Group();
+    const base = new THREE.Color(biome.underside || "#3aa8b8");
+    const matA = pooled("seaweed.mat.a", () =>
+      applyWindSway(
+        new THREE.MeshStandardMaterial({
+          color: base.clone().offsetHSL(0.08, 0.1, -0.08),
+          side: THREE.DoubleSide,
+          flatShading: true,
+          roughness: 0.75,
+        }),
+        2.2
+      )
+    );
+    const matB = pooled("seaweed.mat.b", () =>
+      applyWindSway(
+        new THREE.MeshStandardMaterial({
+          color: new THREE.Color(biome.accent).offsetHSL(-0.08, -0.15, -0.02),
+          side: THREE.DoubleSide,
+          flatShading: true,
+          roughness: 0.75,
+        }),
+        2.2
+      )
+    );
+    const count = 4 + Math.floor(Math.random() * 4);
+    for (let i = 0; i < count; i++) {
+      const h = 0.45 + Math.random() * 0.45;
+      const w = 0.055 + Math.random() * 0.035;
+      const geo = new THREE.PlaneGeometry(w, h, 1, 3);
+      const blade = new THREE.Mesh(geo, i % 2 ? matA : matB);
+      const a = (i / count) * Math.PI * 2 + Math.random() * 0.5;
+      blade.position.set(Math.cos(a) * 0.08, h / 2, Math.sin(a) * 0.08);
+      blade.rotation.y = a + Math.PI / 2;
+      blade.rotation.z = (Math.random() - 0.5) * 0.45;
       g.add(blade);
     }
     return g;
@@ -366,6 +428,48 @@ export const FLORA_BUILDERS = {
       blade.rotation.z = (Math.random() - 0.5) * 0.6;
       g.add(blade);
     }
+    return g;
+  },
+
+  beachsucculent(biome) {
+    const g = new THREE.Group();
+    const leafMat = pooled("beachsucculent.leaf.mat", () =>
+      applyWindSway(
+        new THREE.MeshStandardMaterial({
+          color: new THREE.Color(biome.underside || biome.fog).lerp(new THREE.Color("#d7fff3"), 0.35),
+          flatShading: true,
+          roughness: 0.8,
+        }),
+        0.7
+      )
+    );
+    const budMat = pooled("beachsucculent.bud.mat", () =>
+      new THREE.MeshStandardMaterial({
+        color: new THREE.Color(biome.accent).lerp(new THREE.Color("#fff2b3"), 0.35),
+        flatShading: true,
+        roughness: 0.65,
+      })
+    );
+    const leafGeo = pooled("beachsucculent.leaf.geo", () => {
+      const geo = jitterGeo(new THREE.IcosahedronGeometry(0.11, 0), 0.025);
+      geo.scale(0.65, 0.28, 1.35);
+      return geo;
+    });
+    const leaves = 6 + Math.floor(Math.random() * 3);
+    for (let i = 0; i < leaves; i++) {
+      const a = (i / leaves) * Math.PI * 2 + Math.random() * 0.25;
+      const leaf = new THREE.Mesh(leafGeo, leafMat);
+      leaf.position.set(Math.cos(a) * 0.11, 0.08, Math.sin(a) * 0.11);
+      leaf.rotation.y = a;
+      leaf.rotation.z = 0.55 + Math.random() * 0.25;
+      leaf.castShadow = true;
+      g.add(leaf);
+    }
+    const bud = new THREE.Mesh(jitterGeo(new THREE.IcosahedronGeometry(0.09, 0), 0.02), budMat);
+    bud.position.y = 0.18;
+    bud.scale.set(1.1, 0.75, 1.1);
+    bud.castShadow = true;
+    g.add(bud);
     return g;
   },
 
@@ -819,6 +923,73 @@ export const FLORA_BUILDERS = {
         );
         branch.add(knob);
       }
+    }
+    return g;
+  },
+
+  braincoral(biome) {
+    const g = new THREE.Group();
+    const baseCol = new THREE.Color(biome.accent).lerp(new THREE.Color("#fff0a8"), 0.28);
+    const mat = pooled("braincoral.mat", () =>
+      new THREE.MeshStandardMaterial({ color: baseCol, flatShading: true, roughness: 0.58 })
+    );
+    const grooveMat = pooled("braincoral.groove.mat", () =>
+      new THREE.MeshStandardMaterial({
+        color: baseCol.clone().offsetHSL(0, -0.08, -0.16),
+        flatShading: true,
+        roughness: 0.7,
+      })
+    );
+    const lobes = 5 + Math.floor(Math.random() * 3);
+    for (let i = 0; i < lobes; i++) {
+      const a = (i / lobes) * Math.PI * 2;
+      const r = 0.11 + Math.random() * 0.05;
+      const lobe = new THREE.Mesh(jitterGeo(new THREE.IcosahedronGeometry(r, 0), 0.025), mat);
+      const ring = i === 0 ? 0 : 0.12 + Math.random() * 0.08;
+      lobe.position.set(Math.cos(a) * ring, 0.12 + Math.random() * 0.05, Math.sin(a) * ring);
+      lobe.scale.set(1.4, 0.65, 1.15);
+      lobe.castShadow = true;
+      g.add(lobe);
+    }
+    for (let i = 0; i < 4; i++) {
+      const ridge = new THREE.Mesh(new THREE.TorusGeometry(0.13 + i * 0.035, 0.008, 5, 24), grooveMat);
+      ridge.rotation.x = Math.PI / 2;
+      ridge.position.y = 0.22 + i * 0.005;
+      ridge.scale.z = 0.55;
+      g.add(ridge);
+    }
+    return g;
+  },
+
+  cupcoral(biome) {
+    const g = new THREE.Group();
+    const baseCol = new THREE.Color(biome.accent).offsetHSL(-0.05, -0.08, 0.08);
+    const mat = pooled("cupcoral.mat", () =>
+      new THREE.MeshStandardMaterial({
+        color: baseCol,
+        side: THREE.DoubleSide,
+        flatShading: true,
+        roughness: 0.55,
+      })
+    );
+    const cups = 3 + Math.floor(Math.random() * 3);
+    for (let i = 0; i < cups; i++) {
+      const h = 0.24 + Math.random() * 0.24;
+      const top = 0.11 + Math.random() * 0.05;
+      const bottom = top * 0.45;
+      const a = (i / cups) * Math.PI * 2 + Math.random() * 0.35;
+      const cup = new THREE.Group();
+      cup.position.set(Math.cos(a) * 0.13, h / 2, Math.sin(a) * 0.13);
+      cup.rotation.z = Math.cos(a) * 0.18;
+      cup.rotation.x = -Math.sin(a) * 0.18;
+      const wall = new THREE.Mesh(new THREE.CylinderGeometry(top, bottom, h, 8, 1, true), mat);
+      wall.castShadow = true;
+      cup.add(wall);
+      const lip = new THREE.Mesh(new THREE.TorusGeometry(top * 0.92, 0.014, 5, 18), mat);
+      lip.rotation.x = Math.PI / 2;
+      lip.position.y = h / 2;
+      cup.add(lip);
+      g.add(cup);
     }
     return g;
   },

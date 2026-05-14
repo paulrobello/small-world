@@ -232,6 +232,50 @@ const INSPECT_SCENERY_BUILDERS = {
     return g;
   },
 
+  shell(biome) {
+    const g = new THREE.Group();
+    const geo = new THREE.SphereGeometry(0.1, 8, 6);
+    geo.scale(1.35, 0.3, 0.75);
+    const mat = new THREE.MeshStandardMaterial({
+      color: new THREE.Color(biome.ground[0]).lerp(new THREE.Color("#fff8e8"), 0.55),
+      flatShading: true,
+      roughness: 0.9,
+    });
+    const m = new THREE.Mesh(geo, mat);
+    m.scale.setScalar(2.4);
+    m.position.y = 0.04;
+    m.castShadow = true;
+    g.add(m);
+    return g;
+  },
+
+  starfish(biome) {
+    const g = new THREE.Group();
+    const shape = new THREE.Shape();
+    for (let i = 0; i <= 10; i++) {
+      const a = (i / 10) * Math.PI * 2 - Math.PI / 2;
+      const r = i % 2 === 0 ? 0.18 : 0.065;
+      const x = Math.cos(a) * r;
+      const y = Math.sin(a) * r;
+      if (i === 0) shape.moveTo(x, y);
+      else shape.lineTo(x, y);
+    }
+    const geo = new THREE.ShapeGeometry(shape);
+    geo.rotateX(-Math.PI / 2);
+    const mat = new THREE.MeshStandardMaterial({
+      color: new THREE.Color(biome.accent).lerp(new THREE.Color("#ffd89a"), 0.35),
+      side: THREE.DoubleSide,
+      flatShading: true,
+      roughness: 0.82,
+    });
+    const m = new THREE.Mesh(geo, mat);
+    m.scale.setScalar(2.2);
+    m.position.y = 0.02;
+    m.castShadow = true;
+    g.add(m);
+    return g;
+  },
+
   water(biome) {
     const g = new THREE.Group();
     const geo = new THREE.PlaneGeometry(1.8, 1.8);
@@ -254,9 +298,10 @@ const INSPECT_SCENERY_BUILDERS = {
 const VARIANTS_BY_CATEGORY = {
   creature: CREATURE_VARIANTS,
   flora: [
-    "tree", "pine", "cactus", "mushroom", "fern", "rock", "reed",
-    "grass", "deadtree", "skull", "pillar", "archstone", "crystal",
-    "bigmushroom", "berrybush", "lantern", "coral", "balloontree",
+    "tree", "pine", "cactus", "mushroom", "fern", "rock", "limestonerock",
+    "reed", "seaweed", "grass", "beachsucculent", "deadtree", "skull",
+    "pillar", "archstone", "crystal", "bigmushroom", "berrybush",
+    "lantern", "coral", "braincoral", "cupcoral", "balloontree",
     "obsidianshard",
   ].map((name) => ({
     name,
@@ -267,6 +312,8 @@ const VARIANTS_BY_CATEGORY = {
     { name: "grassblade", kind: "flora", build: (biome) => INSPECT_SCENERY_BUILDERS.grassblade(biome) },
     { name: "grassfield", kind: "flora", build: (biome) => INSPECT_SCENERY_BUILDERS.grassfield(biome) },
     { name: "pebble",     kind: "flora", build: (biome) => INSPECT_SCENERY_BUILDERS.pebble(biome) },
+    { name: "shell",      kind: "flora", build: (biome) => INSPECT_SCENERY_BUILDERS.shell(biome) },
+    { name: "starfish",   kind: "flora", build: (biome) => INSPECT_SCENERY_BUILDERS.starfish(biome) },
     { name: "water",      kind: "flora", build: (biome) => INSPECT_SCENERY_BUILDERS.water(biome) },
   ]),
 };

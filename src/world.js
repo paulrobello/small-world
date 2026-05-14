@@ -35,6 +35,7 @@ import {
   makeGrassField,
   makeWildflowerField,
   makePebbleField,
+  makeBeachcombField,
   makeWaterPlane,
   makeFlySwarm,
 } from "./environment.js";
@@ -379,7 +380,9 @@ export function generateWorld(seed) {
     tree: 0.28, pine: 0.28, deadtree: 0.22, mushroom: 0.18,
     bigmushroom: 0.45, lantern: 0.18, pillar: 0.30, archstone: 0.55,
     balloontree: 0.22, crystal: 0.30, obsidianshard: 0.28, skull: 0.22,
-    berrybush: 0.30, coral: 0.25, fern: 0.18, rock: 0.30, reed: 0.10,
+    berrybush: 0.30, coral: 0.25, braincoral: 0.26, cupcoral: 0.22,
+    fern: 0.18, rock: 0.30, limestonerock: 0.30, reed: 0.10,
+    seaweed: 0.12, beachsucculent: 0.20,
   };
   const FLORA_FOOTPRINT_DEFAULT = 0.20;
   const FLORA_BURY = 0.08; // extra sink so the seam is hidden in soft fog
@@ -410,29 +413,39 @@ export function generateWorld(seed) {
   // Local-space top of a coral at scale=1 (base height + tilted branch + tip
   // ball). Used to compute the max scale that still fits beneath the water
   // surface so corals never poke through.
-  const CORAL_TOP_LOCAL = 1.3;
+  const REEF_CORAL_TOP_LOCAL = {
+    coral: 1.3,
+    braincoral: 0.42,
+    cupcoral: 0.62,
+  };
   const CORAL_SUBMERGE_MARGIN = 0.08;
   const CORAL_MIN_SCALE = 0.55;
-  // Reeds want wet roots but visible stalks, so place them only where terrain
-  // sits just below the water plane rather than on dry sand or deep shelves.
-  const REED_WATER_MARGIN = 0.02;
-  const REED_MAX_WATER_DEPTH = 0.45;
+  // Reeds and seaweed want wet roots but visible stalks, so place them only
+  // where terrain sits below the water plane rather than on dry sand.
+  const SHALLOW_WATER_FLORA = new Set(["reed", "seaweed"]);
+  const WATER_FLORA_MARGIN = 0.02;
+  const WATER_FLORA_MAX_DEPTH = {
+    reed: 0.45,
+    seaweed: 0.75,
+  };
   while (placed < floraTarget && attempts < floraTarget * 6) {
     attempts++;
     const kind = biome.flora[Math.floor(Math.random() * biome.flora.length)];
-    // Coral grows on submerged shelves in water biomes; reeds prefer the
-    // shallow waterline. Both sample the wider falloff band where heights dip
-    // below sea level, while normal flora stays on dry/near-dry ground.
-    const isUnderwaterCoral = biome.water && kind === "coral";
-    const isShallowWaterReed = biome.water && kind === "reed";
-    const p = pickGroundPoint(isUnderwaterCoral || isShallowWaterReed ? 1.0 : 0.88);
+    // Reef corals grow on submerged shelves; reeds/seaweed prefer the shallow
+    // waterline. Both sample the wider falloff band where heights dip below
+    // sea level, while normal flora stays on dry/near-dry ground.
+    const isReefCoral = biome.water && kind in REEF_CORAL_TOP_LOCAL;
+    const isShallowWaterFlora = biome.water && SHALLOW_WATER_FLORA.has(kind);
+    const p = pickGroundPoint(isReefCoral || isShallowWaterFlora ? 1.0 : 0.88);
     const y0 = state.heightFn(p.x, p.z);
-    if (isUnderwaterCoral) {
+    if (isReefCoral) {
       if (y0 > WATER_SURFACE_Y - 0.05) continue; // not submerged enough
       if (y0 < -1.8) continue; // void / extreme depth
-    } else if (isShallowWaterReed) {
-      if (y0 > WATER_SURFACE_Y - REED_WATER_MARGIN) continue; // dry bank
-      if (y0 < WATER_SURFACE_Y - REED_MAX_WATER_DEPTH) continue; // too deep
+    } else if (isShallowWaterFlora) {
+      if (y0 > WATER_SURFACE_Y - WATER_FLORA_MARGIN) continue; // dry bank
+      if (y0 < WATER_SURFACE_Y - WATER_FLORA_MAX_DEPTH[kind]) continue; // too deep
+    } else if (biome.water && y0 < WATER_SURFACE_Y + 0.04) {
+      continue; // keep beach flora and limestone above the waterline
     } else if (y0 < -0.3) {
       continue; // skip steep cliffs / void
     }
@@ -455,9 +468,9 @@ export function generateWorld(seed) {
       state.heightFn(p.x, p.z + fp),
       state.heightFn(p.x, p.z - fp)
     ) - FLORA_BURY;
-    if (isUnderwaterCoral) {
+    if (isReefCoral) {
       // Clamp scale so the tallest tip stays below the water surface.
-      const maxScale = (WATER_SURFACE_Y - CORAL_SUBMERGE_MARGIN - y) / CORAL_TOP_LOCAL;
+      const maxScale = (WATER_SURFACE_Y - CORAL_SUBMERGE_MARGIN - y) / REEF_CORAL_TOP_LOCAL[kind];
       if (maxScale < CORAL_MIN_SCALE) continue;
       s = Math.min(s, maxScale);
     }
@@ -501,25 +514,28 @@ export function generateWorld(seed) {
       state.world.add(swarm);
       state.flySwarms.push(swarm);
     }
-    if (kind === "coral") coralPlaced++;
+    if (isReefCoral) coralPlaced++;
     placed++;
   }
 
   // Coral top-up — the main loop's attempt budget gets eaten by underwater
-  // rejection and scale-clamp skips, so it under-places corals. Run a
-  // coral-only pass with an absolute target tied to floraTarget.
-  if (biome.water && biome.flora.includes("coral")) {
+  // rejection and scale-clamp skips, so it under-places reef pieces. Run a
+  // reef-only pass with an absolute target tied to floraTarget.
+  const reefKinds = biome.water
+    ? [...new Set(biome.flora.filter((kind) => kind in REEF_CORAL_TOP_LOCAL))]
+    : [];
+  if (reefKinds.length > 0) {
     const coralTarget = Math.round(floraTarget * 0.5);
-    const fpBase = FLORA_FOOTPRINT.coral ?? FLORA_FOOTPRINT_DEFAULT;
     let coralAttempts = 0;
     while (coralPlaced < coralTarget && coralAttempts < coralTarget * 12) {
       coralAttempts++;
+      const kind = reefKinds[Math.floor(Math.random() * reefKinds.length)];
       const p = pickGroundPoint(1.0);
       const y0 = state.heightFn(p.x, p.z);
       if (y0 > WATER_SURFACE_Y - 0.05) continue;
       if (y0 < -3.0) continue; // void / past the underwater shelf
       let s = 0.7 + Math.random() * 0.7;
-      const fp = fpBase * s;
+      const fp = (FLORA_FOOTPRINT[kind] ?? FLORA_FOOTPRINT_DEFAULT) * s;
       const y = Math.min(
         y0,
         state.heightFn(p.x + fp, p.z),
@@ -527,11 +543,11 @@ export function generateWorld(seed) {
         state.heightFn(p.x, p.z + fp),
         state.heightFn(p.x, p.z - fp)
       ) - FLORA_BURY;
-      const maxScale = (WATER_SURFACE_Y - CORAL_SUBMERGE_MARGIN - y) / CORAL_TOP_LOCAL;
+      const maxScale = (WATER_SURFACE_Y - CORAL_SUBMERGE_MARGIN - y) / REEF_CORAL_TOP_LOCAL[kind];
       if (maxScale < CORAL_MIN_SCALE) continue;
       s = Math.min(s, maxScale);
-      const f = FLORA_BUILDERS.coral(biome);
-      f.userData.inspect = { category: "flora", variant: "coral" };
+      const f = FLORA_BUILDERS[kind](biome);
+      f.userData.inspect = { category: "flora", variant: kind };
       f.position.set(p.x, y, p.z);
       f.rotation.y = Math.random() * Math.PI * 2;
       f.scale.setScalar(s);
@@ -547,6 +563,8 @@ export function generateWorld(seed) {
     state.world.add(m);
     if (m.userData.positions) state.flowerSpots.push(...m.userData.positions);
   }
+  const beachcomb = makeBeachcombField(biome, state.heightFn);
+  if (beachcomb) state.world.add(beachcomb);
   state.world.add(makePebbleField(biome, state.heightFn));
 
   // creatures — fish biomes don't get sleepers/burrowers (they float).

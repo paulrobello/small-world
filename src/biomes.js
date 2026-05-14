@@ -186,8 +186,11 @@ export const BIOMES = [
     water: "#5fc6cf",
     cloudTint: "#ffffff",
     cloudOpacity: 0.75,
-    flora: ["coral", "coral", "coral", "rock", "reed", "fern"],
-    floraCount: 70,
+    flora: [
+      "coral", "coral", "braincoral", "cupcoral",
+      "seaweed", "seaweed", "reed", "limestonerock", "beachsucculent",
+    ],
+    floraCount: 78,
     particle: "bubble",
     creatureColors: ["#ff7a8c", "#ffb88a", "#7ad6e0", "#fff2b3"],
     creatureCount: [9, 14],
@@ -319,6 +322,10 @@ export const AURORA_TINTS = {
 export const PEBBLE_DENSITY = {
   verdant: 80, desert: 130, frozen: 100,
   marsh:   70, ashen:  140, golden: 90,
-  mossy:  120, twilight: 70, coral: 80,
+  mossy:  120, twilight: 70, coral: 55,
   cloud:  40, grove:    80, obsidian: 160,
+};
+
+export const BEACHCOMB_DENSITY = {
+  coral: 95,
 };

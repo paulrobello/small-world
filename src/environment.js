@@ -2,7 +2,12 @@ import * as THREE from "three";
 import { state, DENSITY_BASE } from "./state.js";
 import { jitterGeo, applyWindSway } from "./util.js";
 import { pickGroundPoint } from "./terrain.js";
-import { WILDFLOWER_PALETTES, FLOWER_DENSITY, PEBBLE_DENSITY } from "./biomes.js";
+import {
+  WILDFLOWER_PALETTES,
+  FLOWER_DENSITY,
+  PEBBLE_DENSITY,
+  BEACHCOMB_DENSITY,
+} from "./biomes.js";
 import { LOWFX, LOWFX_DENSITY } from "./lowfx.js";
 import { BLOOM_LAYER } from "./postfx.js";
 
@@ -585,6 +590,7 @@ export function placeInstanced(geo, mat, count, heightFn, opts = {}) {
     minScale = 0.6,
     maxScale = 1.3,
     minHeight = -0.15,
+    maxHeight = Infinity,
     tilt = 0.25,
     fullRotation = true,
   } = opts;
@@ -610,7 +616,7 @@ export function placeInstanced(geo, mat, count, heightFn, opts = {}) {
     const x = p.x;
     const z = p.z;
     const y = heightFn(x, z);
-    if (y < minHeight) continue;
+    if (y < minHeight || y > maxHeight) continue;
 
     v.set(x, y + yOffset, z);
     s.setScalar(minScale + Math.random() * (maxScale - minScale));
@@ -686,6 +692,72 @@ export function makePebbleField(biome, heightFn) {
   });
   mesh.userData.inspect = { category: "flora", variant: "pebble" };
   return mesh;
+}
+
+function makeStarfishGeometry() {
+  const shape = new THREE.Shape();
+  const points = 10;
+  for (let i = 0; i <= points; i++) {
+    const a = (i / points) * Math.PI * 2 - Math.PI / 2;
+    const r = i % 2 === 0 ? 0.13 : 0.045;
+    const x = Math.cos(a) * r;
+    const y = Math.sin(a) * r;
+    if (i === 0) shape.moveTo(x, y);
+    else shape.lineTo(x, y);
+  }
+  const geo = new THREE.ShapeGeometry(shape);
+  geo.rotateX(-Math.PI / 2);
+  return geo;
+}
+
+export function makeBeachcombField(biome, heightFn) {
+  const total = BEACHCOMB_DENSITY[biome.id] ?? 0;
+  if (total <= 0) return null;
+
+  const group = new THREE.Group();
+  const shellCount = _coverScale(Math.round(total * 0.78));
+  const starCount = _coverScale(Math.round(total * 0.22));
+
+  const shellGeo = new THREE.SphereGeometry(0.08, 8, 6);
+  shellGeo.scale(1.25, 0.28, 0.72);
+  const shellMat = new THREE.MeshStandardMaterial({
+    color: new THREE.Color(biome.ground[0]).lerp(new THREE.Color("#fff8e8"), 0.55),
+    flatShading: true,
+    roughness: 0.9,
+  });
+  const shells = placeInstanced(shellGeo, shellMat, shellCount, heightFn, {
+    yOffset: 0.025,
+    maxRadiusFrac: 0.96,
+    minScale: 0.55,
+    maxScale: 1.25,
+    minHeight: -0.08,
+    maxHeight: 0.32,
+    tilt: 0.35,
+  });
+  shells.userData.inspect = { category: "flora", variant: "shell" };
+  group.add(shells);
+
+  const starGeo = makeStarfishGeometry();
+  const starMat = new THREE.MeshStandardMaterial({
+    color: new THREE.Color(biome.accent).lerp(new THREE.Color("#ffd89a"), 0.35),
+    side: THREE.DoubleSide,
+    flatShading: true,
+    roughness: 0.82,
+  });
+  const stars = placeInstanced(starGeo, starMat, starCount, heightFn, {
+    yOffset: 0.035,
+    maxRadiusFrac: 0.96,
+    minScale: 0.45,
+    maxScale: 0.9,
+    minHeight: -0.12,
+    maxHeight: 0.22,
+    tilt: 0.12,
+  });
+  stars.userData.inspect = { category: "flora", variant: "starfish" };
+  group.add(stars);
+
+  group.userData.inspect = { category: "flora", variant: "shell" };
+  return group;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
