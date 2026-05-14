@@ -574,11 +574,43 @@ export function generateWorld(seed) {
   const allowGroundVariants = biome.creatureKind !== "fish";
   let spawned = 0;
   let budget = ncreatures;
-  // In water biomes, raise the minimum-Y threshold so creatures don't spawn
-  // submerged. Matches the WATER_AVOID_Y check in fauna.js (slight margin
-  // above the waterline so waves never lap over them).
+  // In water biomes, raise the minimum-Y threshold so ground creatures don't
+  // spawn submerged. Fish are the exception: they spawn on underwater shelves
+  // and their step logic keeps them swimming below the surface.
   const groundMinY = biome.water ? 0.05 : 0;
+  const fishSurfaceY = -0.24;
+  const fishMinGroundY = -3.0;
+  function fishMaxGroundY(scale) {
+    return fishSurfaceY - 0.66 * scale;
+  }
+  function placeFishUnderwater(c) {
+    let p = { x: 0, z: 0 };
+    let y = 0;
+    let found = false;
+    for (let tries = 0; tries < 120; tries++) {
+      p = pickGroundPoint(1.0);
+      y = state.heightFn(p.x, p.z);
+      if (y <= fishMaxGroundY(c.scale) && y > fishMinGroundY) {
+        found = true;
+        break;
+      }
+    }
+    if (!found) return false;
+    const topY = fishSurfaceY - 0.34 * c.scale;
+    const bottomY = y + 0.32 * c.scale;
+    const swimY = bottomY + (topY - bottomY) * (0.4 + Math.random() * 0.25);
+    c.group.position.set(p.x, swimY, p.z);
+    state.world.add(c.group);
+    state.creatures.push(c);
+    spawned++;
+    return true;
+  }
   function placeOnGround(c) {
+    if (c.isFish && biome.water) {
+      const placedFish = placeFishUnderwater(c);
+      if (!placedFish) disposeGroup(c.group);
+      return placedFish;
+    }
     let p = { x: 0, z: 0 };
     let y = -10;
     for (let tries = 0; tries < 20 && y < groundMinY; tries++) {
@@ -589,14 +621,17 @@ export function generateWorld(seed) {
     state.world.add(c.group);
     state.creatures.push(c);
     spawned++;
+    return true;
   }
-  while (budget > 0) {
+  let creatureAttempts = 0;
+  while (budget > 0 && creatureAttempts < ncreatures * 10) {
+    creatureAttempts++;
     const r = Math.random();
     // budget rolls: family (parent + kids), sleeper, burrower, plain
     if (allowGroundVariants && budget >= 2 && r < 0.18) {
       // family group — 1 parent + 1-2 kids
       const parent = makeCreature(biome, { role: "parent" });
-      placeOnGround(parent);
+      if (!placeOnGround(parent)) continue;
       budget--;
       const kidCount = Math.min(budget, 1 + (Math.random() < 0.5 ? 1 : 0));
       for (let k = 0; k < kidCount; k++) {
@@ -618,14 +653,11 @@ export function generateWorld(seed) {
         budget--;
       }
     } else if (allowGroundVariants && r < 0.30) {
-      placeOnGround(makeCreature(biome, { sleeper: true }));
-      budget--;
+      if (placeOnGround(makeCreature(biome, { sleeper: true }))) budget--;
     } else if (allowGroundVariants && r < 0.38) {
-      placeOnGround(makeCreature(biome, { burrower: true }));
-      budget--;
+      if (placeOnGround(makeCreature(biome, { burrower: true }))) budget--;
     } else {
-      placeOnGround(makeCreature(biome));
-      budget--;
+      if (placeOnGround(makeCreature(biome))) budget--;
     }
   }
 

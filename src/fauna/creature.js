@@ -18,6 +18,14 @@ const PERSONALITIES = {
 };
 const PERSONALITY_NAMES = Object.keys(PERSONALITIES);
 
+const FISH_MIN_GROUND_Y = -3.0;
+
+function fishMaxGroundY(scale) {
+  // Water plane is around y=-0.12 and can wave downward; keep the fish body's
+  // top below the lowest visible surface and require terrain clearance below.
+  return WATER_AVOID_Y - 0.24 - 0.66 * scale;
+}
+
 // Per-regen creature resource pool — shared eye/pupil materials and the
 // constant geometries used by every creature. `resetCreaturePool()` is
 // called at the top of each generateWorld, so disposeGroup correctly tears
@@ -105,7 +113,15 @@ export function makeCreature(biome, opts = {}) {
   group.rotation.order = "YXZ";
   group.userData.inspect = {
     category: "creature",
-    variant: opts.sleeper ? "sleeper" : opts.burrower ? "burrower" : flies ? "flier" : "walker",
+    variant: opts.sleeper
+      ? "sleeper"
+      : opts.burrower
+        ? "burrower"
+        : isFish
+          ? "fish"
+          : flies
+            ? "flier"
+            : "walker",
   };
   const palette = biome.creatureColors;
   const bodyCol = new THREE.Color(
@@ -123,9 +139,9 @@ export function makeCreature(biome, opts = {}) {
       metalness: 0.02,
     })
   );
-  const bodyBaseY = flies ? 0.92 : 0.82;
-  const bodyBaseX = flies ? 1.05 : 1;
-  const bodyBaseZ = flies ? 1.05 : 1.25;
+  const bodyBaseY = isFish ? 0.72 : flies ? 0.92 : 0.82;
+  const bodyBaseX = isFish ? 0.9 : flies ? 1.05 : 1;
+  const bodyBaseZ = isFish ? 1.45 : flies ? 1.05 : 1.25;
   body.scale.set(bodyBaseX, bodyBaseY, bodyBaseZ);
   body.castShadow = true;
   group.add(body);
@@ -178,11 +194,21 @@ export function makeCreature(biome, opts = {}) {
   const eyeParts = [];
   for (const sign of [-1, 1]) {
     const eye = new THREE.Mesh(eyeGeo, eyeMat);
-    eye.position.set(sign * 0.16, 0.17, 0.4);
+    eye.position.set(
+      sign * (isFish ? 0.25 : 0.16),
+      isFish ? 0.12 : 0.17,
+      isFish ? 0.24 : 0.4
+    );
+    if (isFish) eye.scale.setScalar(0.92);
     group.add(eye);
     eyeParts.push(eye);
     const pupil = new THREE.Mesh(pupilGeo, pupilMat);
-    pupil.position.set(sign * 0.16, 0.17, 0.48);
+    pupil.position.set(
+      sign * (isFish ? 0.32 : 0.16),
+      isFish ? 0.12 : 0.17,
+      isFish ? 0.27 : 0.48
+    );
+    if (isFish) pupil.scale.setScalar(0.86);
     if (biome.glowEyes) pupil.layers.enable(BLOOM_LAYER);
     group.add(pupil);
     eyeParts.push(pupil);
@@ -190,7 +216,7 @@ export function makeCreature(biome, opts = {}) {
 
   // antennae for some
   const antennae = [];
-  if (Math.random() > 0.55) {
+  if (!isFish && Math.random() > 0.55) {
     const antMat = new THREE.MeshStandardMaterial({
       color: bodyCol.clone().offsetHSL(0, 0, -0.2),
     });
@@ -224,10 +250,10 @@ export function makeCreature(biome, opts = {}) {
   const feet = [];
   const legs = [];
   const wings = [];
+  let tailFin = null;
 
   if (flies) {
     if (isFish) {
-      // fin-like ears — small flattened pivots on the upper sides
       const finMat = new THREE.MeshStandardMaterial({
         color: bodyCol.clone().offsetHSL(0, -0.05, 0.14),
         flatShading: true,
@@ -236,26 +262,27 @@ export function makeCreature(biome, opts = {}) {
       });
       for (const side of [-1, 1]) {
         const pivot = new THREE.Group();
-        pivot.position.set(side * 0.18, 0.22, 0.05);
+        pivot.position.set(side * 0.24, -0.02, 0.02);
+        pivot.rotation.z = side * -0.45;
+        pivot.rotation.x = -0.18;
         group.add(pivot);
         const finGeo = jitterGeo(
-          new THREE.IcosahedronGeometry(0.13, 0),
-          0.03
+          new THREE.IcosahedronGeometry(0.16, 0),
+          0.035
         );
-        finGeo.scale(1.4, 0.12, 1.0);
+        finGeo.scale(1.75, 0.12, 0.85);
         const fin = new THREE.Mesh(finGeo, finMat);
-        fin.position.set(side * 0.13, 0.04, 0);
+        fin.position.set(side * 0.2, -0.02, -0.02);
         fin.castShadow = true;
         pivot.add(fin);
         wings.push(pivot);
       }
-      // little tail fin on the back
-      const tailGeo = jitterGeo(new THREE.IcosahedronGeometry(0.13, 0), 0.03);
-      tailGeo.scale(0.3, 0.85, 1.1);
-      const tail = new THREE.Mesh(tailGeo, finMat);
-      tail.position.set(0, 0.05, -0.45);
-      tail.castShadow = true;
-      group.add(tail);
+      const tailGeo = jitterGeo(new THREE.IcosahedronGeometry(0.18, 0), 0.04);
+      tailGeo.scale(0.38, 1.35, 1.6);
+      tailFin = new THREE.Mesh(tailGeo, finMat);
+      tailFin.position.set(0, 0.02, -0.58);
+      tailFin.castShadow = true;
+      group.add(tailFin);
     } else {
       // wings — flattened ellipsoid icospheres on hinge groups
       const wingMat = new THREE.MeshStandardMaterial({
@@ -386,6 +413,7 @@ export function makeCreature(biome, opts = {}) {
     feet,
     legs,
     wings,
+    tailFin,
     eyeParts,
     flies,
     isFish,
@@ -983,7 +1011,15 @@ export function stepCreature(c, dt, t, heightFn) {
     //    submerge them below the waterline
     let wouldStray;
     let target;
-    if (c.flies && c.landState === "flying") {
+    if (c.isFish && state.waterMesh) {
+      const planeBound = state.ISLAND_SIZE * 0.46;
+      const nextGround = heightFn(nx, nz);
+      wouldStray =
+        Math.sqrt(nx * nx + nz * nz) > planeBound ||
+        nextGround > fishMaxGroundY(c.scale) ||
+        nextGround < FISH_MIN_GROUND_Y;
+      target = nearestCenter(pos.x, pos.z);
+    } else if (c.flies && c.landState === "flying") {
       const planeBound = state.ISLAND_SIZE * 0.46;
       wouldStray = Math.sqrt(nx * nx + nz * nz) > planeBound;
       // Fliers may cruise across water — they sit at hoverHeight above
@@ -1006,9 +1042,13 @@ export function stepCreature(c, dt, t, heightFn) {
     }
 
     if (wouldStray) {
-      c.heading =
-        Math.atan2(target.cz - pos.z, target.cx - pos.x) +
-        (Math.random() - 0.5) * 0.5;
+      if (c.isFish) {
+        c.heading += Math.PI + (Math.random() - 0.5) * 0.7;
+      } else {
+        c.heading =
+          Math.atan2(target.cz - pos.z, target.cx - pos.x) +
+          (Math.random() - 0.5) * 0.5;
+      }
     } else {
       // Obstacle slide — walkers always route around trunks; fliers route
       // around them too, but only while below the canopy (height filter in
@@ -1038,13 +1078,19 @@ export function stepCreature(c, dt, t, heightFn) {
         pos.z = nz;
       }
     }
-    // Post-commit water guard for walkers. The pre-step water check above
-    // only sees the straight-step nx/nz — obstacle slide (slide.nx/.nz) and
-    // a herd-influence heading rotation can both deflect the committed
-    // position onto a lake without being caught upstream. Revert to the
-    // previous position and reverse heading so next frame steps back
-    // inland. Fliers handle water through their own FSM ("over water →
-    // forced flying" path), so this only applies to ground movers.
+    // Post-commit water guards. The pre-step water check above only sees the
+    // straight-step nx/nz — obstacle slide (slide.nx/.nz) and a herd-influence
+    // heading rotation can deflect the committed position across a waterline.
+    // Ground movers revert if they enter water; fish revert if they leave a
+    // deep-enough swim band.
+    if (c.isFish && state.waterMesh) {
+      const fishGround = heightFn(pos.x, pos.z);
+      if (fishGround > fishMaxGroundY(c.scale) || fishGround < FISH_MIN_GROUND_Y) {
+        pos.x = oldPosX;
+        pos.z = oldPosZ;
+        c.heading += Math.PI + (Math.random() - 0.5) * 0.5;
+      }
+    }
     if (
       !c.flies &&
       state.waterMesh &&
@@ -1060,7 +1106,20 @@ export function stepCreature(c, dt, t, heightFn) {
   }
 
   const ground = heightFn(pos.x, pos.z);
-  if (c.flies) {
+  if (c.isFish && state.waterMesh) {
+    const topY = WATER_AVOID_Y - 0.24 - 0.34 * c.scale;
+    const bottomY = ground + 0.32 * c.scale;
+    if (bottomY > topY) {
+      c.heading += Math.PI + (Math.random() - 0.5) * 0.5;
+      pos.y += (topY - pos.y) * Math.min(1, dt * 4.0);
+    } else {
+      const band = topY - bottomY;
+      const cruise = bottomY + band * (0.48 + Math.sin(t * 0.45 + c.flapPhase) * 0.18);
+      const swimBob = Math.sin(c.bob) * 0.055 * c.bobAmpMul;
+      const targetY = Math.max(bottomY, Math.min(topY, cruise + swimBob));
+      pos.y += (targetY - pos.y) * Math.min(1, dt * 3.5);
+    }
+  } else if (c.flies) {
     // Floor blends from terrain ground up to (perch top + a tiny lift) as
     // the flier closes in on its perch in XZ. The blend uses smoothstep
     // over a wide ~4-unit window so the rise reads as a gentle glide arc
@@ -1180,17 +1239,16 @@ export function stepCreature(c, dt, t, heightFn) {
 
   if (c.flies) {
     if (c.isFish) {
-      // Visible fin flap — fast enough to read at a glance. Old values (rate
-      // 2.2 / amp 0.25-0.18) felt nearly static; bumped to ~1.4 Hz with a
-      // bigger amplitude so the small fins are clearly working.
-      const phase = t * 5.5 + c.flapPhase;
+      const phase = t * 6.0 + c.flapPhase;
       const wave = Math.sin(phase);
       for (let i = 0; i < c.wings.length; i++) {
         const sign = i === 0 ? -1 : 1;
-        c.wings[i].rotation.z = sign * (0.18 + wave * 0.55);
-        c.wings[i].rotation.y = Math.cos(phase * 0.85) * 0.32;
+        c.wings[i].rotation.z = sign * (-0.45 + wave * 0.28);
+        c.wings[i].rotation.x = -0.18 + Math.cos(phase * 0.8) * 0.12;
+        c.wings[i].rotation.y = Math.cos(phase * 0.7) * 0.18;
       }
-      c.body.rotation.z = wave * 0.06;
+      if (c.tailFin) c.tailFin.rotation.y = Math.sin(phase * 1.15) * 0.55;
+      c.body.rotation.z = wave * 0.04;
     } else if (grounded) {
       // Wings mostly tucked, but with a small idle twitch so the bird never
       // looks completely lifeless. Period ~2s, amplitude small.
