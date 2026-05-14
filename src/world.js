@@ -495,7 +495,8 @@ export function generateWorld(seed) {
     // applied below so a 1.4× tree gets a wider sample than a 0.7× one).
     let s = 0.7 + Math.random() * 0.7;
     const fp = (FLORA_FOOTPRINT[kind] ?? FLORA_FOOTPRINT_DEFAULT) * s;
-    if (blocksPlacement(p.x, p.z, fp * 1.2)) continue;
+    const placementBlockKinds = kind === "lavafissure" ? OBSTACLE_KINDS : PLACEMENT_BLOCK_KINDS;
+    if (blocksPlacement(p.x, p.z, fp * 1.2, placementBlockKinds)) continue;
     const f = FLORA_BUILDERS[kind](biome);
     f.userData.inspect = { category: "flora", variant: kind };
     const y = Math.min(
@@ -741,19 +742,29 @@ export function generateWorld(seed) {
   }
 
   // caterpillars — multi-segment crawlers, occasionally swapped for snails
+  function placeCrawler(make) {
+    for (let tries = 0; tries < 12; tries++) {
+      const crawler = make();
+      const head = crawler.segments?.[0];
+      if (head && !blocksPlacement(head.position.x, head.position.z, 0.28 * crawler.scale)) {
+        state.world.add(crawler.group);
+        state.caterpillars.push(crawler);
+        return true;
+      }
+      disposeGroup(crawler.group);
+    }
+    return false;
+  }
+
   const ncats = 1 + Math.floor(Math.random() * 3); // 1–3
   for (let i = 0; i < ncats; i++) {
-    const cat = makeCaterpillar(biome);
-    state.world.add(cat.group);
-    state.caterpillars.push(cat);
+    placeCrawler(() => makeCaterpillar(biome));
   }
   // snails — 0-2 per world (cute, slow). They live in the caterpillars array
   // so they get stepped and ray-picked alongside their cousins.
   const nsnails = Math.random() < 0.7 ? (Math.random() < 0.4 ? 2 : 1) : 0;
   for (let i = 0; i < nsnails; i++) {
-    const snail = makeCaterpillar(biome, { kind: "snail" });
-    state.world.add(snail.group);
-    state.caterpillars.push(snail);
+    placeCrawler(() => makeCaterpillar(biome, { kind: "snail" }));
   }
 
   // butterflies — drift between flower positions. Skipped in arid biomes
