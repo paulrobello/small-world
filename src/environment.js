@@ -24,7 +24,7 @@ const _coverScale = (n, gain = 1) =>
 const PARTICLE_KIND_ID = {
   pollen: 0, dust: 1, snow: 2, firefly: 3, ember: 4,
   lichenmote: 5, feather: 6, bubble: 7, leaf: 8, spark: 9, rain: 10,
-  sand: 11,
+  sand: 11, cinder: 12,
 };
 
 const _particleVS = `
@@ -42,7 +42,7 @@ void main() {
   vec4 mv = modelViewMatrix * vec4(position, 1.0);
   vViewZ = -mv.z; // positive distance in front of camera, matches readViewDist in postfx.js
   float size = uBaseSize;
-  #if PARTICLE_KIND == 4 || PARTICLE_KIND == 9
+  #if PARTICLE_KIND == 4 || PARTICLE_KIND == 9 || PARTICLE_KIND == 12
     size *= 1.0 - aLife * 0.7;
   #elif PARTICLE_KIND == 2
     size *= 0.7 + 0.3 * fract(aSeed);
@@ -75,7 +75,7 @@ void main() {
   float d = length(c);
   #if PARTICLE_KIND == 10
     float a = smoothstep(0.5, 0.0, abs(c.x) * 2.0) * smoothstep(0.5, 0.0, abs(c.y));
-  #elif PARTICLE_KIND == 11
+  #elif PARTICLE_KIND == 11 || PARTICLE_KIND == 12
     // horizontal streak — stretched in x, tight in y
     float a = smoothstep(0.5, 0.0, abs(c.x)) * smoothstep(0.5, 0.0, abs(c.y) * 2.6);
     // gust pulse: vary alpha by life so individual grains breathe
@@ -84,7 +84,7 @@ void main() {
     float a = smoothstep(0.5, 0.0, d);
   #endif
   vec3 col = uColor;
-  #if PARTICLE_KIND == 4 || PARTICLE_KIND == 9
+  #if PARTICLE_KIND == 4 || PARTICLE_KIND == 9 || PARTICLE_KIND == 12
     col = mix(uColor, uColor2, vLife);
     a *= 1.0 - vLife;
   #elif PARTICLE_KIND == 3
@@ -112,7 +112,7 @@ export function makeParticles(biome) {
   const baseCount = {
     pollen: 240, dust: 320, snow: 500, firefly: 90, ember: 180,
     lichenmote: 140, feather: 120, bubble: 140, leaf: 120, spark: 240, rain: 520,
-    sand: 420,
+    sand: 420, cinder: 300,
   }[kind] || 200;
   const count = _lowfxScale(baseCount);
 
@@ -125,8 +125,8 @@ export function makeParticles(biome) {
     const r = Math.sqrt(Math.random()) * state.ISLAND_RADIUS * 1.1;
     const a = Math.random() * Math.PI * 2;
     positions[i * 3 + 0] = Math.cos(a) * r;
-    // Sand hugs the ground — sample low so grains read as wind-swept, not airborne.
-    positions[i * 3 + 1] = kind === "sand" ? 0.1 + Math.random() * 2.4 : Math.random() * 14;
+    // Sand/cinders hug the ground — sample low so grains read as wind-swept, not airborne.
+    positions[i * 3 + 1] = (kind === "sand" || kind === "cinder") ? 0.1 + Math.random() * 2.8 : Math.random() * 14;
     positions[i * 3 + 2] = Math.sin(a) * r;
     velocities[i * 3 + 0] = (Math.random() - 0.5) * 0.4;
     velocities[i * 3 + 1] = (Math.random() - 0.5) * 0.4;
@@ -152,10 +152,11 @@ export function makeParticles(biome) {
     feather: "#ffffff", bubble: biome.water || biome.sky,
     leaf: biome.accent, spark: biome.sun, rain: biome.sun,
     sand: (biome.ground && biome.ground[2]) || biome.fog,
+    cinder: biome.accent,
   };
-  // Ember/spark fade toward a smokier secondary colour over life.
+  // Ember/spark/cinder fade toward a smokier secondary colour over life.
   const color2Map = {
-    ember: "#3a2018", spark: "#fff2b3",
+    ember: "#3a2018", spark: "#fff2b3", cinder: "#2a1714",
   };
   const sizeMap = {
     firefly: 0.16,
@@ -170,13 +171,14 @@ export function makeParticles(biome) {
     dust: 0.09,
     ember: 0.12,
     sand: 0.16,
+    cinder: 0.13,
   };
   const opacityMap = {
     dust: 0.35, feather: 0.7, bubble: 0.55, leaf: 0.85, spark: 0.95, rain: 0.55,
     pollen: 0.85, snow: 0.85, firefly: 0.85, ember: 0.85, lichenmote: 0.85,
-    sand: 0.55,
+    sand: 0.55, cinder: 0.72,
   };
-  const additive = new Set(["firefly", "ember", "lichenmote", "spark"]);
+  const additive = new Set(["firefly", "ember", "lichenmote", "spark", "cinder"]);
 
   const renderer = state.renderer; // set by main.js after init
   const pixelRatio = renderer ? renderer.getPixelRatio() : 1;
@@ -310,6 +312,27 @@ export function stepParticles(points, dt, t) {
       } else if (Math.abs(z) > state.ISLAND_RADIUS * 1.15) {
         z = -Math.sign(z) * state.ISLAND_RADIUS * 1.05;
       }
+    } else if (kind === "cinder") {
+      // Glowing ash blown low across the wastes: sand-like wind, but slower,
+      // floatier, and capped close to the terrain so it stays cute/subtle.
+      const gust = 0.75 + 0.45 * Math.sin(t * 0.32 + s * 0.06);
+      const cross = 0.22 * Math.sin(t * 0.48 + s * 0.11);
+      x += (4.2 * gust + Math.sin(t * 1.25 + s) * 0.5) * dt;
+      z += (cross + Math.cos(t * 0.82 + s * 1.2) * 0.34) * dt;
+      y += (0.08 + Math.sin(t * 1.7 + s * 1.6) * 0.22) * dt;
+      const groundY = state.heightFn ? state.heightFn(x, z) : 0;
+      const floor = groundY + 0.12;
+      const ceil = groundY + 3.0;
+      if (y < floor) y = floor + Math.random() * 0.18;
+      else if (y > ceil) y = ceil;
+      if (x > state.ISLAND_RADIUS * 1.1) {
+        x = -state.ISLAND_RADIUS * 1.05 + Math.random() * 1.0;
+        z = (Math.random() - 0.5) * state.ISLAND_RADIUS * 2.0;
+        const gy = state.heightFn ? state.heightFn(x, z) : 0;
+        y = gy + 0.12 + Math.random() * 1.15;
+      } else if (Math.abs(z) > state.ISLAND_RADIUS * 1.15) {
+        z = -Math.sign(z) * state.ISLAND_RADIUS * 1.05;
+      }
     } else if (kind === "bubble") {
       // slow upward drift with a soft wobble — pops at the top
       y += (0.35 + (s % 1) * 0.25) * dt;
@@ -380,7 +403,7 @@ export function stepParticles(points, dt, t) {
   // progress. We treat all kinds identically here (cheap one-pass loop).
   for (let i = 0; i < count; i++) {
     const s = seeds[i];
-    if (kind === "ember" || kind === "spark") {
+    if (kind === "ember" || kind === "spark" || kind === "cinder") {
       lifes[i] = Math.min(1, (lifes[i] ?? 0) + dt * 0.6);
       if (lifes[i] >= 1) lifes[i] = 0;
     } else if (kind === "firefly" || kind === "lichenmote") {

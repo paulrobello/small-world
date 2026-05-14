@@ -101,7 +101,7 @@ export const BIOMES = [
     sun: "#ff8866",
     flora: ["lavafissure", "lavafissure", "deadtree", "rock", "rock", "skull", "crystal"],
     floraCount: 48,
-    particle: "ember",
+    particle: "cinder",
     creatureColors: ["#e63946", "#f77f00", "#fcbf49", "#ffd166"],
     creatureCount: [6, 10],
     darkBiome: true,

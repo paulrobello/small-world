@@ -2,9 +2,9 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Add cozy glowing lava fissures to the Ashen Wastes biome with subtle warm lighting and obstacle avoidance.
+**Goal:** Add cozy glowing lava fissures to the Ashen Wastes biome with subtle warm lighting, windblown glowing cinders, and obstacle avoidance.
 
-**Architecture:** Implement `lavafissure` as a normal flora builder in `src/flora.js`, then opt Ashen Wastes into it from `src/biomes.js`. Integrate with existing flora placement in `src/world.js` by adding footprint/obstacle metadata and a capped warm point light, and expose the variant in inspect mode.
+**Architecture:** Implement `lavafissure` as a normal flora builder in `src/flora.js`, then opt Ashen Wastes into it from `src/biomes.js`. Integrate with existing flora placement in `src/world.js` by adding footprint/obstacle metadata and a capped warm point light, expose the variant in inspect mode, and reuse the existing particle system with a new subtle `cinder` particle kind.
 
 **Tech Stack:** Browser ES modules, Three.js from importmap/CDN, existing no-build static app, Makefile/server.py for manual verification.
 
@@ -16,6 +16,7 @@
 - Modify: `src/biomes.js` — add `lavafissure` to Ashen Wastes flora mix and tune palette/count if needed.
 - Modify: `src/world.js` — add footprint/obstacle metadata and capped point lights for fissures.
 - Modify: `src/inspect.js` — add `lavafissure` to flora inspect variants.
+- Modify: `src/environment.js` — add subtle ground-hugging windblown `cinder` particles.
 - No new runtime dependencies.
 
 ## Task 1: Lava fissure flora builder

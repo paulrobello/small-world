@@ -2,7 +2,7 @@
 
 ## Goal
 
-Update the Ashen Wastes biome so it reads as a cute scorched volcanic plain with glowing lava fissures, warm ember light, and subtle creature/flora avoidance, while staying distinct from the darker existing Volcanic Glass biome.
+Update the Ashen Wastes biome so it reads as a cute scorched volcanic plain with glowing lava fissures, windblown glowing cinders, warm ember light, and subtle creature/flora avoidance, while staying distinct from the darker existing Volcanic Glass biome.
 
 ## User-approved direction
 
@@ -22,6 +22,8 @@ A fissure is a small ground-level flora group made from:
 - an optional tiny central vent/glow point.
 
 The fissures should feel hand-placed and blobby, not realistic or sharp. They should use warm saturated colors from the Ashen Wastes accent palette, but avoid harsh neon.
+
+Ashen Wastes should also use subtle low, horizontal glowing cinders drifting like gentler desert sand, staying cute and smoky rather than reading as a firestorm.
 
 ## Architecture
 
