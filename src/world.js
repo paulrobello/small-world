@@ -47,7 +47,7 @@ import {
   makeStarfield,
   makeAurora,
   makeCloudSwirl,
-  makeIslandCloudRing,
+  makeIslandEdgeMist,
   stepClouds,
   updateSkyColors,
 } from "./sky.js";
@@ -216,7 +216,6 @@ export function generateWorld(seed) {
   state.particles = null;
   state.waterMesh = null;
   state.grass = null;
-  state.islandCloudRing = null;
   // release any followed creature — the entity it pointed to no longer exists
   _releaseFollow();
 
@@ -308,8 +307,8 @@ export function generateWorld(seed) {
   state.cloudSwirl = makeCloudSwirl(biome);
   if (state.cloudSwirl) state.world.add(state.cloudSwirl);
 
-  state.islandCloudRing = makeIslandCloudRing(biome);
-  if (state.islandCloudRing) state.world.add(state.islandCloudRing);
+  const edgeMist = makeIslandEdgeMist(biome);
+  if (edgeMist) state.world.add(edgeMist);
 
   const nightP = biome.night ?? {};
   const duskP = biome.dusk ?? null;

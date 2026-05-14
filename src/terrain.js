@@ -16,7 +16,7 @@ export function islandFalloff(center, x, z) {
   const sh = center.shape || { kind: "round" };
   const dx = x - center.cx;
   const dz = z - center.cz;
-  const r = center.radius;
+  const r = center.visualRadius ?? center.radius;
   if (sh.kind === "oblong") {
     const co = Math.cos(sh.orient), si = Math.sin(sh.orient);
     const lx = co * dx + si * dz;
@@ -61,18 +61,19 @@ export function makeHeightFn(noise2D, layout, amp = 3.0) {
 // Sample a random point on the layout, weighted by island area. Used for
 // flora/creature/instance placement so multi-island worlds get coverage of
 // every island and the void in between is skipped automatically.
-export function pickGroundPoint(maxRadiusFrac = 0.88) {
+export function pickGroundPoint(maxRadiusFrac = 0.88, opts = {}) {
   const centers = state.currentLayout.centers;
+  const radiusFor = (c) => opts.visualRadius ? (c.visualRadius ?? c.radius) : c.radius;
   let sum = 0;
-  for (const c of centers) sum += c.radius * c.radius;
+  for (const c of centers) sum += radiusFor(c) * radiusFor(c);
   let r = Math.random() * sum;
   let chosen = centers[0];
   for (const c of centers) {
-    r -= c.radius * c.radius;
+    r -= radiusFor(c) * radiusFor(c);
     if (r <= 0) { chosen = c; break; }
   }
   const ang = Math.random() * Math.PI * 2;
-  const rad = Math.sqrt(Math.random()) * chosen.radius * maxRadiusFrac;
+  const rad = Math.sqrt(Math.random()) * radiusFor(chosen) * maxRadiusFrac;
   return {
     x: chosen.cx + Math.cos(ang) * rad,
     z: chosen.cz + Math.sin(ang) * rad,
@@ -121,10 +122,12 @@ export function pickLayout() {
       strength: 0.55 + Math.random() * 0.2,
     };
   }
+  const visualRadius =
+    shape.kind === "round" ? radius + Math.max(3.0, radius * 0.18) : radius;
   return {
-    centers: [{ cx: 0, cz: 0, radius, shape }],
-    planeSize: Math.max(ISLAND_SIZE_BASE, radius * 2.4),
-    boundRadius: radius,
+    centers: [{ cx: 0, cz: 0, radius, visualRadius, shape }],
+    planeSize: Math.max(ISLAND_SIZE_BASE, visualRadius * 2.4),
+    boundRadius: visualRadius,
     kind: "single",
   };
 }
@@ -132,6 +135,49 @@ export function pickLayout() {
 // ─────────────────────────────────────────────────────────────────────────────
 // Terrain mesh
 // ─────────────────────────────────────────────────────────────────────────────
+function roundClipCenter() {
+  const centers = state.currentLayout?.centers ?? [];
+  return centers.find((c) => (c.shape?.kind ?? "round") === "round") ?? null;
+}
+
+function patchRoundTerrainClipShader(shader, center) {
+  const clipRadius = center.visualRadius ?? center.radius;
+  shader.uniforms.uClipCenter = { value: new THREE.Vector2(center.cx, center.cz) };
+  shader.uniforms.uClipRadius = { value: clipRadius };
+  shader.vertexShader = shader.vertexShader
+    .replace(
+      "#include <common>",
+      "#include <common>\nvarying vec2 vClipXZ;"
+    )
+    .replace(
+      "#include <begin_vertex>",
+      "#include <begin_vertex>\nvClipXZ = transformed.xz;"
+    );
+  shader.fragmentShader = shader.fragmentShader
+    .replace(
+      "#include <common>",
+      "#include <common>\nuniform vec2 uClipCenter;\nuniform float uClipRadius;\nvarying vec2 vClipXZ;"
+    )
+    .replace(
+      "#include <clipping_planes_fragment>",
+      "#include <clipping_planes_fragment>\nif (distance(vClipXZ, uClipCenter) > uClipRadius) discard;"
+    );
+}
+
+function applyRoundTerrainClip(mat, center) {
+  if (!center) return;
+  mat.onBeforeCompile = (shader) => patchRoundTerrainClipShader(shader, center);
+}
+
+function makeRoundTerrainDepthMaterial(center) {
+  if (!center) return null;
+  const mat = new THREE.MeshDepthMaterial({
+    depthPacking: THREE.RGBADepthPacking,
+  });
+  mat.onBeforeCompile = (shader) => patchRoundTerrainClipShader(shader, center);
+  return mat;
+}
+
 export function makeTerrain(biome, heightFn) {
   // segment density scales with size so larger worlds keep similar fidelity
   const segs = Math.round(140 * (state.ISLAND_SIZE / ISLAND_SIZE_BASE));
@@ -212,9 +258,13 @@ export function makeTerrain(biome, heightFn) {
     emissiveIntensity: cloudlike ? 0.08 : 0,
   });
 
+  const clipCenter = roundClipCenter();
+  applyRoundTerrainClip(mat, clipCenter);
+
   const mesh = new THREE.Mesh(geo, mat);
   mesh.receiveShadow = true;
   mesh.castShadow = true;
+  mesh.customDepthMaterial = makeRoundTerrainDepthMaterial(clipCenter);
   return mesh;
 }
 

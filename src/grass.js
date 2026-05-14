@@ -274,12 +274,12 @@ export function makeGrassField(biome, heightFn) {
   const candidateAttempts = Math.floor(count * 5);
   while (placed < count && attempts < candidateAttempts) {
     attempts++;
-    const p = pickGroundPoint(0.88);
+    const p = pickGroundPoint(0.98, { visualRadius: true });
     const x = p.x;
     const z = p.z;
     const y = heightFn(x, z);
     // -4.0 = "void zone past the island falloff", not "natural valley".
-    // pickGroundPoint(0.88) already keeps us inside the island radius;
+    // pickGroundPoint(... visualRadius) already keeps us inside the visible island;
     // the inner noise amplitude is ±3.2 so any negative under -4 is the
     // edge plunge. Don't reject mid-island dips.
     if (y < -4.0) continue;
@@ -349,11 +349,11 @@ export function makeGrassField(biome, heightFn) {
   return mesh;
 }
 
-export function stepGrass(camera) {
-  if (!state.grass || !camera) return;
+export function stepGrass(camera, fadeCenter = camera?.position) {
+  if (!state.grass || !camera || !fadeCenter) return;
   const u = state.grass.uniforms.uCameraXZ.value;
-  u.x = camera.position.x;
-  u.y = camera.position.z;
+  u.x = fadeCenter.x;
+  u.y = fadeCenter.z;
 
   // Creature → grass push. The grass shader compares against world-space XZ
   // (modelMatrix is applied before the test), but creature.group.position is

@@ -185,7 +185,7 @@ function animate() {
     if (state.userSettings.windEnabled !== false) {
       state.windUniforms.uTime.value = t;
     }
-    stepGrass(camera);
+    stepGrass(camera, isStrolling() ? camera.position : controls.target);
     updateDayNight(t);
   }
 

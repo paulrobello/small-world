@@ -140,9 +140,6 @@ function applyStrollVisualComfort(on) {
   if (state.currentBiome?.cloudlike && state.mountains) {
     state.mountains.visible = !on;
   }
-  if (state.islandCloudRing) {
-    state.islandCloudRing.visible = !on;
-  }
 }
 
 export function isPhotoMode() {

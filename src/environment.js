@@ -620,6 +620,7 @@ export function placeInstanced(geo, mat, count, heightFn, opts = {}) {
     fullRotation = true,
     avoidObstacleKinds = null,
     avoidRadius = 0,
+    visualRadius = false,
   } = opts;
   const avoidObstacleKindSet = avoidObstacleKinds
     ? (avoidObstacleKinds instanceof Set ? avoidObstacleKinds : new Set(avoidObstacleKinds))
@@ -642,7 +643,7 @@ export function placeInstanced(geo, mat, count, heightFn, opts = {}) {
   let attempts = 0;
   while (placed < count && attempts < count * 5) {
     attempts++;
-    const p = pickGroundPoint(maxRadiusFrac);
+    const p = pickGroundPoint(maxRadiusFrac, { visualRadius });
     const x = p.x;
     const z = p.z;
     if (avoidObstacleKindSet) {
@@ -710,6 +711,7 @@ export function makeWildflowerField(biome, heightFn) {
       tilt: 0,
       avoidObstacleKinds: ["lavafissure"],
       avoidRadius: 0.12,
+      visualRadius: true,
     });
     if (biome.glowFlowers) inst.layers.enable(BLOOM_LAYER);
     inst.userData.inspect = { category: "flora", variant: "wildflower" };
@@ -767,6 +769,7 @@ export function makePebbleField(biome, heightFn) {
     tilt: 0.5,
     avoidObstacleKinds: ["lavafissure"],
     avoidRadius: 0.12,
+    visualRadius: true,
   });
   mesh.userData.inspect = { category: "flora", variant: "pebble" };
   return mesh;
