@@ -667,6 +667,9 @@ export function makeIslandEdgeMist(biome) {
   return mesh;
 }
 
+// Compatibility alias for older world wiring that imported the cloud ring name.
+export const makeIslandCloudRing = makeIslandEdgeMist;
+
 export function updateSkyColors(skyDome, mountains, dayNight, dayFactor, nightAmt) {
   if (skyDome) {
     const u = skyDome.material.uniforms;
