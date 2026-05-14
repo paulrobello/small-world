@@ -413,18 +413,26 @@ export function generateWorld(seed) {
   const CORAL_TOP_LOCAL = 1.3;
   const CORAL_SUBMERGE_MARGIN = 0.08;
   const CORAL_MIN_SCALE = 0.55;
+  // Reeds want wet roots but visible stalks, so place them only where terrain
+  // sits just below the water plane rather than on dry sand or deep shelves.
+  const REED_WATER_MARGIN = 0.02;
+  const REED_MAX_WATER_DEPTH = 0.45;
   while (placed < floraTarget && attempts < floraTarget * 6) {
     attempts++;
     const kind = biome.flora[Math.floor(Math.random() * biome.flora.length)];
-    // Coral grows on submerged shelves in water biomes — sample the wider
-    // falloff band where heights dip below sea level and reject picks that
-    // would put it above water.
+    // Coral grows on submerged shelves in water biomes; reeds prefer the
+    // shallow waterline. Both sample the wider falloff band where heights dip
+    // below sea level, while normal flora stays on dry/near-dry ground.
     const isUnderwaterCoral = biome.water && kind === "coral";
-    const p = pickGroundPoint(isUnderwaterCoral ? 1.0 : 0.88);
+    const isShallowWaterReed = biome.water && kind === "reed";
+    const p = pickGroundPoint(isUnderwaterCoral || isShallowWaterReed ? 1.0 : 0.88);
     const y0 = state.heightFn(p.x, p.z);
     if (isUnderwaterCoral) {
       if (y0 > WATER_SURFACE_Y - 0.05) continue; // not submerged enough
       if (y0 < -1.8) continue; // void / extreme depth
+    } else if (isShallowWaterReed) {
+      if (y0 > WATER_SURFACE_Y - REED_WATER_MARGIN) continue; // dry bank
+      if (y0 < WATER_SURFACE_Y - REED_MAX_WATER_DEPTH) continue; // too deep
     } else if (y0 < -0.3) {
       continue; // skip steep cliffs / void
     }
