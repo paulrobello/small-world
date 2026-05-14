@@ -77,7 +77,7 @@
           <span class="help-glyph">?</span>
         </button>
         <button class="settings-toggle" id="settings-toggle" aria-label="settings" title="settings">
-          <span class="settings-glyph">✦</span>
+          <span class="settings-glyph">⚙</span>
         </button>
         <button class="regen" id="regen">
           <span class="regen-glyph">↻</span>
@@ -104,15 +104,17 @@
       <div class="settings-section-label">modes</div>
       <dl class="help-list">
         <dt>regenerate</dt>
-        <dd>bottom-right button rolls a new world seed.</dd>
+        <dd>bottom-right button or <kbd>r</kbd> rolls a new world seed.</dd>
         <dt>click-to-focus</dt>
         <dd>tap any creature for a few seconds of close camera focus.</dd>
         <dt>follow</dt>
-        <dd>settings → follow → tap a creature to track it indefinitely.</dd>
+        <dd>settings → follow → tap a creature to track it indefinitely. <kbd>esc</kbd> releases follow.</dd>
         <dt>first-person stroll</dt>
-        <dd>press <kbd>f</kbd> (or settings → first-person stroll). wasd to walk · mouse to look · <kbd>f</kbd> or <kbd>esc</kbd> to exit.</dd>
+        <dd><kbd>f</kbd> enters/exits. <kbd>w</kbd><kbd>a</kbd><kbd>s</kbd><kbd>d</kbd> walks · <kbd>shift</kbd> moves faster · mouse looks · <kbd>esc</kbd> exits.</dd>
         <dt>photo mode</dt>
-        <dd>press <kbd>p</kbd> to hide the ui and freeze every animation. press <kbd>s</kbd> while in photo mode to save a png to your downloads. <kbd>p</kbd> or <kbd>esc</kbd> to exit.</dd>
+        <dd><kbd>p</kbd> hides the ui and freezes animation. <kbd>s</kbd> saves a png while in photo mode. <kbd>p</kbd> or <kbd>esc</kbd> exits.</dd>
+        <dt>manual pause</dt>
+        <dd><kbd>space</kbd> pauses or resumes the simulation outside photo/stroll/selection modes.</dd>
       </dl>
     </section>
 
@@ -122,9 +124,13 @@
         <dt>drag</dt><dd>rotate the camera.</dd>
         <dt>scroll · pinch</dt><dd>zoom in / out.</dd>
         <dt>hover a sleeper</dt><dd>gently wakes drowsing creatures.</dd>
+        <dt><kbd>r</kbd></dt><dd>regenerate world.</dd>
         <dt><kbd>p</kbd></dt><dd>toggle photo mode.</dd>
         <dt><kbd>s</kbd></dt><dd>save the current frame as a png (photo mode only).</dd>
         <dt><kbd>f</kbd></dt><dd>enter or exit first-person stroll.</dd>
+        <dt><kbd>w</kbd><kbd>a</kbd><kbd>s</kbd><kbd>d</kbd></dt><dd>move in first-person stroll.</dd>
+        <dt><kbd>shift</kbd></dt><dd>move faster in first-person stroll.</dd>
+        <dt><kbd>space</kbd></dt><dd>toggle manual pause.</dd>
         <dt><kbd>esc</kbd></dt><dd>cancel focus · exit any mode · close panels.</dd>
       </dl>
     </section>

@@ -401,9 +401,20 @@ body {
   border-color: var(--ink);
   background: rgba(245, 240, 230, 0.1);
 }
-.settings-glyph {
+.settings-glyph,
+.help-glyph {
   display: inline-block;
+  font-family: "DM Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  line-height: 1;
+}
+.settings-glyph {
+  font-size: 19px;
   transition: transform 0.6s cubic-bezier(0.7, 0, 0.3, 1);
+}
+.help-glyph {
+  font-size: 20px;
+  font-weight: 500;
+  transform: translateY(-1px);
 }
 .settings-toggle:hover .settings-glyph { transform: rotate(72deg); }
 
