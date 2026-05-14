@@ -432,6 +432,7 @@ export function generateWorld(seed) {
   // visually nose-clip the trunk. fp itself is already ~1.5× the trunk radius.
   const OBSTACLE_PAD = 1.15;
   const PLACEMENT_BLOCK_KINDS = new Set(["lavafissure"]);
+  const floraPlacementBlocks = [];
   function blocksPlacement(x, z, r, kinds = PLACEMENT_BLOCK_KINDS) {
     const kindSet = kinds instanceof Set ? kinds : new Set(kinds);
     for (const obstacle of state.obstacles) {
@@ -439,6 +440,17 @@ export function generateWorld(seed) {
       const minD = obstacle.r + r;
       const dx = x - obstacle.x;
       const dz = z - obstacle.z;
+      if (dx * dx + dz * dz < minD * minD) return true;
+    }
+    return false;
+  }
+  function blocksFloraPlacement(x, z, r, kinds = null) {
+    const kindSet = kinds == null ? null : (kinds instanceof Set ? kinds : new Set(kinds));
+    for (const block of floraPlacementBlocks) {
+      if (kindSet && !kindSet.has(block.kind)) continue;
+      const minD = block.r + r;
+      const dx = x - block.x;
+      const dz = z - block.z;
       if (dx * dx + dz * dz < minD * minD) return true;
     }
     return false;
@@ -495,8 +507,8 @@ export function generateWorld(seed) {
     // applied below so a 1.4× tree gets a wider sample than a 0.7× one).
     let s = 0.7 + Math.random() * 0.7;
     const fp = (FLORA_FOOTPRINT[kind] ?? FLORA_FOOTPRINT_DEFAULT) * s;
-    const placementBlockKinds = kind === "lavafissure" ? OBSTACLE_KINDS : PLACEMENT_BLOCK_KINDS;
-    if (blocksPlacement(p.x, p.z, fp * 1.2, placementBlockKinds)) continue;
+    const placementBlockKinds = kind === "lavafissure" ? null : PLACEMENT_BLOCK_KINDS;
+    if (blocksFloraPlacement(p.x, p.z, fp * 1.2, placementBlockKinds)) continue;
     const f = FLORA_BUILDERS[kind](biome);
     f.userData.inspect = { category: "flora", variant: kind };
     const y = Math.min(
@@ -528,6 +540,7 @@ export function generateWorld(seed) {
       fissureLightCount++;
     }
     state.world.add(f);
+    floraPlacementBlocks.push({ kind, x: p.x, z: p.z, r: fp * 1.2 });
     if (OBSTACLE_KINDS.has(kind)) {
       const topLocal = (OBSTACLE_TOP[kind] ?? OBSTACLE_TOP_DEFAULT) * s;
       const topY = y0 + topLocal;
