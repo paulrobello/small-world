@@ -516,7 +516,7 @@ export function makeCloudSwirl(biome) {
 }
 
 function makeGrassAuraLineSegments(radius, innerRadius, outerRadius, aura, colors) {
-  const count = (LOWFX ? 1100 : 3200) * 100;
+  const count = (LOWFX ? 1100 : 3200) * 1000;
   const positions = new Float32Array(count * 2 * 3);
   const tipFactors = new Float32Array(count * 2);
   const seeds = new Float32Array(count * 2);
@@ -530,7 +530,7 @@ function makeGrassAuraLineSegments(radius, innerRadius, outerRadius, aura, color
     const z = Math.sin(angle) * r;
     const tangent = angle + Math.PI / 2;
     const outward = angle;
-    const h = (0.46 + Math.random() * 1.05) * 0.375;
+    const h = (0.46 + Math.random() * 1.05) * 0.23203125;
     const lean = (Math.random() - 0.5) * 0.34;
     const outLean = (Math.random() - 0.35) * 0.14;
     const tipX = x + Math.cos(tangent) * lean + Math.cos(outward) * outLean;
@@ -731,8 +731,8 @@ export function makeIslandEdgeMist(biome) {
           float grassBand = innerFade * outerFade;
           float fieldDensity = smoothstep(0.12, 0.82, fbm(vec2(angle * 9.0, radial * 0.45) + driftA));
           vec3 fieldCol = uColA;
-          fieldCol *= mix(0.92, 1.04, fieldDensity);
-          fieldCol *= mix(0.90, 1.0, grassBand);
+          fieldCol *= mix(0.62, 0.78, fieldDensity);
+          fieldCol *= mix(0.84, 0.94, grassBand);
           gl_FragColor = vec4(fieldCol, 1.0);
           return;
         }
