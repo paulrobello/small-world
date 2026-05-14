@@ -32,6 +32,7 @@ const CREATURE_VARIANTS = [
       return makeCreature(biome);
     } },
   { name: "fish",     kind: "creature",    build: (biome) => makeCreature({ ...biome, creatureKind: "fish" }) },
+  { name: "angler",   kind: "creature",    build: (biome) => makeCreature({ ...biome, creatureKind: "fish", anglerFish: true }, { angler: true }) },
   { name: "sleeper",  kind: "creature",    build: (biome) => makeCreature(biome, { sleeper: true }) },
   { name: "burrower", kind: "creature",    build: (biome) => makeCreature(biome, { burrower: true }) },
   { name: "caterpillar", kind: "caterpillar", build: (biome) => makeCaterpillar(biome) },
