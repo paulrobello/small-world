@@ -63,10 +63,21 @@ venv/
 .ruff_cache/
 
 # local agent settings
+*-mcp.json
+.gemini/
+.gemini-clipboard/
 .claude/settings.local.json
+.claude/.cc2cc-session-id
+.claude/scheduled_tasks.lock
+.claude/statusline-*
+claude_scratch/
+.pi/extensions/discord-relay/state.json
 .pi/status-footer.json
-.superpowers
+*.local
+*.local.*
+docs/playgrounds
 docs/superpowers
+.superpowers
 
 # local git worktrees
 .worktrees/

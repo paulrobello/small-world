@@ -43,6 +43,12 @@ make logs
 
 Then open http://localhost:1999. Edits to any source file (`main.js`, `src/*.js`, `style.css`, `index.html`) take effect on browser reload.
 
+## Development notes
+
+- There is intentionally no build step, package manager, test runner, linter, or formatter in this repo.
+- Deployment is via GitHub Pages at the live demo URL above; completed enhancements are typically committed and pushed to publish.
+- AI coding agents should start with [`CLAUDE.md`](CLAUDE.md), which is also referenced by `AGENTS.md` and `GEMINI.md` compatibility stubs.
+
 ## Stack
 
 - [Three.js](https://threejs.org/) r0.184 (ES module, loaded via importmap from jsDelivr)
