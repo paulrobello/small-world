@@ -112,7 +112,7 @@ export function makeParticles(biome) {
   const baseCount = {
     pollen: 240, dust: 320, snow: 500, firefly: 90, ember: 180,
     lichenmote: 140, feather: 120, bubble: 140, leaf: 120, spark: 240, rain: 520,
-    sand: 420, cinder: 300,
+    sand: 420, cinder: 520,
   }[kind] || 200;
   const count = _lowfxScale(baseCount);
 
@@ -152,11 +152,11 @@ export function makeParticles(biome) {
     feather: "#ffffff", bubble: biome.water || biome.sky,
     leaf: biome.accent, spark: biome.sun, rain: biome.sun,
     sand: (biome.ground && biome.ground[2]) || biome.fog,
-    cinder: biome.accent,
+    cinder: biome.sun,
   };
   // Ember/spark/cinder fade toward a smokier secondary colour over life.
   const color2Map = {
-    ember: "#3a2018", spark: "#fff2b3", cinder: "#2a1714",
+    ember: "#3a2018", spark: "#fff2b3", cinder: "#4a2018",
   };
   const sizeMap = {
     firefly: 0.16,
@@ -171,12 +171,12 @@ export function makeParticles(biome) {
     dust: 0.09,
     ember: 0.12,
     sand: 0.16,
-    cinder: 0.13,
+    cinder: 0.19,
   };
   const opacityMap = {
     dust: 0.35, feather: 0.7, bubble: 0.55, leaf: 0.85, spark: 0.95, rain: 0.55,
     pollen: 0.85, snow: 0.85, firefly: 0.85, ember: 0.85, lichenmote: 0.85,
-    sand: 0.55, cinder: 0.72,
+    sand: 0.55, cinder: 0.95,
   };
   const additive = new Set(["firefly", "ember", "lichenmote", "spark", "cinder"]);
 

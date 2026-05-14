@@ -387,7 +387,7 @@ export function generateWorld(seed) {
   let fissureLightCount = 0;
   let coralPlaced = 0;
   const CRYSTAL_CAP = 4;
-  const FISSURE_LIGHT_CAP = LOWFX ? 2 : 5;
+  const FISSURE_LIGHT_CAP = LOWFX ? 4 : 9;
   // Density compensation: biome counts were tuned against a 38-unit base; the
   // current ISLAND_SIZE may be larger. Scale linearly with width so a bigger
   // world still feels populated rather than empty.
@@ -534,7 +534,7 @@ export function generateWorld(seed) {
       crystalCount++;
     }
     if (kind === "lavafissure" && fissureLightCount < FISSURE_LIGHT_CAP) {
-      const glow = new THREE.PointLight(new THREE.Color(biome.accent), 0.85, 4.2, 2.0);
+      const glow = new THREE.PointLight(new THREE.Color(biome.accent), 1.25, 5.5, 2.0);
       glow.position.set(0, 0.22, 0);
       f.add(glow);
       fissureLightCount++;

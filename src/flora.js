@@ -1064,7 +1064,7 @@ export const FLORA_BUILDERS = {
       new THREE.MeshStandardMaterial({
         color: ember.clone().lerp(hot, 0.22),
         emissive: ember.clone().lerp(hot, 0.45),
-        emissiveIntensity: 1.65,
+        emissiveIntensity: 2.45,
         flatShading: true,
         roughness: 0.35,
       })
@@ -1073,19 +1073,19 @@ export const FLORA_BUILDERS = {
       new THREE.MeshBasicMaterial({
         color: ember,
         transparent: true,
-        opacity: 0.20,
+        opacity: 0.34,
         blending: THREE.AdditiveBlending,
         depthWrite: false,
       })
     );
 
-    const seamCount = 2 + Math.floor(Math.random() * 3);
+    const seamCount = 3 + Math.floor(Math.random() * 3);
     for (let i = 0; i < seamCount; i++) {
-      const geo = new THREE.BoxGeometry(0.32 + Math.random() * 0.22, 0.018, 0.055 + Math.random() * 0.025);
+      const geo = new THREE.BoxGeometry(0.55 + Math.random() * 0.30, 0.024, 0.075 + Math.random() * 0.035);
       const seam = new THREE.Mesh(geo, lavaMat);
       const a = (i / seamCount) * Math.PI * 2 + (Math.random() - 0.5) * 0.8;
       const off = Math.random() * 0.16;
-      seam.position.set(Math.cos(a) * off, 0.035 + i * 0.002, Math.sin(a) * off);
+      seam.position.set(Math.cos(a) * off, 0.052 + i * 0.003, Math.sin(a) * off);
       seam.rotation.y = a + (Math.random() - 0.5) * 0.55;
       seam.layers.enable(BLOOM_LAYER);
       g.add(seam);
@@ -1108,16 +1108,16 @@ export const FLORA_BUILDERS = {
     const haloGeo = pooled("lavafissure.halo.geo", () => new THREE.IcosahedronGeometry(0.24, 1));
     const halo = new THREE.Mesh(haloGeo, haloMat);
     halo.position.y = 0.018;
-    halo.scale.set(1.65, 0.18, 1.0);
+    halo.scale.set(2.4, 0.22, 1.45);
     halo.rotation.y = Math.random() * Math.PI;
     halo.layers.enable(BLOOM_LAYER);
     g.add(halo);
 
-    if (Math.random() < 0.65) {
-      const ventGeo = pooled("lavafissure.vent.geo", () => new THREE.IcosahedronGeometry(0.055, 1));
+    if (Math.random() < 0.85) {
+      const ventGeo = pooled("lavafissure.vent.geo", () => new THREE.IcosahedronGeometry(0.07, 1));
       const vent = new THREE.Mesh(ventGeo, lavaMat);
-      vent.position.y = 0.085;
-      vent.scale.set(1.25, 0.6, 1.25);
+      vent.position.y = 0.105;
+      vent.scale.set(1.7, 0.7, 1.7);
       vent.layers.enable(BLOOM_LAYER);
       g.add(vent);
     }
