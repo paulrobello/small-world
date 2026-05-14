@@ -1077,47 +1077,59 @@ export const FLORA_BUILDERS = {
       new THREE.MeshBasicMaterial({
         color: ember,
         transparent: true,
-        opacity: 0.16,
+        opacity: 0.08,
         blending: THREE.AdditiveBlending,
         depthWrite: false,
       })
     );
 
-    const segmentCount = 5 + Math.floor(Math.random() * 3);
-    const totalLen = 1.65 + Math.random() * 0.55;
+    const segmentCount = 7 + Math.floor(Math.random() * 4);
+    const totalLen = 3.3 + Math.random() * 1.1;
     const step = totalLen / segmentCount;
-    let wanderZ = (Math.random() - 0.5) * 0.08;
+    const points = [];
+    let wanderZ = (Math.random() - 0.5) * 0.10;
+    for (let i = 0; i <= segmentCount; i++) {
+      if (i > 0) wanderZ += (Math.random() - 0.5) * 0.72;
+      points.push({
+        x: -totalLen * 0.5 + step * i,
+        z: Math.max(-0.75, Math.min(0.75, wanderZ)),
+      });
+    }
+
     for (let i = 0; i < segmentCount; i++) {
-      const x = -totalLen * 0.5 + step * (i + 0.5);
-      wanderZ += (Math.random() - 0.5) * 0.16;
-      const z = wanderZ;
-      const segLen = step * (0.58 + Math.random() * 0.28);
-      const angle = (Math.random() - 0.5) * 0.62;
+      const a = points[i];
+      const b = points[i + 1];
+      const dx = b.x - a.x;
+      const dz = b.z - a.z;
+      const midX = (a.x + b.x) * 0.5;
+      const midZ = (a.z + b.z) * 0.5;
+      const segLen = Math.sqrt(dx * dx + dz * dz) * (1.16 + Math.random() * 0.18);
+      const angle = Math.atan2(dz, dx);
 
       const rim = new THREE.Mesh(
-        new THREE.BoxGeometry(segLen + 0.12, 0.022, 0.15 + Math.random() * 0.035),
+        new THREE.BoxGeometry(segLen + 0.16, 0.022, 0.16 + Math.random() * 0.03),
         rimMat
       );
-      rim.position.set(x, 0.046, z);
-      rim.rotation.y = angle;
+      rim.position.set(midX, 0.046, midZ);
+      rim.rotation.y = -angle;
       g.add(rim);
 
       const seam = new THREE.Mesh(
-        new THREE.BoxGeometry(segLen, 0.026, 0.062 + Math.random() * 0.022),
+        new THREE.BoxGeometry(segLen, 0.026, 0.058 + Math.random() * 0.018),
         lavaMat
       );
-      seam.position.set(x, 0.064, z);
-      seam.rotation.y = angle;
+      seam.position.set(midX, 0.064, midZ);
+      seam.rotation.y = -angle;
       seam.layers.enable(BLOOM_LAYER);
       g.add(seam);
 
       if (i > 0 && i < segmentCount - 1) {
         const core = new THREE.Mesh(
-          new THREE.BoxGeometry(segLen * 0.48, 0.028, 0.028),
+          new THREE.BoxGeometry(segLen * 0.62, 0.028, 0.026),
           coreMat
         );
-        core.position.set(x, 0.079, z + (Math.random() - 0.5) * 0.025);
-        core.rotation.y = angle;
+        core.position.set(midX, 0.079, midZ);
+        core.rotation.y = -angle;
         core.layers.enable(BLOOM_LAYER);
         g.add(core);
       }
@@ -1141,7 +1153,7 @@ export const FLORA_BUILDERS = {
     const haloGeo = pooled("lavafissure.halo.geo", () => new THREE.IcosahedronGeometry(0.24, 1));
     const halo = new THREE.Mesh(haloGeo, haloMat);
     halo.position.y = 0.026;
-    halo.scale.set(totalLen * 1.55, 0.16, 0.55);
+    halo.scale.set(totalLen * 0.82, 0.10, 0.22);
     halo.layers.enable(BLOOM_LAYER);
     g.add(halo);
 
