@@ -1085,9 +1085,9 @@ export const FLORA_BUILDERS = {
           varying float vHeat;
           float hash(float n) { return fract(sin(n) * 43758.5453123); }
           void main() {
-            float edge = smoothstep(0.78, 0.98, vAcross);
-            float redBand = smoothstep(0.0225, 0.44, vAcross);
-            float coreMask = 1.0 - smoothstep(0.0125, 0.0375, vAcross);
+            float edge = smoothstep(0.62, 0.92, vAcross);
+            float redBand = smoothstep(0.01125, 0.38, vAcross);
+            float coreMask = 1.0 - smoothstep(0.00625, 0.01875, vAcross);
             float flicker = 0.82 + 0.18 * hash(floor(vAlong * 34.0) + vHeat * 19.0);
             vec3 redGlow = uLava * vec3(0.95, 0.28, 0.16);
             vec3 lava = mix(uCore, redGlow * flicker, redBand);
@@ -1131,7 +1131,7 @@ export const FLORA_BUILDERS = {
       const nx = -tz / tl;
       const nz = tx / tl;
       const taper = Math.sin((i / (pointCount - 1)) * Math.PI);
-      const halfW = centers[i].halfW * (0.45 + 0.55 * taper);
+      const halfW = centers[i].halfW * taper;
       for (const a of across) {
         positions.push(
           centers[i].x + nx * a * halfW,
