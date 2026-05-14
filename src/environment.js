@@ -616,7 +616,12 @@ export function placeInstanced(geo, mat, count, heightFn, opts = {}) {
     maxHeight = Infinity,
     tilt = 0.25,
     fullRotation = true,
+    avoidObstacleKinds = null,
+    avoidRadius = 0,
   } = opts;
+  const avoidObstacleKindSet = avoidObstacleKinds
+    ? (avoidObstacleKinds instanceof Set ? avoidObstacleKinds : new Set(avoidObstacleKinds))
+    : null;
 
   const mesh = new THREE.InstancedMesh(geo, mat, count);
   mesh.receiveShadow = true;
@@ -638,6 +643,20 @@ export function placeInstanced(geo, mat, count, heightFn, opts = {}) {
     const p = pickGroundPoint(maxRadiusFrac);
     const x = p.x;
     const z = p.z;
+    if (avoidObstacleKindSet) {
+      let blocked = false;
+      for (const obstacle of state.obstacles) {
+        if (!avoidObstacleKindSet.has(obstacle.kind)) continue;
+        const minD = obstacle.r + avoidRadius;
+        const dx = x - obstacle.x;
+        const dz = z - obstacle.z;
+        if (dx * dx + dz * dz < minD * minD) {
+          blocked = true;
+          break;
+        }
+      }
+      if (blocked) continue;
+    }
     const y = heightFn(x, z);
     if (y < minHeight || y > maxHeight) continue;
 
@@ -687,6 +706,8 @@ export function makeWildflowerField(biome, heightFn) {
       minScale: 0.6,
       maxScale: 1.5,
       tilt: 0,
+      avoidObstacleKinds: ["lavafissure"],
+      avoidRadius: 0.12,
     });
     if (biome.glowFlowers) inst.layers.enable(BLOOM_LAYER);
     inst.userData.inspect = { category: "flora", variant: "wildflower" };
@@ -742,6 +763,8 @@ export function makePebbleField(biome, heightFn) {
     minScale: 0.4,
     maxScale: 1.1,
     tilt: 0.5,
+    avoidObstacleKinds: ["lavafissure"],
+    avoidRadius: 0.12,
   });
   mesh.userData.inspect = { category: "flora", variant: "pebble" };
   return mesh;

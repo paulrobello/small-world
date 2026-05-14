@@ -431,6 +431,18 @@ export function generateWorld(seed) {
   // Extra pad on top of the slope-plant footprint so creature bodies don't
   // visually nose-clip the trunk. fp itself is already ~1.5× the trunk radius.
   const OBSTACLE_PAD = 1.15;
+  const PLACEMENT_BLOCK_KINDS = new Set(["lavafissure"]);
+  function blocksPlacement(x, z, r, kinds = PLACEMENT_BLOCK_KINDS) {
+    const kindSet = kinds instanceof Set ? kinds : new Set(kinds);
+    for (const obstacle of state.obstacles) {
+      if (!kindSet.has(obstacle.kind)) continue;
+      const minD = obstacle.r + r;
+      const dx = x - obstacle.x;
+      const dz = z - obstacle.z;
+      if (dx * dx + dz * dz < minD * minD) return true;
+    }
+    return false;
+  }
   // Water-plane surface Y — matches makeWaterPlane in environment.js. Used to
   // separate underwater coral spawns from above-water flora in water biomes.
   const WATER_SURFACE_Y = -0.12;
@@ -476,8 +488,6 @@ export function generateWorld(seed) {
     // Hard cap on crystals — they each spawn a point light, and we want at
     // most 4 in any world to keep the shader cost (and the visual chaos) down.
     if (kind === "crystal" && crystalCount >= CRYSTAL_CAP) continue;
-    const f = FLORA_BUILDERS[kind](biome);
-    f.userData.inspect = { category: "flora", variant: kind };
     // Slope-plant: sample heightFn at four offsets around the trunk axis
     // and sink the base to the lowest sample minus FLORA_BURY. On a slope
     // this keeps the downhill side buried instead of floating out of the
@@ -485,6 +495,9 @@ export function generateWorld(seed) {
     // applied below so a 1.4× tree gets a wider sample than a 0.7× one).
     let s = 0.7 + Math.random() * 0.7;
     const fp = (FLORA_FOOTPRINT[kind] ?? FLORA_FOOTPRINT_DEFAULT) * s;
+    if (blocksPlacement(p.x, p.z, fp * 1.2)) continue;
+    const f = FLORA_BUILDERS[kind](biome);
+    f.userData.inspect = { category: "flora", variant: kind };
     const y = Math.min(
       y0,
       state.heightFn(p.x + fp, p.z),
@@ -518,6 +531,7 @@ export function generateWorld(seed) {
       const topLocal = (OBSTACLE_TOP[kind] ?? OBSTACLE_TOP_DEFAULT) * s;
       const topY = y0 + topLocal;
       state.obstacles.push({
+        kind,
         x: p.x,
         z: p.z,
         r: fp * OBSTACLE_PAD,
@@ -647,9 +661,18 @@ export function generateWorld(seed) {
     }
     let p = { x: 0, z: 0 };
     let y = -10;
-    for (let tries = 0; tries < 20 && y < groundMinY; tries++) {
+    let found = false;
+    for (let tries = 0; tries < 40; tries++) {
       p = pickGroundPoint(0.65);
       y = state.heightFn(p.x, p.z);
+      if (y >= groundMinY && !blocksPlacement(p.x, p.z, 0.35)) {
+        found = true;
+        break;
+      }
+    }
+    if (!found) {
+      disposeGroup(c.group);
+      return false;
     }
     c.group.position.set(p.x, y + 0.4, p.z);
     state.world.add(c.group);
@@ -676,15 +699,22 @@ export function generateWorld(seed) {
         });
         // spawn near the parent so they don't tow from the void
         const pp = parent.group.position;
-        const ang = Math.random() * Math.PI * 2;
-        const off = 1.0 + Math.random() * 0.8;
-        const nx = pp.x + Math.cos(ang) * off;
-        const nz = pp.z + Math.sin(ang) * off;
-        kid.group.position.set(nx, state.heightFn(nx, nz) + 0.4, nz);
-        state.world.add(kid.group);
-        state.creatures.push(kid);
-        spawned++;
-        budget--;
+        let kidPlaced = false;
+        for (let tries = 0; tries < 8; tries++) {
+          const ang = Math.random() * Math.PI * 2;
+          const off = 1.0 + Math.random() * 0.8;
+          const nx = pp.x + Math.cos(ang) * off;
+          const nz = pp.z + Math.sin(ang) * off;
+          if (blocksPlacement(nx, nz, 0.3)) continue;
+          kid.group.position.set(nx, state.heightFn(nx, nz) + 0.4, nz);
+          state.world.add(kid.group);
+          state.creatures.push(kid);
+          spawned++;
+          budget--;
+          kidPlaced = true;
+          break;
+        }
+        if (!kidPlaced) disposeGroup(kid.group);
       }
     } else if (allowGroundVariants && r < 0.30) {
       if (placeOnGround(makeCreature(biome, { sleeper: true }))) budget--;
