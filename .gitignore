@@ -62,8 +62,9 @@ venv/
 .mypy_cache/
 .ruff_cache/
 
-# claude local settings
+# local agent settings
 .claude/settings.local.json
+.pi/status-footer.json
 .superpowers
 docs/superpowers
 
