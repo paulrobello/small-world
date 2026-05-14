@@ -515,56 +515,84 @@ export function makeCloudSwirl(biome) {
   return mesh;
 }
 
-// Soft island-edge cloud ring for round layouts. This is intentionally smaller
-// and lower than the cloud-biome swirl: it hugs the island rim like a cute misty
-// collar instead of turning every biome into the cloud island.
-export function makeIslandCloudRing(biome) {
+// Low perimeter aura for round layouts. By default this preserves the soft
+// island-edge mist, while biomes can tune `edgeAura` for reusable variants such
+// as grass, water, swamp, or denser fog without adding extra per-frame state.
+export function makeIslandEdgeMist(biome) {
   const centers = state.currentLayout?.centers ?? [];
   const center = centers.find((c) => (c.shape?.kind ?? "round") === "round");
   if (!center) return null;
 
-  const group = new THREE.Group();
-  group.position.set(center.cx, 0, center.cz);
-
-  const radius = center.radius * 1.08;
-  const tube = Math.max(2.8, center.radius * 0.14);
-  const colA = new THREE.Color(biome.fog).lerp(new THREE.Color(biome.accent), 0.35);
-  const colB = new THREE.Color(biome.accent).lerp(new THREE.Color(0xffffff), 0.15);
-
-  // Low translucent vapor body: fills gaps between puffs without reading as a
-  // hard geometric donut.
-  const geo = new THREE.TorusGeometry(
-    radius,
-    tube,
-    LOWFX ? 8 : 12,
-    LOWFX ? 72 : 120
+  const radius = center.visualRadius ?? center.radius;
+  const aura = biome.edgeAura ?? {};
+  const pattern = aura.pattern ?? "mist";
+  const innerSoft = aura.innerSoft ?? Math.max(1.0, radius * 0.04);
+  const outerSoft = aura.outerSoft ?? Math.max(24.0, center.radius * 1.36);
+  const inwardOverlap = aura.inwardOverlap ?? innerSoft;
+  const innerRadius = Math.max(0.1, radius - inwardOverlap);
+  const outerRadius = radius + outerSoft;
+  const geo = new THREE.RingGeometry(
+    innerRadius,
+    outerRadius,
+    LOWFX ? 96 : 160,
+    LOWFX ? 4 : 7
   );
+
+  const colors = aura.colors ?? [];
+  const colA = colors[0]
+    ? new THREE.Color(colors[0])
+    : new THREE.Color("#8f8f9a").lerp(new THREE.Color(biome.fog), 0.25);
+  const colB = colors[1]
+    ? new THREE.Color(colors[1])
+    : new THREE.Color("#d4d0c2").lerp(new THREE.Color(biome.fog), 0.18);
+  const colC = colors[2]
+    ? new THREE.Color(colors[2])
+    : new THREE.Color(biome.accent ?? biome.sun ?? "#ffffff");
+
   const mat = new THREE.ShaderMaterial({
     transparent: true,
     depthWrite: false,
-    depthTest: false,
+    depthTest: true,
     fog: false,
     side: THREE.DoubleSide,
     uniforms: {
       uTime: state.windUniforms.uTime,
+      uRadius: { value: radius },
+      uInnerSoft: { value: innerSoft },
+      uOuterSoft: { value: outerSoft },
+      uOutwardFadeStart: { value: aura.outwardFadeStart ?? 0.62 },
+      uPattern: { value: pattern === "grass" ? 1 : 0 },
       uColA: { value: colA },
       uColB: { value: colB },
-      uAlpha: { value: LOWFX ? 0.55 : 0.65 },
+      uColC: { value: colC },
+      uAlpha: { value: aura.alpha ?? 1.0 },
+      uNoiseScale: { value: aura.noiseScale ?? 0.058 },
+      uStreakScale: { value: aura.streakScale ?? 12.0 },
+      uWindStrength: { value: aura.windStrength ?? 0.65 },
     },
     vertexShader: `
-      varying vec2 vUv;
+      varying vec2 vLocalXZ;
       void main() {
-        vUv = uv;
+        vLocalXZ = position.xy;
         gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
       }
     `,
     fragmentShader: `
       precision highp float;
       uniform float uTime;
+      uniform float uRadius;
+      uniform float uInnerSoft;
+      uniform float uOuterSoft;
+      uniform float uOutwardFadeStart;
+      uniform float uPattern;
       uniform vec3 uColA;
       uniform vec3 uColB;
+      uniform vec3 uColC;
       uniform float uAlpha;
-      varying vec2 vUv;
+      uniform float uNoiseScale;
+      uniform float uStreakScale;
+      uniform float uWindStrength;
+      varying vec2 vLocalXZ;
 
       float hash(vec2 p) {
         return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453);
@@ -575,63 +603,68 @@ export function makeIslandCloudRing(biome) {
         return mix(mix(hash(i), hash(i + vec2(1.0, 0.0)), u.x),
                    mix(hash(i + vec2(0.0, 1.0)), hash(i + vec2(1.0, 1.0)), u.x), u.y);
       }
+      float fbm(vec2 p) {
+        float a = vnoise(p);
+        float b = vnoise(p * 2.17 + vec2(4.2, -1.7));
+        float c = vnoise(p * 4.03 + vec2(-2.6, 3.1));
+        return a * 0.55 + b * 0.30 + c * 0.15;
+      }
 
       void main() {
-        vec2 uv = vUv;
-        float slow = uTime * 0.035;
-        float broad = vnoise(vec2(uv.x * 10.0 - slow, uv.y * 2.2));
-        float tuft = vnoise(vec2(uv.x * 30.0 + slow * 1.7, uv.y * 7.0 + uTime * 0.025));
-        float n = broad * 0.68 + tuft * 0.42;
-        float puffs = smoothstep(0.28, 0.88, n);
-        float tubeFade = smoothstep(0.02, 0.22, uv.y) * smoothstep(0.98, 0.78, uv.y);
-        float gaps = smoothstep(0.18, 0.72, vnoise(vec2(uv.x * 6.0 + 4.0, 1.8)));
-        float a = puffs * tubeFade * mix(0.45, 1.0, gaps) * uAlpha;
-        vec3 col = mix(uColA, uColB, clamp(n, 0.0, 1.0));
+        float d = length(vLocalXZ);
+        float inward = smoothstep(uRadius - uInnerSoft, uRadius + 0.25, d);
+        float outward = 1.0 - smoothstep(uRadius + uOuterSoft * uOutwardFadeStart, uRadius + uOuterSoft, d);
+        float edge = inward * outward;
+        float seam = 1.0 - smoothstep(0.0, uInnerSoft * 0.55, abs(d - uRadius));
+        vec2 base = vLocalXZ * uNoiseScale;
+        vec2 driftA = vec2(uTime * 0.032, -uTime * 0.021) * uWindStrength;
+        vec2 driftB = vec2(-uTime * 0.018, uTime * 0.027) * uWindStrength;
+        vec2 domainWarp = vec2(
+          fbm(base * 1.7 + driftA + vec2(2.4, -1.1)),
+          fbm(base * 1.5 + driftB + vec2(-3.2, 2.7))
+        ) - 0.5;
+        vec2 p = base + domainWarp * 1.85;
+        float waveA = fbm(p + driftA);
+        float waveB = fbm(p * 1.85 - driftB + vec2(3.1, -2.4));
+        float waveC = fbm(p * 3.2 + domainWarp * 0.75 + vec2(-1.7, 4.0));
+        float n = waveA * 0.50 + waveB * 0.33 + waveC * 0.17;
+
+        if (uPattern > 0.5) {
+          float angle = atan(vLocalXZ.y, vLocalXZ.x);
+          float radial = d - uRadius;
+          float gust = fbm(vec2(angle * 2.8 + uTime * 0.035 * uWindStrength, radial * 0.10));
+          float bladeWave = sin(angle * uStreakScale + radial * 0.82 + gust * 4.5 + uTime * 0.42 * uWindStrength);
+          float bladeMask = smoothstep(0.28, 0.95, bladeWave * 0.5 + 0.5);
+          float fine = smoothstep(0.40, 0.86, fbm(vec2(angle * 34.0, radial * 0.18) + domainWarp * 1.6));
+          float highlight = bladeMask * fine;
+          float tufts = smoothstep(0.18, 0.78, n + highlight * 0.22);
+          float overlapBoost = 1.0 - smoothstep(0.0, uInnerSoft * 1.5, max(0.0, uRadius - d));
+          float a = (edge * mix(0.32, 0.82, tufts) + seam * 0.24 + highlight * edge * 0.26) * overlapBoost * uAlpha;
+          if (a < 0.006) discard;
+          vec3 fieldCol = mix(uColA, uColB, tufts * 0.62 + highlight * 0.18);
+          fieldCol = mix(fieldCol, uColC, highlight * 0.38 + seam * 0.08);
+          gl_FragColor = vec4(fieldCol, a);
+          return;
+        }
+
+        float tufts = smoothstep(0.20, 0.82, n);
+        float wisps = smoothstep(0.10, 0.70, waveA * 0.6 + waveB * 0.4);
+        float a = (edge * mix(0.58, 0.95, tufts) + seam * 0.38) * mix(0.82, 1.0, wisps) * uAlpha;
+        if (a < 0.006) discard;
+        vec3 col = mix(uColA, uColB, tufts * 0.34 + seam * 0.10);
         gl_FragColor = vec4(col, a);
       }
     `,
   });
-  const mist = new THREE.Mesh(geo, mat);
-  mist.rotation.x = Math.PI / 2;
-  mist.position.y = 4.4;
-  mist.frustumCulled = false;
-  mist.renderOrder = -18;
-  group.add(mist);
 
-  // Bigger billboard puffs make the ring legible from the default camera while
-  // keeping the silhouette soft and hand-placed.
-  const tex = getCloudTexture();
-  const puffCount = LOWFX ? 26 : 44;
-  const puffBase = new THREE.SpriteMaterial({
-    map: tex,
-    color: colB,
-    transparent: true,
-    opacity: LOWFX ? 0.82 : 0.90,
-    depthWrite: false,
-    depthTest: false,
-    fog: false,
-  });
-  const puffRadius = center.radius * 0.78;
-  for (let i = 0; i < puffCount; i++) {
-    const step = Math.PI * 2 / puffCount;
-    const angle = i * step + (Math.random() - 0.5) * step * 0.55;
-    const r = puffRadius + (Math.random() - 0.5) * tube * 1.1;
-    const s = new THREE.Sprite(puffBase.clone());
-    s.position.set(
-      Math.cos(angle) * r,
-      4.7 + Math.random() * 2.4 + Math.sin(angle * 3.0) * 0.35,
-      Math.sin(angle) * r
-    );
-    const scale = 7.2 + Math.random() * 5.8;
-    s.scale.set(scale * (1.4 + Math.random() * 0.45), scale * (0.55 + Math.random() * 0.25), 1);
-    s.material.opacity *= 0.72 + Math.random() * 0.35;
-    s.material.rotation = angle + (Math.random() - 0.5) * 0.7;
-    s.renderOrder = -12;
-    group.add(s);
-  }
-
-  group.frustumCulled = false;
-  return group;
+  const mesh = new THREE.Mesh(geo, mat);
+  mesh.name = pattern === "grass" ? "island-edge-grass-aura" : "island-edge-mist";
+  mesh.userData.inspect = { category: "atmosphere", variant: mesh.name };
+  mesh.rotation.x = -Math.PI / 2;
+  mesh.position.set(center.cx, aura.y ?? 0.38, center.cz);
+  mesh.frustumCulled = false;
+  mesh.renderOrder = aura.renderOrder ?? -16;
+  return mesh;
 }
 
 export function updateSkyColors(skyDome, mountains, dayNight, dayFactor, nightAmt) {
