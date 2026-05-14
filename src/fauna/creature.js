@@ -371,7 +371,7 @@ export function makeCreature(biome, opts = {}) {
   const baseScale = 0.65 + Math.random() * 0.6;
   // burrowers are notably smaller; kids inherit sizeMul on top
   const burrowScale = opts.burrower ? 0.55 : 1;
-  const scale = baseScale * sizeMul * burrowScale * (isFish ? 0.75 : 1);
+  const scale = baseScale * sizeMul * burrowScale * (isFish ? 0.5625 : 1);
   group.scale.setScalar(scale);
 
   const hoverHeight = 1.4 + Math.random() * 1.8;
