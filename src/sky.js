@@ -641,17 +641,19 @@ function makeGrassAuraLineSegments(radius, innerRadius, outerRadius, aura, color
   return lines;
 }
 
-// Low perimeter aura for round layouts. By default this preserves the soft
-// island-edge mist, while biomes can tune `edgeAura` for reusable variants such
-// as grass, water, swamp, or denser fog without adding extra per-frame state.
+// Low perimeter aura. By default this preserves the soft round-island mist;
+// grass variants can also fall back to the active island center so seeded
+// oblong/kidney layouts still get their external grass disc.
 export function makeIslandEdgeMist(biome) {
   const centers = state.currentLayout?.centers ?? [];
-  const center = centers.find((c) => (c.shape?.kind ?? "round") === "round");
+  const aura = biome.edgeAura ?? {};
+  const pattern = aura.pattern ?? "mist";
+  const isGrassAura = pattern === "grass";
+  const roundCenter = centers.find((c) => (c.shape?.kind ?? "round") === "round");
+  const center = roundCenter ?? (isGrassAura ? centers[0] : null);
   if (!center) return null;
 
   const radius = center.visualRadius ?? center.radius;
-  const aura = biome.edgeAura ?? {};
-  const pattern = aura.pattern ?? "mist";
   const innerSoft = aura.innerSoft ?? Math.max(1.0, radius * 0.04);
   const outerSoft = aura.outerSoft ?? Math.max(24.0, center.radius * 1.36);
   const inwardOverlap = aura.inwardOverlap ?? innerSoft;
@@ -675,7 +677,6 @@ export function makeIslandEdgeMist(biome) {
     ? new THREE.Color(colors[2])
     : new THREE.Color(biome.accent ?? biome.sun ?? "#ffffff");
 
-  const isGrassAura = pattern === "grass";
   const mat = new THREE.ShaderMaterial({
     transparent: !isGrassAura,
     depthWrite: isGrassAura,
