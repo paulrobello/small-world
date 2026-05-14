@@ -174,7 +174,7 @@ export const BIOMES = [
     glowFlowers: true,
     edgeAura: {
       pattern: "grass",
-      colors: ["#221622", "#2e202e", "#463646"],
+      colors: ["#010111", "#101028", "#282846"],
       alpha: 1.0,
       innerSoft: 2.4,
       outerSoft: 10.5,
