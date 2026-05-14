@@ -405,7 +405,7 @@ export function generateWorld(seed) {
     balloontree: 0.22, crystal: 0.30, obsidianshard: 0.28, skull: 0.22,
     berrybush: 0.30, coral: 0.25, braincoral: 0.26, cupcoral: 0.22,
     fern: 0.18, rock: 0.30, limestonerock: 0.30, reed: 0.10,
-    seaweed: 0.12, beachsucculent: 0.20, lavafissure: 0.34,
+    seaweed: 0.12, beachsucculent: 0.20, lavafissure: 0.72,
   };
   const FLORA_FOOTPRINT_DEFAULT = 0.20;
   const FLORA_BURY = 0.08; // extra sink so the seam is hidden in soft fog
@@ -425,7 +425,7 @@ export function generateWorld(seed) {
     tree: 2.3, pine: 2.2, deadtree: 1.8, mushroom: 1.1,
     bigmushroom: 2.6, pillar: 2.8, archstone: 2.6, balloontree: 3.2,
     crystal: 1.6, lantern: 1.7, obsidianshard: 2.2, skull: 1.5,
-    lavafissure: 0.28,
+    lavafissure: 0.16,
   };
   const OBSTACLE_TOP_DEFAULT = 2.0;
   // Extra pad on top of the slope-plant footprint so creature bodies don't

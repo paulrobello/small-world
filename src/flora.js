@@ -1053,6 +1053,13 @@ export const FLORA_BUILDERS = {
     const g = new THREE.Group();
     const ember = new THREE.Color(biome.accent);
     const hot = new THREE.Color("#ffd166");
+    const rimMat = pooled("lavafissure.rim.mat", () =>
+      new THREE.MeshStandardMaterial({
+        color: new THREE.Color(biome.underside).offsetHSL(0, 0.02, 0.08),
+        flatShading: true,
+        roughness: 0.88,
+      })
+    );
     const stoneMat = pooled("lavafissure.stone.mat", () =>
       new THREE.MeshStandardMaterial({
         color: new THREE.Color(biome.cliff).offsetHSL(0, -0.05, 0.04),
@@ -1061,66 +1068,82 @@ export const FLORA_BUILDERS = {
       })
     );
     const lavaMat = pooled("lavafissure.lava.mat", () =>
-      new THREE.MeshStandardMaterial({
-        color: ember.clone().lerp(hot, 0.22),
-        emissive: ember.clone().lerp(hot, 0.45),
-        emissiveIntensity: 2.45,
-        flatShading: true,
-        roughness: 0.35,
-      })
+      new THREE.MeshBasicMaterial({ color: ember.clone().lerp(hot, 0.28) })
+    );
+    const coreMat = pooled("lavafissure.core.mat", () =>
+      new THREE.MeshBasicMaterial({ color: hot })
     );
     const haloMat = pooled("lavafissure.halo.mat", () =>
       new THREE.MeshBasicMaterial({
         color: ember,
         transparent: true,
-        opacity: 0.34,
+        opacity: 0.16,
         blending: THREE.AdditiveBlending,
         depthWrite: false,
       })
     );
 
-    const seamCount = 3 + Math.floor(Math.random() * 3);
-    for (let i = 0; i < seamCount; i++) {
-      const geo = new THREE.BoxGeometry(0.55 + Math.random() * 0.30, 0.024, 0.075 + Math.random() * 0.035);
-      const seam = new THREE.Mesh(geo, lavaMat);
-      const a = (i / seamCount) * Math.PI * 2 + (Math.random() - 0.5) * 0.8;
-      const off = Math.random() * 0.16;
-      seam.position.set(Math.cos(a) * off, 0.052 + i * 0.003, Math.sin(a) * off);
-      seam.rotation.y = a + (Math.random() - 0.5) * 0.55;
+    const segmentCount = 5 + Math.floor(Math.random() * 3);
+    const totalLen = 1.65 + Math.random() * 0.55;
+    const step = totalLen / segmentCount;
+    let wanderZ = (Math.random() - 0.5) * 0.08;
+    for (let i = 0; i < segmentCount; i++) {
+      const x = -totalLen * 0.5 + step * (i + 0.5);
+      wanderZ += (Math.random() - 0.5) * 0.16;
+      const z = wanderZ;
+      const segLen = step * (0.58 + Math.random() * 0.28);
+      const angle = (Math.random() - 0.5) * 0.62;
+
+      const rim = new THREE.Mesh(
+        new THREE.BoxGeometry(segLen + 0.12, 0.022, 0.15 + Math.random() * 0.035),
+        rimMat
+      );
+      rim.position.set(x, 0.046, z);
+      rim.rotation.y = angle;
+      g.add(rim);
+
+      const seam = new THREE.Mesh(
+        new THREE.BoxGeometry(segLen, 0.026, 0.062 + Math.random() * 0.022),
+        lavaMat
+      );
+      seam.position.set(x, 0.064, z);
+      seam.rotation.y = angle;
       seam.layers.enable(BLOOM_LAYER);
       g.add(seam);
+
+      if (i > 0 && i < segmentCount - 1) {
+        const core = new THREE.Mesh(
+          new THREE.BoxGeometry(segLen * 0.48, 0.028, 0.028),
+          coreMat
+        );
+        core.position.set(x, 0.079, z + (Math.random() - 0.5) * 0.025);
+        core.rotation.y = angle;
+        core.layers.enable(BLOOM_LAYER);
+        g.add(core);
+      }
     }
 
     const stoneGeo = pooled("lavafissure.stone.geo", () => new THREE.IcosahedronGeometry(0.08, 0));
-    const stones = 7 + Math.floor(Math.random() * 4);
+    const stones = 8 + Math.floor(Math.random() * 5);
     for (let i = 0; i < stones; i++) {
       const stone = new THREE.Mesh(stoneGeo, stoneMat);
-      const a = (i / stones) * Math.PI * 2 + Math.random() * 0.35;
-      const r = 0.18 + Math.random() * 0.22;
-      const s = 0.55 + Math.random() * 0.75;
-      stone.position.set(Math.cos(a) * r, 0.04, Math.sin(a) * r);
-      stone.scale.set(s * (0.9 + Math.random() * 0.5), 0.35 + Math.random() * 0.35, s);
-      stone.rotation.set(Math.random() * 0.4, Math.random() * Math.PI * 2, Math.random() * 0.4);
+      const along = (Math.random() - 0.5) * totalLen;
+      const side = Math.random() < 0.5 ? -1 : 1;
+      const edge = side * (0.16 + Math.random() * 0.18);
+      const s = 0.45 + Math.random() * 0.65;
+      stone.position.set(along, 0.04, edge);
+      stone.scale.set(s * (1.0 + Math.random() * 0.65), 0.30 + Math.random() * 0.35, s * 0.75);
+      stone.rotation.set(Math.random() * 0.35, Math.random() * Math.PI * 2, Math.random() * 0.35);
       stone.castShadow = true;
       g.add(stone);
     }
 
     const haloGeo = pooled("lavafissure.halo.geo", () => new THREE.IcosahedronGeometry(0.24, 1));
     const halo = new THREE.Mesh(haloGeo, haloMat);
-    halo.position.y = 0.018;
-    halo.scale.set(2.4, 0.22, 1.45);
-    halo.rotation.y = Math.random() * Math.PI;
+    halo.position.y = 0.026;
+    halo.scale.set(totalLen * 1.55, 0.16, 0.55);
     halo.layers.enable(BLOOM_LAYER);
     g.add(halo);
-
-    if (Math.random() < 0.85) {
-      const ventGeo = pooled("lavafissure.vent.geo", () => new THREE.IcosahedronGeometry(0.07, 1));
-      const vent = new THREE.Mesh(ventGeo, lavaMat);
-      vent.position.y = 0.105;
-      vent.scale.set(1.7, 0.7, 1.7);
-      vent.layers.enable(BLOOM_LAYER);
-      g.add(vent);
-    }
 
     return g;
   },
