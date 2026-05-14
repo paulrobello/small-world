@@ -1049,6 +1049,82 @@ export const FLORA_BUILDERS = {
     return g;
   },
 
+  lavafissure(biome) {
+    const g = new THREE.Group();
+    const ember = new THREE.Color(biome.accent);
+    const hot = new THREE.Color("#ffd166");
+    const stoneMat = pooled("lavafissure.stone.mat", () =>
+      new THREE.MeshStandardMaterial({
+        color: new THREE.Color(biome.cliff).offsetHSL(0, -0.05, 0.04),
+        flatShading: true,
+        roughness: 0.9,
+      })
+    );
+    const lavaMat = pooled("lavafissure.lava.mat", () =>
+      new THREE.MeshStandardMaterial({
+        color: ember.clone().lerp(hot, 0.22),
+        emissive: ember.clone().lerp(hot, 0.45),
+        emissiveIntensity: 1.65,
+        flatShading: true,
+        roughness: 0.35,
+      })
+    );
+    const haloMat = pooled("lavafissure.halo.mat", () =>
+      new THREE.MeshBasicMaterial({
+        color: ember,
+        transparent: true,
+        opacity: 0.20,
+        blending: THREE.AdditiveBlending,
+        depthWrite: false,
+      })
+    );
+
+    const seamCount = 2 + Math.floor(Math.random() * 3);
+    for (let i = 0; i < seamCount; i++) {
+      const geo = new THREE.BoxGeometry(0.32 + Math.random() * 0.22, 0.018, 0.055 + Math.random() * 0.025);
+      const seam = new THREE.Mesh(geo, lavaMat);
+      const a = (i / seamCount) * Math.PI * 2 + (Math.random() - 0.5) * 0.8;
+      const off = Math.random() * 0.16;
+      seam.position.set(Math.cos(a) * off, 0.035 + i * 0.002, Math.sin(a) * off);
+      seam.rotation.y = a + (Math.random() - 0.5) * 0.55;
+      seam.layers.enable(BLOOM_LAYER);
+      g.add(seam);
+    }
+
+    const stoneGeo = pooled("lavafissure.stone.geo", () => new THREE.IcosahedronGeometry(0.08, 0));
+    const stones = 7 + Math.floor(Math.random() * 4);
+    for (let i = 0; i < stones; i++) {
+      const stone = new THREE.Mesh(stoneGeo, stoneMat);
+      const a = (i / stones) * Math.PI * 2 + Math.random() * 0.35;
+      const r = 0.18 + Math.random() * 0.22;
+      const s = 0.55 + Math.random() * 0.75;
+      stone.position.set(Math.cos(a) * r, 0.04, Math.sin(a) * r);
+      stone.scale.set(s * (0.9 + Math.random() * 0.5), 0.35 + Math.random() * 0.35, s);
+      stone.rotation.set(Math.random() * 0.4, Math.random() * Math.PI * 2, Math.random() * 0.4);
+      stone.castShadow = true;
+      g.add(stone);
+    }
+
+    const haloGeo = pooled("lavafissure.halo.geo", () => new THREE.IcosahedronGeometry(0.24, 1));
+    const halo = new THREE.Mesh(haloGeo, haloMat);
+    halo.position.y = 0.018;
+    halo.scale.set(1.65, 0.18, 1.0);
+    halo.rotation.y = Math.random() * Math.PI;
+    halo.layers.enable(BLOOM_LAYER);
+    g.add(halo);
+
+    if (Math.random() < 0.65) {
+      const ventGeo = pooled("lavafissure.vent.geo", () => new THREE.IcosahedronGeometry(0.055, 1));
+      const vent = new THREE.Mesh(ventGeo, lavaMat);
+      vent.position.y = 0.085;
+      vent.scale.set(1.25, 0.6, 1.25);
+      vent.layers.enable(BLOOM_LAYER);
+      g.add(vent);
+    }
+
+    return g;
+  },
+
   obsidianshard(biome) {
     const g = new THREE.Group();
     const ember = new THREE.Color(biome.accent);
