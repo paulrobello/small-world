@@ -463,7 +463,7 @@ export function makeAurora(biome) {
 // colors blended from biome.fog → biome.accent. Returns null on any biome
 // that isn't flagged cloudlike.
 export function makeCloudSwirl(biome) {
-  if (!biome.cloudlike) return null;
+  if (!biome.cloudlike || biome.cloudSwirl === false) return null;
 
   const radius = 30.0;      // major radius — wraps around the island
   const tube = 7.0;         // minor radius — thickness of the cloud band
@@ -650,8 +650,9 @@ export function makeIslandEdgeMist(biome) {
   const aura = biome.edgeAura ?? {};
   const pattern = aura.pattern ?? "mist";
   const isGrassAura = pattern === "grass";
+  const hasExplicitAura = !!biome.edgeAura;
   const roundCenter = centers.find((c) => (c.shape?.kind ?? "round") === "round");
-  const center = roundCenter ?? (isGrassAura ? centers[0] : null);
+  const center = roundCenter ?? (isGrassAura || hasExplicitAura ? centers[0] : null);
   if (!center) return null;
 
   const radius = center.visualRadius ?? center.radius;

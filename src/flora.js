@@ -1026,7 +1026,7 @@ export const FLORA_BUILDERS = {
     for (let i = 0; i < puffs; i++) {
       const r = 0.32 + Math.random() * 0.18;
       const puff = new THREE.Mesh(
-        jitterGeo(new THREE.IcosahedronGeometry(r, 0), r * 0.18),
+        jitterGeo(new THREE.IcosahedronGeometry(r, 1), r * 0.12),
         puffMat
       );
       const a = (i / puffs) * Math.PI * 2;
@@ -1041,7 +1041,7 @@ export const FLORA_BUILDERS = {
     }
     // crowning puff
     const crown = new THREE.Mesh(
-      jitterGeo(new THREE.IcosahedronGeometry(0.45, 0), 0.08),
+      jitterGeo(new THREE.IcosahedronGeometry(0.45, 1), 0.055),
       puffMat
     );
     crown.position.y = trunkH + 0.5;

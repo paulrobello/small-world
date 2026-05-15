@@ -364,6 +364,8 @@ let _specimen = null;
 let _specimenKind = "creature";
 let _hudEl = null;
 let _stage = null;
+let _inspectCamera = null;
+let _inspectControls = null;
 let _paused = _params.get("paused") === "1";
 // Pending single-frame step. 0 = no step. Positive = forward, negative = back.
 let _stepDt = 0;
@@ -482,6 +484,40 @@ function _liftForFlora(group) {
   return Math.max(0, -bbox.min.y);
 }
 
+function _specimenRoot() {
+  return _specimen?.group ?? _specimen ?? null;
+}
+
+function _frameSpecimenInView() {
+  const root = _specimenRoot();
+  if (!root || !_inspectCamera || !_inspectControls) return;
+
+  const bbox = new THREE.Box3().setFromObject(root);
+  if (!isFinite(bbox.min.x) || bbox.isEmpty()) return;
+
+  const sphere = new THREE.Sphere();
+  bbox.getBoundingSphere(sphere);
+  const center = sphere.center;
+  const radius = Math.max(0.45, sphere.radius);
+
+  const camera = _inspectCamera;
+  const controls = _inspectControls;
+  const dir = camera.position.clone().sub(controls.target);
+  if (dir.lengthSq() < 0.0001) dir.set(1.7, 1.0, 1.7);
+  dir.normalize();
+
+  const verticalFov = THREE.MathUtils.degToRad(camera.getEffectiveFOV());
+  const horizontalFov = 2 * Math.atan(Math.tan(verticalFov / 2) * camera.aspect);
+  const fitFov = Math.max(0.1, Math.min(verticalFov, horizontalFov));
+  const fitDistance = (radius / Math.sin(fitFov / 2)) * 1.22;
+
+  controls.target.copy(center);
+  camera.position.copy(center).addScaledVector(dir, fitDistance);
+  controls.minDistance = Math.max(0.35, fitDistance * 0.28);
+  controls.maxDistance = Math.max(6, fitDistance * 3.2);
+  controls.update();
+}
+
 function spawnSpecimen(scene) {
   if (_specimen) {
     const grp = _specimen.group ?? _specimen;
@@ -568,6 +604,7 @@ function spawnSpecimen(scene) {
     }
     scene.add(c.group);
   }
+  _frameSpecimenInView();
   updateHud();
   _syncUrl();
 }
@@ -619,6 +656,8 @@ function stepInspectCaterpillar(c, dt) {
 }
 
 export function setupInspect(scene, renderer, camera, controls) {
+  _inspectCamera = camera;
+  _inspectControls = controls;
   camera.position.set(1.7, 1.0, 1.7);
   controls.target.set(0, 0.35, 0);
   controls.minDistance = 0.8;
