@@ -589,8 +589,8 @@ varying float vAlpha;
 void main() {
   vec2 p = vUv - 0.5;
   float d = length(vec2(p.x * 0.82, p.y * 1.18));
-  float oval = smoothstep(0.5, 0.18, d);
-  float center = smoothstep(0.36, 0.04, d);
+  float oval = 1.0 - smoothstep(0.18, 0.5, d);
+  float center = 1.0 - smoothstep(0.04, 0.36, d);
   float alpha = oval * (0.72 + center * 0.28) * vAlpha;
   if (alpha <= 0.005) discard;
   gl_FragColor = vec4(uColor, alpha);
