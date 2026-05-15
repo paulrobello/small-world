@@ -17,25 +17,21 @@ const _furVS = `
 uniform float uShellLayer;
 uniform float uLayers;
 uniform float uFurLength;
+uniform float uHasVertexColor;
 varying vec3 vPos;
 varying float vLayerT;
 varying vec3 vNormal;
 varying vec3 vBodyColor;
+attribute vec3 color;
 void main() {
   vLayerT = uShellLayer / uLayers;
   vec3 p = position + normal * uFurLength * vLayerT;
-  // Pass the ORIGINAL (un-displaced) position so the fragment shader can
-  // compute a stable per-cell hash that matches across all shells — that's
-  // what makes a single hair appear as one column running through every
-  // layer instead of disconnected stripes.
   vPos = position;
   vNormal = normalMatrix * normal;
-  // Sample the body's vertex color so fur inherits painted patterns (e.g.
-  // bumblebee stripes). Falls back to white when no vertex colors exist.
-  vBodyColor = vec3(1.0);
-  #ifdef USE_COLOR
-  vBodyColor = color;
-  #endif
+  // Inherit vertex colors from the body geometry when present
+  // (e.g. bumblebee stripes). The attribute is always declared so the
+  // shader compiles; uHasVertexColor gates whether it's actually used.
+  vBodyColor = uHasVertexColor > 0.5 ? color : vec3(1.0);
   gl_Position = projectionMatrix * modelViewMatrix * vec4(p, 1.0);
 }
 `;
@@ -86,14 +82,13 @@ export const sharedFurUniforms = {
 // Build a fur material template. Clone()ing it gives per-shell instances
 // that share the above uniforms (Three's ShaderMaterial.clone copies the
 // uniforms object shallowly), and we then overwrite uShellLayer per clone.
-function makeFurTemplate(baseColor, tipColor, furLength) {
+function makeFurTemplate(baseColor, tipColor, furLength, hasVertexColor) {
   return new THREE.ShaderMaterial({
     vertexShader: _furVS,
     fragmentShader: _furFS,
     transparent: true,
     depthWrite: true,
     side: THREE.DoubleSide,
-    vertexColors: true,
     uniforms: {
       uShellLayer: { value: 0 },
       uLayers: sharedFurUniforms.uLayers,
@@ -101,6 +96,7 @@ function makeFurTemplate(baseColor, tipColor, furLength) {
       uBaseColor: { value: baseColor.clone() },
       uTipColor: { value: tipColor.clone() },
       uLightDir: sharedFurUniforms.uLightDir,
+      uHasVertexColor: { value: hasVertexColor ? 1.0 : 0.0 },
     },
   });
 }
@@ -123,7 +119,8 @@ export function applyShellFur(body, biome, opts = {}) {
 
   sharedFurUniforms.uLayers.value = Math.max(sharedFurUniforms.uLayers.value, layers);
 
-  const template = makeFurTemplate(baseColor, tipColor, furLength);
+  const hasVertexColor = !!(body.geometry && body.geometry.attributes && body.geometry.attributes.color);
+  const template = makeFurTemplate(baseColor, tipColor, furLength, hasVertexColor);
   const shells = [];
   for (let i = 1; i <= layers; i++) {
     const mat = template.clone();
