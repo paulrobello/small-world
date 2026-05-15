@@ -98,6 +98,10 @@ class GroundMarksStaticTest(unittest.TestCase):
         self.assertIn("groundMarkOffset", source)
         self.assertIn("poof: true", source)
         self.assertIn("makeDustKick", source)
+        self.assertIn("state.waterMesh && y < WATER_AVOID_Y", source)
+        self.assertNotIn("if (y <= 0.04) return", source)
+        self.assertIn("width: Math.max(0.045, 0.08 * c.scale)", source)
+        self.assertIn("length: Math.max(0.075, 0.15 * c.scale)", source)
 
     def test_walker_footprints_are_not_gated_by_shared_dust_cooldown(self) -> None:
         source = CREATURE_JS.read_text()
@@ -122,6 +126,8 @@ class GroundMarksStaticTest(unittest.TestCase):
         self.assertIn('c.type === "snail"', source)
         self.assertIn("fromX: c.lastGroundMarkX", source)
         self.assertIn("fromZ: c.lastGroundMarkZ", source)
+        self.assertIn("state.waterMesh && y < WATER_AVOID_Y", source)
+        self.assertNotIn("if (y <= 0.04) return", source)
 
 
 if __name__ == "__main__":

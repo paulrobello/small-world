@@ -279,7 +279,7 @@ function emitCrawlerGroundMark(c, x, z, heading, heightFn) {
   if (c.groundMarkDistance < interval) return;
 
   const y = heightFn(x, z);
-  if (y <= 0.04) return;
+  if (state.waterMesh && y < WATER_AVOID_Y) return;
 
   emitGroundMark(marks, {
     x,
