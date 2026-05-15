@@ -42,7 +42,7 @@ export const BIOMES = [
     flora: ["cactus", "cactus", "rock", "rock", "skull", "pillar"],
     floraCount: 50,
     particle: "sand",
-    creatureColors: ["#fefae0", "#dda15e", "#bc6c25", "#3d405b"],
+    creatureColors: ["#f3c68f", "#d97757", "#a94a3f", "#7a3438"],
     creatureCount: [6, 11],
     // Butterflies read as out-of-place over the dunes — the desert gets fly
     // swarms over skulls instead, set up during flora placement.
