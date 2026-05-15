@@ -20,6 +20,7 @@ uniform float uFurLength;
 varying vec3 vPos;
 varying float vLayerT;
 varying vec3 vNormal;
+varying vec3 vBodyColor;
 void main() {
   vLayerT = uShellLayer / uLayers;
   vec3 p = position + normal * uFurLength * vLayerT;
@@ -29,6 +30,12 @@ void main() {
   // layer instead of disconnected stripes.
   vPos = position;
   vNormal = normalMatrix * normal;
+  // Sample the body's vertex color so fur inherits painted patterns (e.g.
+  // bumblebee stripes). Falls back to white when no vertex colors exist.
+  vBodyColor = vec3(1.0);
+  #ifdef USE_COLOR
+  vBodyColor = color;
+  #endif
   gl_Position = projectionMatrix * modelViewMatrix * vec4(p, 1.0);
 }
 `;
@@ -41,6 +48,7 @@ uniform vec3 uLightDir;
 varying vec3 vPos;
 varying float vLayerT;
 varying vec3 vNormal;
+varying vec3 vBodyColor;
 
 // 3D point hash — irrational multipliers in each axis decorrelate the
 // output so adjacent cells get visually random values. Returns [0, 1].
@@ -60,7 +68,9 @@ void main() {
   if (h < threshold) discard;
   vec3 N = normalize(vNormal);
   float lam = max(0.0, dot(N, normalize(uLightDir)));
-  vec3 c = mix(uBaseColor, uTipColor, vLayerT);
+  // Modulate base→tip gradient by the body vertex color so painted patterns
+  // (e.g. bumblebee stripes) carry through into the fur.
+  vec3 c = mix(uBaseColor * vBodyColor, uTipColor * vBodyColor, vLayerT);
   // flat lambert response — keep colour close to body PBR; avoid blowing out
   c *= 0.7 + 0.3 * lam;
   gl_FragColor = vec4(c, 1.0 - vLayerT * 0.35);
@@ -83,6 +93,7 @@ function makeFurTemplate(baseColor, tipColor, furLength) {
     transparent: true,
     depthWrite: true,
     side: THREE.DoubleSide,
+    vertexColors: true,
     uniforms: {
       uShellLayer: { value: 0 },
       uLayers: sharedFurUniforms.uLayers,
