@@ -51,10 +51,10 @@ float hash13(vec3 p) {
 }
 
 void main() {
-  // Sample a 3D grid in object space — cell size ~1/120 of a unit. The
+  // Sample a 3D grid in object space — cell size ~1/80 of a unit. The
   // floor() runs in the fragment so every fragment lands in a single
   // cell, giving point-distributed hairs instead of interpolated bands.
-  vec3 cell = floor(vPos * 120.0);
+  vec3 cell = floor(vPos * 80.0);
   float h = hash13(cell);
   float threshold = 0.0 + vLayerT * 0.70;
   if (h < threshold) discard;
@@ -102,7 +102,7 @@ export function applyShellFur(body, biome, opts = {}) {
   // is often viewed full-size while the live world may auto-enter LOWFX on
   // smaller windows, so skipping fur entirely made the two modes disagree.
   const layers = opts.layers ?? (LOWFX ? 4 : 8);
-  const furLength = opts.length ?? (LOWFX ? 0.082 : 0.072);
+  const furLength = opts.length ?? biome.furLength ?? (LOWFX ? 0.082 : 0.072);
   const baseColor =
     opts.baseColor ?? (body.material && body.material.color
       ? body.material.color.clone()

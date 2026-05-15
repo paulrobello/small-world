@@ -16,7 +16,9 @@ export const BIOMES = [
     particle: "leaf",
     creatureColors: ["#c8b86a", "#b9824d", "#9b6a46", "#d8cfa3"],
     creatureCount: [10, 16],
-    furProbability: 0.30,
+    furProbability: 1.0,
+    furLength: 0.075,
+    furTip: "#fff1b8",
     groveDetails: {
       mushroomFamilies: true,
       fairyRing: true,

@@ -158,7 +158,19 @@ class VerdantGroveCustomDomainTest(unittest.TestCase):
 
         self.assertNotIn("if (LOWFX) return null", fur)
         self.assertIn("const layers = opts.layers ?? (LOWFX ? 4 : 8);", fur)
-        self.assertIn("const furLength = opts.length ?? (LOWFX ? 0.082 : 0.072);", fur)
+        self.assertIn("const furLength = opts.length ?? biome.furLength ?? (LOWFX ? 0.082 : 0.072);", fur)
+
+    def test_verdant_fur_is_readable_in_live_world(self) -> None:
+        biomes = (ROOT / "src" / "biomes.js").read_text()
+        creature = (ROOT / "src" / "fauna" / "creature.js").read_text()
+        fur = (ROOT / "src" / "fur.js").read_text()
+        verdant_block = biomes[biomes.index('id: "verdant"') : biomes.index('id: "desert"')]
+
+        self.assertIn("furProbability: 1.0", verdant_block)
+        self.assertIn("furLength: 0.075", verdant_block)
+        self.assertIn('furTip: "#fff1b8"', verdant_block)
+        self.assertIn("new THREE.Color(biome.furTip)", creature)
+        self.assertIn("vec3 cell = floor(vPos * 80.0);", fur)
 
     def test_verdant_uses_leafballtree_with_custom_leaf_wind(self) -> None:
         biomes = (ROOT / "src" / "biomes.js").read_text()
