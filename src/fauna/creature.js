@@ -1463,26 +1463,28 @@ export function stepCreature(c, dt, t, heightFn) {
       c.feet[i].position.y = footY;
       c.legs[i].scale.y = -0.1 - footY;
       // Rising-edge footstep detection — fires once when sVal crosses 0.85
-      // upward. Emit a soft-ground footprint and an optional tiny sand poof.
-      // Cooldown gates multiple kicks per stride.
+      // upward. Every rising foot leaves its own soft-ground footprint.
+      // Shared cooldown only throttles the optional tiny sand poof.
       const prev = c.lastFootSin[i] ?? 0;
-      if (sVal > 0.85 && prev <= 0.85 && t - c.lastDustAt > 0.18) {
+      if (sVal > 0.85 && prev <= 0.85) {
         emitWalkerFootprint(c, i, heightFn);
-        const fx = c.group.position.x;
-        const fz = c.group.position.z;
-        const fy = heightFn(fx, fz);
-        if (fy > 0.1 && state.currentBiome?.groundMarks?.poof === "sand") {
-          const kick = makeDustKick(fx, fy, fz, c.dirtColor, {
-            count: 2,
-            size: 0.045,
-            opacity: 0.28,
-            velocityScale: 0.35,
-            life: 0.28,
-          });
-          state.world.add(kick);
-          state.dustKicks.push(kick);
+        if (t - c.lastDustAt > 0.18) {
+          const fx = c.group.position.x;
+          const fz = c.group.position.z;
+          const fy = heightFn(fx, fz);
+          if (fy > 0.1 && state.currentBiome?.groundMarks?.poof === "sand") {
+            const kick = makeDustKick(fx, fy, fz, c.dirtColor, {
+              count: 2,
+              size: 0.045,
+              opacity: 0.28,
+              velocityScale: 0.35,
+              life: 0.28,
+            });
+            state.world.add(kick);
+            state.dustKicks.push(kick);
+          }
+          c.lastDustAt = t;
         }
-        c.lastDustAt = t;
       }
       c.lastFootSin[i] = sVal;
     }

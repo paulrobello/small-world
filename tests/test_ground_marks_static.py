@@ -80,6 +80,17 @@ class GroundMarksStaticTest(unittest.TestCase):
         self.assertIn("poof: true", source)
         self.assertIn("makeDustKick", source)
 
+    def test_walker_footprints_are_not_gated_by_shared_dust_cooldown(self) -> None:
+        source = CREATURE_JS.read_text()
+
+        self.assertIn("if (sVal > 0.85 && prev <= 0.85) {", source)
+        self.assertIn("emitWalkerFootprint(c, i, heightFn);", source)
+        self.assertIn("if (t - c.lastDustAt > 0.18) {", source)
+        self.assertNotIn(
+            "if (sVal > 0.85 && prev <= 0.85 && t - c.lastDustAt > 0.18) {",
+            source,
+        )
+
     def test_crawlers_emit_continuous_trails(self) -> None:
         source = CATERPILLAR_JS.read_text()
 
