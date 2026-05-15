@@ -35,14 +35,15 @@ export function makeShadowDisks(biome) {
   // Sized to a generous upper bound — creatures + caterpillars + 16 slack.
   const cap = Math.max(64, state.creatures.length + state.caterpillars.length + 16);
   const geo = new THREE.PlaneGeometry(1, 1).rotateX(-Math.PI / 2);
-  // Tint the shadow with a darkened biome fog so it feels grounded.
-  const tint = new THREE.Color(biome.fog).offsetHSL(0, 0, -0.4);
+  // Tint the shadow with a darkened biome fog so it feels grounded. Cloudlike
+  // islands get softer, lighter shadows so the surface keeps its airy feel.
+  const tint = new THREE.Color(biome.fog).offsetHSL(0, 0, biome.cloudlike ? -0.18 : -0.4);
   const mat = new THREE.MeshBasicMaterial({
     map: tex,
     color: tint,
     transparent: true,
     depthWrite: false,
-    opacity: 0.45,
+    opacity: biome.cloudlike ? 0.26 : 0.45,
     fog: false,
   });
   const mesh = new THREE.InstancedMesh(geo, mat, cap);

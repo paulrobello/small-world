@@ -831,25 +831,42 @@ export function makeCloudPuffField(biome, heightFn) {
   geo.scale(1.7, 0.32, 1.25);
   const glow = new THREE.Color(0xffffff);
   const mat = new THREE.MeshStandardMaterial({
-    color: new THREE.Color(biome.fog).lerp(glow, 0.7),
-    emissive: new THREE.Color(biome.sky).lerp(glow, 0.55),
-    emissiveIntensity: 0.1,
+    color: new THREE.Color(biome.fog).lerp(glow, 0.82),
+    emissive: new THREE.Color(biome.sky).lerp(glow, 0.68),
+    emissiveIntensity: 0.14,
     flatShading: false,
     roughness: 0.82,
     metalness: 0,
   });
+  const group = new THREE.Group();
+  group.name = "cloud-puff-field";
   const mesh = placeInstanced(geo, mat, count, heightFn, {
-    yOffset: 0.08,
-    minScale: 0.7,
-    maxScale: 2.0,
-    tilt: 0.12,
-    maxRadiusFrac: 0.82,
+    yOffset: 0.05,
+    minScale: 0.58,
+    maxScale: 1.75,
+    tilt: 0.08,
+    maxRadiusFrac: 0.84,
     minHeight: -0.25,
   });
+  mesh.name = "cloud-puff-pads";
   mesh.castShadow = false;
   mesh.receiveShadow = true;
-  mesh.userData.inspect = { category: "flora", variant: "cloudpuff" };
-  return mesh;
+  group.add(mesh);
+
+  const floatingCloudlets = placeInstanced(geo, mat, _coverScale(LOWFX ? 14 : 24), heightFn, {
+    yOffset: 0.34,
+    minScale: 0.22,
+    maxScale: 0.56,
+    tilt: 0.18,
+    maxRadiusFrac: 0.72,
+    minHeight: -0.25,
+  });
+  floatingCloudlets.name = "floatingCloudlets";
+  floatingCloudlets.castShadow = false;
+  floatingCloudlets.receiveShadow = false;
+  group.add(floatingCloudlets);
+  group.userData.inspect = { category: "flora", variant: "cloudpuff" };
+  return group;
 }
 
 export function makePebbleField(biome, heightFn) {
