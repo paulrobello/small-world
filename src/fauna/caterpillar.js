@@ -11,7 +11,7 @@ import { WATER_AVOID_Y, avoidObstacles } from "./shared.js";
 // Caterpillar — head + 3-8 body spheres, body segments follow head's trail
 // ─────────────────────────────────────────────────────────────────────────────
 const TRAIL_RETENTION_PADDING = 1.0;
-const TRAIL_MIN_POINT_DISTANCE = 0.01;
+const TRAIL_MIN_POINT_DISTANCE = 1e-6;
 
 function trailSegmentLength(a, b) {
   const dx = a.x - b.x;
