@@ -302,7 +302,7 @@ const VARIANTS_BY_CATEGORY = {
   flora: [
     "tree", "pine", "cactus", "mushroom", "fern", "rock", "limestonerock",
     "reed", "seaweed", "grass", "beachsucculent", "deadtree", "skull",
-    "pillar", "archstone", "crystal", "bigmushroom", "berrybush",
+    "pillar", "archstone", "crystal", "bigmushroom", "fairyring", "berrybush",
     "lantern", "coral", "braincoral", "cupcoral", "balloontree",
     "lavafissure", "obsidianshard",
   ].map((name) => ({

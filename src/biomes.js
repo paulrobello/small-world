@@ -17,6 +17,12 @@ export const BIOMES = [
     creatureColors: ["#e9c46a", "#f4a261", "#e76f51", "#fff8e0"],
     creatureCount: [10, 16],
     furProbability: 0.30,
+    groveDetails: {
+      mushroomFamilies: true,
+      fairyRing: true,
+      groundCover: true,
+      sporeGlow: true,
+    },
     edgeAura: {
       pattern: "grass",
       colors: ["#2B2812", "#2B2812", "#2B2812"],

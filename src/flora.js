@@ -98,6 +98,69 @@ function pooled(key, factory) {
   return v;
 }
 
+function addGroveMushroomFamily(group, biome, { radius = 0.44, count = 3, capY = 0.35 } = {}) {
+  if (!biome.groveDetails?.mushroomFamilies) return;
+  const stemGeo = pooled("grove.babyMushroom.stem.geo", () =>
+    new THREE.CylinderGeometry(0.025, 0.04, 0.18, 5).translate(0, 0.09, 0)
+  );
+  const capGeo = pooled("grove.babyMushroom.cap.geo", () =>
+    new THREE.SphereGeometry(0.085, 7, 5, 0, Math.PI * 2, 0, Math.PI / 2)
+      .scale(1.25, 0.72, 1.25)
+      .translate(0, 0.18, 0)
+  );
+  const stemMat = pooled("grove.babyMushroom.stem.mat", () =>
+    new THREE.MeshStandardMaterial({ color: "#f4e6c9", flatShading: true, roughness: 0.95 })
+  );
+  const capMat = pooled("grove.babyMushroom.cap.mat", () =>
+    new THREE.MeshStandardMaterial({
+      color: new THREE.Color(biome.accent).lerp(new THREE.Color("#b85f2a"), 0.18),
+      flatShading: true,
+      roughness: 0.68,
+    })
+  );
+  const babies = count + Math.floor(Math.random() * 3);
+  for (let i = 0; i < babies; i++) {
+    const a = Math.random() * Math.PI * 2;
+    const r = radius * (0.35 + Math.random() * 0.65);
+    const scale = 0.72 + Math.random() * 0.62;
+    const x = Math.cos(a) * r;
+    const z = Math.sin(a) * r;
+    const stem = new THREE.Mesh(stemGeo, stemMat);
+    stem.position.set(x, 0, z);
+    stem.scale.setScalar(scale);
+    stem.castShadow = true;
+    group.add(stem);
+    const cap = new THREE.Mesh(capGeo, capMat);
+    cap.position.set(x, 0, z);
+    cap.scale.setScalar(scale);
+    cap.rotation.y = Math.random() * Math.PI * 2;
+    cap.castShadow = true;
+    group.add(cap);
+  }
+
+  if (!biome.groveDetails?.sporeGlow) return;
+  const sporeGeo = pooled("grove.spore.geo", () => new THREE.SphereGeometry(0.026, 6, 5));
+  const sporeMat = pooled("grove.spore.mat", () => {
+    const color = new THREE.Color("#ffc36b");
+    return new THREE.MeshStandardMaterial({
+      color,
+      emissive: color.clone().multiplyScalar(1.6),
+      emissiveIntensity: 1.3,
+      flatShading: true,
+      roughness: 0.45,
+    });
+  });
+  const spores = 3 + Math.floor(Math.random() * 4);
+  for (let i = 0; i < spores; i++) {
+    const a = Math.random() * Math.PI * 2;
+    const r = radius * (0.18 + Math.random() * 0.62);
+    const spore = new THREE.Mesh(sporeGeo, sporeMat);
+    spore.position.set(Math.cos(a) * r, capY * (0.55 + Math.random() * 0.75), Math.sin(a) * r);
+    spore.layers.enable(BLOOM_LAYER);
+    group.add(spore);
+  }
+}
+
 export const FLORA_BUILDERS = {
   tree(biome) {
     const g = new THREE.Group();
@@ -267,6 +330,7 @@ export const FLORA_BUILDERS = {
     // spot for fliers. Sphere radius 0.22 with Y-scale 0.9 puts the apex at
     // cap.position.y + 0.22*0.9.
     g.userData.capTopY = 0.36 + 0.22 * 0.9;
+    addGroveMushroomFamily(g, biome, { radius: 0.42, count: 2, capY: g.userData.capTopY });
     return g;
   },
 
@@ -759,6 +823,93 @@ export const FLORA_BUILDERS = {
       const spot = new THREE.Mesh(spotGeo, spotMat);
       g.add(spot);
     }
+    addGroveMushroomFamily(g, biome, { radius: 1.15, count: 4, capY: stemH });
+    return g;
+  },
+
+  fairyring(biome) {
+    const g = new THREE.Group();
+    const mossGeo = new THREE.RingGeometry(0.62, 1.28, 36, 4);
+    mossGeo.rotateX(-Math.PI / 2);
+    const mossMat = new THREE.MeshStandardMaterial({
+      color: new THREE.Color(biome.ground[0]).lerp(new THREE.Color("#b6d48a"), 0.32),
+      flatShading: true,
+      roughness: 1,
+    });
+    const moss = new THREE.Mesh(mossGeo, mossMat);
+    moss.userData.surfaceLift = 0.024;
+    moss.userData.surfaceConformVertices = true;
+    moss.receiveShadow = true;
+    g.add(moss);
+
+    const stumpMat = new THREE.MeshStandardMaterial({ color: TRUNK, flatShading: true, roughness: 1 });
+    const stump = new THREE.Mesh(
+      jitterGeo(new THREE.CylinderGeometry(0.18, 0.24, 0.38, 8).translate(0, 0.19, 0), 0.025),
+      stumpMat
+    );
+    stump.scale.set(1.2, 0.82, 0.9);
+    stump.castShadow = true;
+    g.add(stump);
+    const hollow = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.085, 0.07, 0.018, 8).translate(0, 0.325, 0),
+      new THREE.MeshStandardMaterial({ color: "#22150e", flatShading: true, roughness: 1 })
+    );
+    hollow.scale.set(1.25, 1, 0.8);
+    g.add(hollow);
+
+    const stemGeo = new THREE.CylinderGeometry(0.026, 0.04, 0.18, 5).translate(0, 0.09, 0);
+    const capGeo = new THREE.SphereGeometry(0.09, 7, 5, 0, Math.PI * 2, 0, Math.PI / 2)
+      .scale(1.28, 0.72, 1.28)
+      .translate(0, 0.18, 0);
+    const stemMat = new THREE.MeshStandardMaterial({ color: "#f4e6c9", flatShading: true, roughness: 0.95 });
+    const capMat = new THREE.MeshStandardMaterial({
+      color: new THREE.Color(biome.accent).lerp(new THREE.Color("#b85f2a"), 0.18),
+      flatShading: true,
+      roughness: 0.68,
+    });
+    const mushrooms = 10 + Math.floor(Math.random() * 4);
+    for (let i = 0; i < mushrooms; i++) {
+      const a = (i / mushrooms) * Math.PI * 2 + (Math.random() - 0.5) * 0.18;
+      const r = 0.9 + (Math.random() - 0.5) * 0.16;
+      const scale = 0.75 + Math.random() * 0.55;
+      const x = Math.cos(a) * r;
+      const z = Math.sin(a) * r;
+      const stem = new THREE.Mesh(stemGeo, stemMat);
+      stem.position.set(x, 0, z);
+      stem.scale.setScalar(scale);
+      stem.userData.surfaceLift = 0;
+      stem.castShadow = true;
+      g.add(stem);
+      const cap = new THREE.Mesh(capGeo, capMat);
+      cap.position.set(x, 0, z);
+      cap.rotation.y = a + Math.PI / 2;
+      cap.scale.setScalar(scale);
+      cap.userData.surfaceLift = 0;
+      cap.castShadow = true;
+      g.add(cap);
+    }
+
+    if (biome.groveDetails?.sporeGlow) {
+      const sporeGeo = new THREE.SphereGeometry(0.032, 6, 5);
+      const glow = new THREE.Color("#ffc36b");
+      const sporeMat = new THREE.MeshStandardMaterial({
+        color: glow,
+        emissive: glow.clone().multiplyScalar(1.8),
+        emissiveIntensity: 1.4,
+        flatShading: true,
+        roughness: 0.35,
+      });
+      for (let i = 0; i < 8; i++) {
+        const a = Math.random() * Math.PI * 2;
+        const r = 0.35 + Math.random() * 0.82;
+        const spore = new THREE.Mesh(sporeGeo, sporeMat);
+        spore.position.set(Math.cos(a) * r, 0.16 + Math.random() * 0.62, Math.sin(a) * r);
+        spore.layers.enable(BLOOM_LAYER);
+        g.add(spore);
+      }
+    }
+
+    g.userData.capTopY = 0.32;
     return g;
   },
 

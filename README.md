@@ -2,7 +2,7 @@
 
 A Three.js terrarium that grows a tiny floating-island world — biome, terrain, flora, creatures, birds, and weather — from a 16-bit seed. Cute and painterly by design.
 
-**Live demo:** https://paulrobello.github.io/small-world/
+**Live demo:** https://small-world.pardev.net/
 
 Every world is deterministic from its seed (visible in the URL as `?seed=0x____`), so a link reproduces exactly what you see. Hit *regenerate* for a fresh roll, or share your URL to send someone the exact same island.
 
@@ -12,10 +12,10 @@ A handful of seeds across different biomes — click any image to load that exac
 
 |   |   |
 |---|---|
-| [![verdant grove (0xcfff)](https://raw.githubusercontent.com/paulrobello/small-world/main/screenshots/small-world-verdant-cfff.png)](https://paulrobello.github.io/small-world/?seed=0xcfff) | [![coral atoll (0x0ac5)](https://raw.githubusercontent.com/paulrobello/small-world/main/screenshots/small-world-coral-0ac5.png)](https://paulrobello.github.io/small-world/?seed=0x0ac5) |
-| [![lavender marsh (0xe480)](https://raw.githubusercontent.com/paulrobello/small-world/main/screenshots/small-world-marsh-e480.png)](https://paulrobello.github.io/small-world/?seed=0xe480) | [![twilight meadow (0x07de)](https://raw.githubusercontent.com/paulrobello/small-world/main/screenshots/small-world-twilight-07de.png)](https://paulrobello.github.io/small-world/?seed=0x07de) |
-| [![golden steppe (0xc32c)](https://raw.githubusercontent.com/paulrobello/small-world/main/screenshots/small-world-golden-c32c.png)](https://paulrobello.github.io/small-world/?seed=0xc32c) | [![cloud island (0x3f2a)](https://raw.githubusercontent.com/paulrobello/small-world/main/screenshots/small-world-cloud-3f2a.png)](https://paulrobello.github.io/small-world/?seed=0x3f2a) |
-| [![frozen vale (0x7462)](https://raw.githubusercontent.com/paulrobello/small-world/main/screenshots/small-world-frozen-7462.png)](https://paulrobello.github.io/small-world/?seed=0x7462) | |
+| [![verdant grove (0xcfff)](https://raw.githubusercontent.com/paulrobello/small-world/main/screenshots/small-world-verdant-cfff.png)](https://small-world.pardev.net/?seed=0xcfff) | [![coral atoll (0x0ac5)](https://raw.githubusercontent.com/paulrobello/small-world/main/screenshots/small-world-coral-0ac5.png)](https://small-world.pardev.net/?seed=0x0ac5) |
+| [![lavender marsh (0xe480)](https://raw.githubusercontent.com/paulrobello/small-world/main/screenshots/small-world-marsh-e480.png)](https://small-world.pardev.net/?seed=0xe480) | [![twilight meadow (0x07de)](https://raw.githubusercontent.com/paulrobello/small-world/main/screenshots/small-world-twilight-07de.png)](https://small-world.pardev.net/?seed=0x07de) |
+| [![golden steppe (0xc32c)](https://raw.githubusercontent.com/paulrobello/small-world/main/screenshots/small-world-golden-c32c.png)](https://small-world.pardev.net/?seed=0xc32c) | [![cloud island (0x3f2a)](https://raw.githubusercontent.com/paulrobello/small-world/main/screenshots/small-world-cloud-3f2a.png)](https://small-world.pardev.net/?seed=0x3f2a) |
+| [![frozen vale (0x7462)](https://raw.githubusercontent.com/paulrobello/small-world/main/screenshots/small-world-frozen-7462.png)](https://small-world.pardev.net/?seed=0x7462) | |
 
 ## Features
 

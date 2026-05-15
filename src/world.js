@@ -35,6 +35,7 @@ import {
   makeGrassField,
   makeWildflowerField,
   makePebbleField,
+  makeVerdantGroveDetails,
   makeCloudPuffField,
   makeBeachcombField,
   makeWaterPlane,
@@ -400,7 +401,7 @@ export function generateWorld(seed) {
   // Anything not listed falls back to FLORA_FOOTPRINT_DEFAULT.
   const FLORA_FOOTPRINT = {
     tree: 0.28, pine: 0.28, deadtree: 0.22, mushroom: 0.18,
-    bigmushroom: 0.45, lantern: 0.18, pillar: 0.30, archstone: 0.55,
+    bigmushroom: 0.45, fairyring: 1.15, lantern: 0.18, pillar: 0.30, archstone: 0.55,
     balloontree: 0.22, crystal: 0.30, obsidianshard: 0.28, skull: 0.22,
     berrybush: 0.30, coral: 0.25, braincoral: 0.26, cupcoral: 0.22,
     fern: 0.18, rock: 0.30, limestonerock: 0.30, reed: 0.10,
@@ -414,7 +415,7 @@ export function generateWorld(seed) {
   // visually and adding collision there reads as fussy.
   const OBSTACLE_KINDS = new Set([
     "tree", "pine", "deadtree", "mushroom", "bigmushroom",
-    "pillar", "archstone", "balloontree", "crystal",
+    "fairyring", "pillar", "archstone", "balloontree", "crystal",
     "lantern", "obsidianshard", "skull", "lavafissure",
   ]);
   // Per-kind canopy top height (local Y of the highest visible mass at
@@ -422,7 +423,7 @@ export function generateWorld(seed) {
   // trunk; fliers above that altitude can pass over freely.
   const OBSTACLE_TOP = {
     tree: 2.3, pine: 2.2, deadtree: 1.8, mushroom: 1.1,
-    bigmushroom: 2.6, pillar: 2.8, archstone: 2.6, balloontree: 3.2,
+    bigmushroom: 2.6, fairyring: 0.9, pillar: 2.8, archstone: 2.6, balloontree: 3.2,
     crystal: 1.6, lantern: 1.7, obsidianshard: 2.2, skull: 1.5,
     lavafissure: 0.16,
   };
@@ -430,6 +431,11 @@ export function generateWorld(seed) {
   // Extra pad on top of the slope-plant footprint so creature bodies don't
   // visually nose-clip the trunk. fp itself is already ~1.5× the trunk radius.
   const OBSTACLE_PAD = 1.15;
+  // Visual canopy spacing is wider than root/footprint spacing. Trees and
+  // big mushrooms can have small trunks but broad crowns/caps, so they need
+  // a separate placement radius to prevent silhouettes from intersecting.
+  const CANOPY_SPACING_KINDS = new Set(["tree", "pine", "deadtree", "bigmushroom", "fairyring"]);
+  const CANOPY_SPACING_PAD = 2.8;
   const PLACEMENT_BLOCK_KINDS = new Set(["lavafissure"]);
   const floraPlacementBlocks = [];
   function blocksPlacement(x, z, r, kinds = PLACEMENT_BLOCK_KINDS) {
@@ -502,6 +508,46 @@ export function generateWorld(seed) {
     reed: 0.45,
     seaweed: 0.75,
   };
+
+  if (biome.groveDetails?.fairyRing) {
+    let choice = null;
+    for (let tries = 0; tries < 36; tries++) {
+      const p = pickGroundPoint(0.42);
+      const y0 = state.heightFn(p.x, p.z);
+      const s = 1.05 + Math.random() * 0.22;
+      const fp = FLORA_FOOTPRINT.fairyring * s;
+      if (blocksFloraPlacement(p.x, p.z, fp * 1.1)) continue;
+      if (!choice || y0 > choice.y0) choice = { p, y0, s, fp };
+      if (y0 >= -0.2) break;
+    }
+    if (choice) {
+      const { p, y0, s, fp } = choice;
+      const landmark = FLORA_BUILDERS.fairyring(biome);
+      landmark.userData.inspect = { category: "flora", variant: "fairyring" };
+      const y = Math.min(
+        y0,
+        state.heightFn(p.x + fp, p.z),
+        state.heightFn(p.x - fp, p.z),
+        state.heightFn(p.x, p.z + fp),
+        state.heightFn(p.x, p.z - fp)
+      ) - FLORA_BURY;
+      landmark.position.set(p.x, y, p.z);
+      landmark.rotation.y = Math.random() * Math.PI * 2;
+      landmark.scale.setScalar(s);
+      conformSurfaceChildrenToTerrain(landmark);
+      state.world.add(landmark);
+      floraPlacementBlocks.push({ kind: "fairyring", x: p.x, z: p.z, r: fp * 1.1 });
+      state.obstacles.push({
+        kind: "fairyring",
+        x: p.x,
+        z: p.z,
+        r: fp * 0.72,
+        top: y0 + (OBSTACLE_TOP.fairyring ?? OBSTACLE_TOP_DEFAULT) * s,
+      });
+      placed++;
+    }
+  }
+
   while (placed < floraTarget && attempts < floraTarget * 6) {
     attempts++;
     const kind = biome.flora[Math.floor(Math.random() * biome.flora.length)];
@@ -535,6 +581,7 @@ export function generateWorld(seed) {
     const fp = (FLORA_FOOTPRINT[kind] ?? FLORA_FOOTPRINT_DEFAULT) * s;
     const placementBlockKinds = kind === "lavafissure" ? null : PLACEMENT_BLOCK_KINDS;
     if (blocksFloraPlacement(p.x, p.z, fp * 1.2, placementBlockKinds)) continue;
+    if (CANOPY_SPACING_KINDS.has(kind) && blocksFloraPlacement(p.x, p.z, fp * CANOPY_SPACING_PAD, CANOPY_SPACING_KINDS)) continue;
     const f = FLORA_BUILDERS[kind](biome);
     f.userData.inspect = { category: "flora", variant: kind };
     const y = Math.min(
@@ -567,7 +614,12 @@ export function generateWorld(seed) {
       fissureLightCount++;
     }
     state.world.add(f);
-    floraPlacementBlocks.push({ kind, x: p.x, z: p.z, r: fp * 1.2 });
+    floraPlacementBlocks.push({
+      kind,
+      x: p.x,
+      z: p.z,
+      r: fp * (CANOPY_SPACING_KINDS.has(kind) ? CANOPY_SPACING_PAD : 1.2),
+    });
     if (OBSTACLE_KINDS.has(kind)) {
       const topLocal = (OBSTACLE_TOP[kind] ?? OBSTACLE_TOP_DEFAULT) * s;
       const fissurePts = kind === "lavafissure" ? f.userData.fissureObstaclePoints : null;
@@ -667,6 +719,8 @@ export function generateWorld(seed) {
     state.world.add(m);
     if (m.userData.positions) state.flowerSpots.push(...m.userData.positions);
   }
+  const groveDetails = makeVerdantGroveDetails(biome, state.heightFn);
+  if (groveDetails) state.world.add(groveDetails);
   const cloudPuffs = makeCloudPuffField(biome, state.heightFn);
   if (cloudPuffs) state.world.add(cloudPuffs);
   const beachcomb = makeBeachcombField(biome, state.heightFn);

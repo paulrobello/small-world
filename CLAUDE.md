@@ -32,7 +32,7 @@ There are no tests, no linter, no build. Edits to `main.js` / `src/*.js` / `styl
 
 ## Release/deploy
 
-No release script or GitHub Actions workflow is present. README links the live site at `https://paulrobello.github.io/small-world/`, and `ideas.md` says to commit and push completed enhancement work so it is live on GitHub Pages. Treat Pages publication from `main` as inferred from repository docs and verify repository Pages settings before changing deployment behavior.
+No release script or GitHub Actions workflow is present. README links the live site at `https://small-world.pardev.net/`; GitHub Pages should use the root `CNAME` file (`small-world.pardev.net`) for the custom domain. `ideas.md` says to commit and push completed enhancement work so it is live on GitHub Pages. Treat Pages publication from `main` as inferred from repository docs and verify repository Pages settings before changing deployment behavior.
 
 ## Architecture
 

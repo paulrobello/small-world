@@ -720,6 +720,109 @@ export function makeWildflowerField(biome, heightFn) {
   return meshes;
 }
 
+export function makeVerdantGroveDetails(biome, heightFn) {
+  if (!biome.groveDetails?.groundCover) return null;
+
+  const group = new THREE.Group();
+  group.name = "verdant-grove-details";
+
+  const mossGeo = new THREE.CircleGeometry(0.18, 10);
+  mossGeo.scale(1.75, 0.85, 1);
+  mossGeo.rotateX(-Math.PI / 2);
+  const mossMat = new THREE.MeshStandardMaterial({
+    color: new THREE.Color(biome.ground[0]).lerp(new THREE.Color("#a9c985"), 0.28),
+    flatShading: true,
+    roughness: 1,
+  });
+  const mossPads = placeInstanced(mossGeo, mossMat, _coverScale(52), heightFn, {
+    yOffset: 0.024,
+    minScale: 0.65,
+    maxScale: 1.75,
+    tilt: 0.05,
+    maxRadiusFrac: 0.84,
+    minHeight: -0.2,
+    avoidObstacleKinds: ["lavafissure"],
+    avoidRadius: 0.12,
+    visualRadius: true,
+  });
+  mossPads.name = "moss-pads";
+  mossPads.userData.inspect = { category: "flora", variant: "grassblade" };
+  group.add(mossPads);
+
+  const leafGeo = new THREE.CircleGeometry(0.06, 5);
+  leafGeo.scale(1.9, 0.55, 1);
+  leafGeo.rotateX(-Math.PI / 2);
+  const leafMat = new THREE.MeshStandardMaterial({
+    color: new THREE.Color(biome.accent).lerp(new THREE.Color("#5a321d"), 0.36),
+    flatShading: true,
+    roughness: 0.9,
+  });
+  const leaves = placeInstanced(leafGeo, leafMat, _coverScale(80), heightFn, {
+    yOffset: 0.035,
+    minScale: 0.55,
+    maxScale: 1.35,
+    tilt: 0.16,
+    maxRadiusFrac: 0.9,
+    minHeight: -0.22,
+    avoidObstacleKinds: ["lavafissure"],
+    avoidRadius: 0.12,
+    visualRadius: true,
+  });
+  leaves.name = "leaf-litter";
+  leaves.userData.inspect = { category: "flora", variant: "wildflower" };
+  group.add(leaves);
+
+  const cloverGeo = new THREE.ConeGeometry(0.055, 0.18, 4).translate(0, 0.09, 0);
+  const cloverMat = applyWindSway(
+    new THREE.MeshStandardMaterial({
+      color: new THREE.Color(biome.ground[2]).offsetHSL(0.02, 0.08, -0.1),
+      flatShading: true,
+      roughness: 0.85,
+    }),
+    1.2
+  );
+  const clover = placeInstanced(cloverGeo, cloverMat, _coverScale(70), heightFn, {
+    yOffset: 0.028,
+    minScale: 0.55,
+    maxScale: 1.25,
+    tilt: 0.4,
+    maxRadiusFrac: 0.82,
+    minHeight: -0.18,
+    avoidObstacleKinds: ["lavafissure"],
+    avoidRadius: 0.12,
+    visualRadius: true,
+  });
+  clover.name = "clover-tufts";
+  clover.userData.inspect = { category: "flora", variant: "grassblade" };
+  group.add(clover);
+
+  const dewGeo = new THREE.SphereGeometry(0.032, 6, 5);
+  const dewMat = new THREE.MeshStandardMaterial({
+    color: "#f2fff0",
+    emissive: new THREE.Color("#d6ffd0").multiplyScalar(0.18),
+    flatShading: false,
+    roughness: 0.18,
+    metalness: 0.08,
+  });
+  const dew = placeInstanced(dewGeo, dewMat, _coverScale(38), heightFn, {
+    yOffset: 0.085,
+    minScale: 0.45,
+    maxScale: 0.95,
+    tilt: 0,
+    maxRadiusFrac: 0.78,
+    minHeight: -0.12,
+    avoidObstacleKinds: ["lavafissure"],
+    avoidRadius: 0.12,
+    visualRadius: true,
+  });
+  dew.name = "dew-beads";
+  dew.userData.inspect = { category: "flora", variant: "wildflower" };
+  group.add(dew);
+
+  group.userData.inspect = { category: "flora", variant: "grassblade" };
+  return group;
+}
+
 export function makeCloudPuffField(biome, heightFn) {
   if (!biome.cloudlike) return null;
 
