@@ -53,16 +53,19 @@ class GroundMarksStaticTest(unittest.TestCase):
         self.assertIn("export function stepGroundMarks", section)
         self.assertIn("installGroundMarkShader", section)
         self.assertIn("onBeforeCompile", section)
-        self.assertIn("uGroundMarkA", section)
-        self.assertIn("uGroundMarkB", section)
-        self.assertIn("uGroundMarkCount", section)
+        self.assertIn("new THREE.CanvasTexture", section)
+        self.assertIn("uGroundMarkTex", section)
+        self.assertIn("uGroundMarkInvSize", section)
         self.assertIn("vGroundMarkXZ", section)
+        self.assertIn("texture2D(uGroundMarkTex", section)
         self.assertIn("diffuseColor.rgb = mix", section)
         self.assertNotIn("GROUND_MARK_LIFT", section)
         self.assertNotIn("new THREE.InstancedMesh", section)
         self.assertNotIn("new THREE.PlaneGeometry", section)
         self.assertNotIn("attribute float aAlpha", section)
         self.assertNotIn("polygonOffset: true", section)
+        self.assertNotIn("uGroundMarkA", section)
+        self.assertNotIn("uGroundMarkB", section)
 
     def test_state_world_and_main_wire_ground_marks(self) -> None:
         state_source = STATE_JS.read_text()
@@ -117,6 +120,8 @@ class GroundMarksStaticTest(unittest.TestCase):
         self.assertIn("lastGroundSampleZ", source)
         self.assertIn("groundMarkDistance", source)
         self.assertIn('c.type === "snail"', source)
+        self.assertIn("fromX: c.lastGroundMarkX", source)
+        self.assertIn("fromZ: c.lastGroundMarkZ", source)
 
 
 if __name__ == "__main__":
