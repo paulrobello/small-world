@@ -185,24 +185,29 @@ export function makeCreature(biome, opts = {}) {
 
   if (isBumblebee) {
     const stripes = opts.stripeColors || ["#111111", "#ffd13b"];
+    // Override bodyCol so fur, belly, legs all use the dark stripe color
+    bodyCol.set(stripes[0]);
     body.material.color.set(stripes[0]);
     body.material.name = "bumblebee.body.mat";
     bodyBaseZ *= 1.25; // 25% elongation
     body.scale.set(bodyBaseX, bodyBaseY, bodyBaseZ);
-    // Stripe bands — small flattened icospheres wrapping the body
-    const stripeMat = new THREE.MeshStandardMaterial({
-      color: new THREE.Color(stripes[1]),
-      flatShading: true,
-      roughness: 0.45,
-    });
-    // Bands scale slightly larger than the body so they poke through
-    // the fur shells and read as colored stripes even at tiny scale.
-    const bandGeo = new THREE.IcosahedronGeometry(0.46, 0);
+    // Stripe bands — furry yellow wraps around the dark body.
+    // Each band gets its own fur shells so the stripes read as fuzzy.
+    const bandGeo = new THREE.IcosahedronGeometry(0.44, 1);
     for (let bi = -1; bi <= 1; bi++) {
-      const band = new THREE.Mesh(bandGeo, stripeMat);
-      band.position.z = bi * 0.20;
-      band.scale.set(1.12, 1.12, 0.18);
+      const band = new THREE.Mesh(bandGeo, new THREE.MeshStandardMaterial({
+        color: new THREE.Color(stripes[1]),
+        flatShading: true,
+        roughness: 0.55,
+      }));
+      band.position.z = bi * 0.22;
+      band.scale.set(1.08, 1.08, 0.24);
       body.add(band);
+      // Furry stripes — apply shell fur to each band mesh
+      applyShellFur(band, biome, {
+        baseColor: new THREE.Color(stripes[1]).clone(),
+        tipColor: new THREE.Color(stripes[1]).offsetHSL(0, -0.1, 0.08),
+      });
     }
   }
 
@@ -379,9 +384,9 @@ export function makeCreature(biome, opts = {}) {
     } else {
       // wings — flattened ellipsoid icospheres on hinge groups
       const wingMat = new THREE.MeshStandardMaterial({
-        color: bodyCol.clone().offsetHSL(0, -0.15, 0.12),
+        color: isBumblebee ? 0xccccdd : bodyCol.clone().offsetHSL(0, -0.15, 0.12),
         flatShading: true,
-        roughness: 0.45,
+        roughness: isBumblebee ? 0.3 : 0.45,
         side: THREE.DoubleSide,
       });
       for (const side of [-1, 1]) {
@@ -447,17 +452,15 @@ export function makeCreature(biome, opts = {}) {
           group.add(dangle);
         }
       }
-      // Stinger — small rounded cone at the rear
+      // Stinger — thin black cone at the rear
       if (isBumblebee) {
-        const stingerGeo = new THREE.ConeGeometry(0.06, 0.22, 6);
+        const stingerGeo = new THREE.ConeGeometry(0.03, 0.30, 5);
         stingerGeo.rotateX(Math.PI / 2);
-        stingerGeo.translate(0, 0, -0.5);
+        stingerGeo.translate(0, 0, -0.55);
         const stinger = new THREE.Mesh(stingerGeo, new THREE.MeshStandardMaterial({
-          color: 0x201610,
-          flatShading: true,
-          roughness: 0.6,
+          color: 0x0a0a0a,
+          roughness: 0.4,
         }));
-        stinger.castShadow = true;
         group.add(stinger);
       }
     }
