@@ -1299,16 +1299,15 @@ export const FLORA_BUILDERS = {
     const berryMat = pooled("berrybush.berry.mat", () =>
       new THREE.MeshStandardMaterial({
         color: new THREE.Color(biome.accent),
-        flatShading: true,
-        roughness: 0.55,
+        roughness: 0.62,
       })
     );
-    const berryGeo = pooled("berrybush.berry.geo", () => new THREE.SphereGeometry(0.05, 6, 5));
+    const berryGeo = pooled("berrybush.berry.geo", () => new THREE.SphereGeometry(0.05, 12, 8));
     const berries = 4 + Math.floor(Math.random() * 4);
     // Bush is an ellipsoid at (0, 0.28, 0): xz-radius 0.32, y-scale 0.85.
-    // Place berries on the upper hemisphere of that surface so they hug the
-    // bush instead of floating off the side at small horizontal slices.
-    const R = 0.33;
+    // Sink berry centers just inside the upper hemisphere so the berries read
+    // as attached fruit rather than beads hovering over the faceted canopy.
+    const R = 0.285;
     for (let i = 0; i < berries; i++) {
       const a = Math.random() * Math.PI * 2;
       const elev = 0.2 + Math.random() * 1.1; // [~11°, ~75°] above equator
