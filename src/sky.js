@@ -549,7 +549,8 @@ export function makeCloudSwirl(biome) {
 }
 
 function makeGrassAuraLineSegments(radius, innerRadius, outerRadius, aura, colors) {
-  const count = (LOWFX ? 1100 : 3200) * 1000;
+  const lineDensity = Math.max(0, aura.lineDensity ?? 1);
+  const count = Math.round((LOWFX ? 1100 : 3200) * 1000 * lineDensity);
   const positions = new Float32Array(count * 2 * 3);
   const tipFactors = new Float32Array(count * 2);
   const seeds = new Float32Array(count * 2);
@@ -794,7 +795,7 @@ export function makeIslandEdgeMist(biome) {
     group.userData.inspect = { category: "atmosphere", variant: group.name };
     group.position.set(center.cx, 0, center.cz);
     mesh.position.y = aura.y ?? 0.26;
-    group.add(mesh);
+    if (aura.ground !== false) group.add(mesh);
     group.add(makeGrassAuraLineSegments(radius, innerRadius, outerRadius, aura, {
       root: colA,
       tip: colB,

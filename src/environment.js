@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import { state, DENSITY_BASE } from "./state.js";
 import { jitterGeo, applyWindSway } from "./util.js";
-import { pickGroundPoint } from "./terrain.js";
+import { applyRoundPlaneClip, pickGroundPoint, roundClipCenter } from "./terrain.js";
 import {
   WILDFLOWER_PALETTES,
   FLOWER_DENSITY,
@@ -903,6 +903,7 @@ export function makeWaterPlane(biome) {
          }`
       );
   };
+  applyRoundPlaneClip(mat, roundClipCenter());
 
   const mesh = new THREE.Mesh(geo, mat);
   // sit a touch below sea level so the underside cone meets the water

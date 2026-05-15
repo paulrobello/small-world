@@ -135,9 +135,9 @@ export function pickLayout() {
 // ─────────────────────────────────────────────────────────────────────────────
 // Terrain mesh
 // ─────────────────────────────────────────────────────────────────────────────
-function roundClipCenter() {
+export function roundClipCenter() {
   const centers = state.currentLayout?.centers ?? [];
-  return centers.find((c) => (c.shape?.kind ?? "round") === "round") ?? null;
+  return centers.find((c) => (c.shape?.kind ?? "round") === "round") ?? centers[0] ?? null;
 }
 
 function patchRoundTerrainClipShader(shader, center) {
@@ -164,9 +164,13 @@ function patchRoundTerrainClipShader(shader, center) {
     );
 }
 
-function applyRoundTerrainClip(mat, center) {
+export function applyRoundPlaneClip(mat, center) {
   if (!center) return;
-  mat.onBeforeCompile = (shader) => patchRoundTerrainClipShader(shader, center);
+  const prev = mat.onBeforeCompile;
+  mat.onBeforeCompile = (shader) => {
+    if (prev) prev(shader);
+    patchRoundTerrainClipShader(shader, center);
+  };
 }
 
 function makeRoundTerrainDepthMaterial(center) {
@@ -259,7 +263,7 @@ export function makeTerrain(biome, heightFn) {
   });
 
   const clipCenter = roundClipCenter();
-  applyRoundTerrainClip(mat, clipCenter);
+  applyRoundPlaneClip(mat, clipCenter);
 
   const mesh = new THREE.Mesh(geo, mat);
   mesh.receiveShadow = true;
