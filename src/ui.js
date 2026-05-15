@@ -49,6 +49,7 @@ const PERSISTED_KEYS = [
   "grassEnabled",
   "grassDensity",
   "grassHeight",
+  "grassEdgeDiscs",
   "grassPanelOpen",
   "terrainSmoothShading",
 ];
@@ -285,6 +286,7 @@ export function initUi({ camera, canvas, controls, renderer }) {
   _followButton = document.getElementById("setting-follow");
   const settingsToggle = document.getElementById("settings-toggle");
   const settingsClose = document.getElementById("settings-close");
+  const settingsResetDefaults = document.getElementById("setting-reset-defaults");
 
   // Hand world.js a release callback so generateWorld() can drop a stale follow.
   setFollowReleaseCallback(() => setFollowTarget(null));
@@ -305,6 +307,10 @@ export function initUi({ camera, canvas, controls, renderer }) {
     setSettingsOpen(opening);
   });
   settingsClose.addEventListener("click", () => setSettingsOpen(false));
+  settingsResetDefaults.addEventListener("click", () => {
+    localStorage.removeItem(SETTINGS_KEY);
+    window.location.reload();
+  });
 
   helpToggle.addEventListener("click", () => {
     const opening = !helpPanel.classList.contains("open");
@@ -666,6 +672,7 @@ export function initUi({ camera, canvas, controls, renderer }) {
   // the per-vertex Y in the grass shader via a uniform.
   const grassDetailsEl = document.getElementById("setting-grass-details");
   const grassEnabledEl = document.getElementById("setting-grass-enabled");
+  const grassEdgeDiscsEl = document.getElementById("setting-grass-edge-discs");
   const grassDensityEl = document.getElementById("setting-grass-density");
   const grassDensityValueEl = document.getElementById("setting-grass-density-value");
   const grassHeightEl = document.getElementById("setting-grass-height");
@@ -703,6 +710,11 @@ export function initUi({ camera, canvas, controls, renderer }) {
   const HEIGHT_BASE = 1.2;
   grassDetailsEl.open = !!state.userSettings.grassPanelOpen;
   grassEnabledEl.checked = state.userSettings.grassEnabled !== false;
+  if (state.userSettings.grassEdgeDiscs === undefined) state.userSettings.grassEdgeDiscs = !LOWFX;
+  if (LOWFX) state.userSettings.grassEdgeDiscs = false;
+  grassEdgeDiscsEl.checked = state.userSettings.grassEdgeDiscs !== false;
+  grassEdgeDiscsEl.disabled = LOWFX;
+  grassEdgeDiscsEl.parentElement.style.opacity = LOWFX ? "0.45" : "";
   grassDensityEl.value = String(
     Math.round(((state.userSettings.grassDensity ?? DENSITY_BASE) / DENSITY_BASE) * 100)
   );
@@ -721,6 +733,10 @@ export function initUi({ camera, canvas, controls, renderer }) {
     state.userSettings.grassEnabled = grassEnabledEl.checked;
     syncGrassSliderEnabledState();
     applyGrassSettings();
+    saveSettings();
+  });
+  grassEdgeDiscsEl.addEventListener("change", () => {
+    state.userSettings.grassEdgeDiscs = LOWFX ? false : grassEdgeDiscsEl.checked;
     saveSettings();
   });
   grassDensityEl.addEventListener("input", () => {

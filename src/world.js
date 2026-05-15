@@ -400,7 +400,7 @@ export function generateWorld(seed) {
   // trunks need a wider sample so the downhill side stays buried on slopes.
   // Anything not listed falls back to FLORA_FOOTPRINT_DEFAULT.
   const FLORA_FOOTPRINT = {
-    tree: 0.28, pine: 0.28, deadtree: 0.22, mushroom: 0.18,
+    tree: 0.28, leafballtree: 0.32, pine: 0.28, deadtree: 0.22, mushroom: 0.18,
     bigmushroom: 0.45, fairyring: 1.15, lantern: 0.18, pillar: 0.30, archstone: 0.55,
     balloontree: 0.22, crystal: 0.30, obsidianshard: 0.28, skull: 0.22,
     berrybush: 0.30, coral: 0.25, braincoral: 0.26, cupcoral: 0.22,
@@ -414,7 +414,7 @@ export function generateWorld(seed) {
   // berrybushes, coral, reeds) are skipped — creatures can step over them
   // visually and adding collision there reads as fussy.
   const OBSTACLE_KINDS = new Set([
-    "tree", "pine", "deadtree", "mushroom", "bigmushroom",
+    "tree", "leafballtree", "pine", "deadtree", "mushroom", "bigmushroom",
     "fairyring", "pillar", "archstone", "balloontree", "crystal",
     "lantern", "obsidianshard", "skull", "lavafissure",
   ]);
@@ -422,7 +422,7 @@ export function generateWorld(seed) {
   // scale=1). Fliers below ground + top * scale must route around the
   // trunk; fliers above that altitude can pass over freely.
   const OBSTACLE_TOP = {
-    tree: 2.3, pine: 2.2, deadtree: 1.8, mushroom: 1.1,
+    tree: 2.3, leafballtree: 2.25, pine: 2.2, deadtree: 1.8, mushroom: 1.1,
     bigmushroom: 2.6, fairyring: 0.9, pillar: 2.8, archstone: 2.6, balloontree: 3.2,
     crystal: 1.6, lantern: 1.7, obsidianshard: 2.2, skull: 1.5,
     lavafissure: 0.16,
@@ -434,7 +434,7 @@ export function generateWorld(seed) {
   // Visual canopy spacing is wider than root/footprint spacing. Trees and
   // big mushrooms can have small trunks but broad crowns/caps, so they need
   // a separate placement radius to prevent silhouettes from intersecting.
-  const CANOPY_SPACING_KINDS = new Set(["tree", "pine", "deadtree", "bigmushroom", "fairyring"]);
+  const CANOPY_SPACING_KINDS = new Set(["tree", "leafballtree", "pine", "deadtree", "bigmushroom", "fairyring"]);
   const CANOPY_SPACING_PAD = 2.8;
   const PLACEMENT_BLOCK_KINDS = new Set(["lavafissure"]);
   const floraPlacementBlocks = [];

@@ -11,7 +11,7 @@ export const BIOMES = [
     fogDensity: 0.011,
     accent: "#f4a261",
     sun: "#fff8e0",
-    flora: ["tree", "tree", "mushroom", "bigmushroom", "berrybush", "fern", "fern", "rock"],
+    flora: ["leafballtree", "leafballtree", "mushroom", "bigmushroom", "berrybush", "fern", "fern", "rock"],
     floraCount: 90,
     particle: "leaf",
     creatureColors: ["#e9c46a", "#f4a261", "#e76f51", "#fff8e0"],
@@ -22,19 +22,6 @@ export const BIOMES = [
       fairyRing: true,
       groundCover: true,
       sporeGlow: true,
-    },
-    edgeAura: {
-      pattern: "grass",
-      colors: ["#2B2812", "#2B2812", "#2B2812"],
-      alpha: 1.0,
-      innerSoft: 2.4,
-      outerSoft: 10.5,
-      inwardOverlap: 2.3,
-      outwardFadeStart: 0.18,
-      y: 0.26,
-      noiseScale: 0.14,
-      streakScale: 34.0,
-      windStrength: 0.85,
     },
     dusk: { sky: "#e6a070", fog: "#c98a64", sun: "#ffb070", ground: "#5d4530" },
     night: { sky: "#0d1a22", fog: "#0a1418", sun: "#7090a8", ground: "#0a1810" },
@@ -389,7 +376,7 @@ export const WILDFLOWER_PALETTES = {
 
 // 0 = no grass field (burnt/volcanic biomes and bare atolls read wrong with grass blades).
 export const GRASS_DENSITY = {
-  verdant: 600, desert:   0, frozen: 240,
+  verdant: 75, desert:   0, frozen: 240,
   marsh:   500, ashen:    0, golden: 750,
   mossy:   650, twilight: 540, coral: 0,
   cloud:     0, grove:   400, obsidian: 0,

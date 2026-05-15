@@ -13,6 +13,31 @@ import { createNoise2D } from "simplex-noise";
 const _params = new URLSearchParams(window.location.search);
 export const INSPECT = _params.get("inspect") === "1";
 
+const INSPECT_VIEW_DIRECTIONS = {
+  default: new THREE.Vector3(1.7, 1.0, 1.7),
+  top: new THREE.Vector3(0.001, 1, 0.001),
+  left: new THREE.Vector3(-1, 0.35, 0),
+  right: new THREE.Vector3(1, 0.35, 0),
+  front: new THREE.Vector3(0, 0.35, 1),
+  back: new THREE.Vector3(0, 0.35, -1),
+  up: new THREE.Vector3(0, -0.32, 1),
+};
+
+function _parseViewName(raw) {
+  return raw && raw in INSPECT_VIEW_DIRECTIONS ? raw : "default";
+}
+
+function _parseVectorParam(raw) {
+  if (!raw) return null;
+  const parts = raw.split(",").map((v) => Number(v.trim()));
+  if (parts.length !== 3 || parts.some((v) => !Number.isFinite(v))) return null;
+  return new THREE.Vector3(parts[0], parts[1], parts[2]);
+}
+
+function _formatVectorParam(v) {
+  return [v.x, v.y, v.z].map((n) => Number(n.toFixed(4))).join(",");
+}
+
 const CREATURE_VARIANTS = [
   { name: "walker",   kind: "creature",    build: (biome) => makeCreature(biome) },
   { name: "flier",    kind: "creature",    build: (biome) => {
@@ -300,7 +325,7 @@ const INSPECT_SCENERY_BUILDERS = {
 const VARIANTS_BY_CATEGORY = {
   creature: CREATURE_VARIANTS,
   flora: [
-    "tree", "pine", "cactus", "mushroom", "fern", "rock", "limestonerock",
+    "tree", "leafballtree", "pine", "cactus", "mushroom", "fern", "rock", "limestonerock",
     "reed", "seaweed", "grass", "beachsucculent", "deadtree", "skull",
     "pillar", "archstone", "crystal", "bigmushroom", "fairyring", "berrybush",
     "lantern", "coral", "braincoral", "cupcoral", "balloontree",
@@ -338,7 +363,11 @@ function _findCategoryIdx(id) {
 //   &biome=<id>                   — biome id from BIOMES (default: first entry)
 //   &variant=<name>               — walker | flier | sleeper | burrower | caterpillar | snail
 //   &seed=<hex|int>               — specimen seed (default: derived from biome+variant)
-//   &paused=1                     — start paused
+//   &view=<name>                  — default | top | left | right | front | back | up
+//   &camera=<x,y,z>&target=<x,y,z> — exact initial camera pose; overrides view when both are valid
+//   &screenshot=1                 — download a PNG after the first framed render
+//   &wind=1                       — enable foliage wind in inspect (default: off)
+//   &paused=0                     — start rotating/animating (default: paused)
 function _findBiomeIdx(id) {
   if (!id) return 0;
   const i = BIOMES.findIndex((b) => b.id === id);
@@ -366,7 +395,18 @@ let _hudEl = null;
 let _stage = null;
 let _inspectCamera = null;
 let _inspectControls = null;
-let _paused = _params.get("paused") === "1";
+let _inspectRenderer = null;
+let _viewName = _parseViewName(_params.get("view"));
+let _cameraOverride = _parseVectorParam(_params.get("camera"));
+let _targetOverride = _parseVectorParam(_params.get("target"));
+if (!_cameraOverride || !_targetOverride) {
+  _cameraOverride = null;
+  _targetOverride = null;
+}
+let _autoScreenshot = _params.get("screenshot") === "1";
+let _autoScreenshotDone = false;
+let _inspectWindEnabled = _params.get("wind") === "1";
+let _paused = _params.get("paused") !== "0";
 // Pending single-frame step. 0 = no step. Positive = forward, negative = back.
 let _stepDt = 0;
 let _frozenT = 0;
@@ -385,11 +425,45 @@ function _syncUrl() {
   sp.set("variant", _currentVariants()[_variantIdx].name);
   const seed = _seedOverride ?? _derivedSeed();
   sp.set("seed", "0x" + seed.toString(16).padStart(4, "0"));
-  if (_paused) sp.set("paused", "1");
+  sp.set("view", _viewName);
+  if (_cameraOverride && _targetOverride) {
+    sp.set("camera", _formatVectorParam(_cameraOverride));
+    sp.set("target", _formatVectorParam(_targetOverride));
+  }
+  if (_autoScreenshot) sp.set("screenshot", "1");
+  if (_inspectWindEnabled) sp.set("wind", "1");
+  sp.set("paused", _paused ? "1" : "0");
   const next = window.location.pathname + "?" + sp.toString();
   if (next !== window.location.pathname + window.location.search) {
     window.history.replaceState(null, "", next);
   }
+}
+
+function applyInspectWindSetting() {
+  state.windUniforms.uFoliageWind.value = _inspectWindEnabled ? 1 : 0;
+}
+
+function downloadInspectScreenshot(renderer = _inspectRenderer) {
+  if (!renderer?.domElement) return;
+  const biomeTag = BIOMES[_biomeIdx].id.replace(/\s+/g, "-");
+  const variantTag = _currentVariants()[_variantIdx].name.replace(/\s+/g, "-");
+  const seed = _seedOverride ?? _derivedSeed();
+  const seedTag = "0x" + seed.toString(16).padStart(4, "0");
+  const url = renderer.domElement.toDataURL("image/png");
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `small-world-inspect-${biomeTag}-${variantTag}-${seedTag}-${_viewName}.png`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+}
+
+function scheduleAutoScreenshot(renderer = _inspectRenderer) {
+  if (!_autoScreenshot || _autoScreenshotDone) return;
+  _autoScreenshotDone = true;
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => downloadInspectScreenshot(renderer));
+  });
 }
 
 function disposeObject(o) {
@@ -502,8 +576,18 @@ function _frameSpecimenInView() {
 
   const camera = _inspectCamera;
   const controls = _inspectControls;
-  const dir = camera.position.clone().sub(controls.target);
-  if (dir.lengthSq() < 0.0001) dir.set(1.7, 1.0, 1.7);
+  if (_cameraOverride && _targetOverride) {
+    camera.position.copy(_cameraOverride);
+    controls.target.copy(_targetOverride);
+    const dist = Math.max(0.35, camera.position.distanceTo(controls.target));
+    controls.minDistance = Math.max(0.35, dist * 0.12);
+    controls.maxDistance = Math.max(6, dist * 3.2);
+    controls.update();
+    return;
+  }
+
+  const dir = INSPECT_VIEW_DIRECTIONS[_viewName].clone();
+  if (dir.lengthSq() < 0.0001) dir.copy(INSPECT_VIEW_DIRECTIONS.default);
   dir.normalize();
 
   const verticalFov = THREE.MathUtils.degToRad(camera.getEffectiveFOV());
@@ -616,6 +700,7 @@ function updateHud() {
   const variant = variants[_variantIdx];
   const category = CATEGORIES[_categoryIdx];
   const pauseTag = _paused ? `<span class="ihud-paused">PAUSED</span>` : "";
+  const windTag = _inspectWindEnabled ? `<span class="ihud-paused">WIND</span>` : "";
   // Reroll has no visible effect for most flora; hide the hint there to
   // avoid implying we'll change something.
   const rerollHint = category === "flora" ? "" : " &nbsp; r reroll";
@@ -627,7 +712,8 @@ function updateHud() {
     `<span class="ihud-sep">·</span>` +
     `<span class="ihud-val">${variant.name}</span>` +
     pauseTag +
-    `<span class="ihud-keys">[/] biome &nbsp; k category &nbsp; ,/. variant${rerollHint} &nbsp; space pause &nbsp; ←/→ step</span>`;
+    windTag +
+    `<span class="ihud-keys">[/] biome &nbsp; k category &nbsp; ,/. variant${rerollHint} &nbsp; w wind &nbsp; s screenshot &nbsp; space pause &nbsp; ←/→ step</span>`;
 }
 
 const _flatHeight = () => 0;
@@ -658,16 +744,24 @@ function stepInspectCaterpillar(c, dt) {
 export function setupInspect(scene, renderer, camera, controls) {
   _inspectCamera = camera;
   _inspectControls = controls;
-  camera.position.set(1.7, 1.0, 1.7);
-  controls.target.set(0, 0.35, 0);
+  _inspectRenderer = renderer;
+  if (_cameraOverride && _targetOverride) {
+    controls.target.copy(_targetOverride);
+    camera.position.copy(_cameraOverride);
+  } else {
+    controls.target.set(0, 0.35, 0);
+    camera.position.copy(controls.target).add(INSPECT_VIEW_DIRECTIONS[_viewName]);
+  }
   controls.minDistance = 0.8;
   controls.maxDistance = 6;
   controls.autoRotate = !_paused;
   controls.autoRotateSpeed = 0.6;
+  controls.minPolarAngle = 0.001;
   controls.maxPolarAngle = Math.PI * 0.9;
   controls.update();
 
   state.heightFn = _flatHeight;
+  applyInspectWindSetting();
 
   buildStage(scene);
 
@@ -707,6 +801,15 @@ export function setupInspect(scene, renderer, camera, controls) {
       // Pick a fresh random seed and keep it so the URL stays reproducible
       _seedOverride = (Math.random() * 0x10000) | 0;
       spawnSpecimen(scene);
+    } else if (e.key === "s" || e.key === "S") {
+      e.preventDefault();
+      downloadInspectScreenshot(renderer);
+    } else if (e.key === "w" || e.key === "W") {
+      e.preventDefault();
+      _inspectWindEnabled = !_inspectWindEnabled;
+      applyInspectWindSetting();
+      updateHud();
+      _syncUrl();
     } else if (e.key === " ") {
       _paused = !_paused;
       _stepDt = 0;
@@ -731,6 +834,7 @@ export function setupInspect(scene, renderer, camera, controls) {
   });
 
   spawnSpecimen(scene);
+  scheduleAutoScreenshot(renderer);
 }
 
 export function stepInspect(dt, t) {

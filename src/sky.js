@@ -650,6 +650,7 @@ export function makeIslandEdgeMist(biome) {
   const aura = biome.edgeAura ?? {};
   const pattern = aura.pattern ?? "mist";
   const isGrassAura = pattern === "grass";
+  if (isGrassAura && (LOWFX || state.userSettings.grassEdgeDiscs === false)) return null;
   const hasExplicitAura = !!biome.edgeAura;
   const roundCenter = centers.find((c) => (c.shape?.kind ?? "round") === "round");
   const center = roundCenter ?? (isGrassAura || hasExplicitAura ? centers[0] : null);

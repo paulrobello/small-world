@@ -69,7 +69,7 @@ camera.position.set(20, 14, 20);
 const controls = new OrbitControls(camera, canvas);
 controls.enableDamping = true;
 controls.dampingFactor = 0.06;
-controls.autoRotate = true;
+controls.autoRotate = false;
 controls.autoRotateSpeed = 0.22;
 controls.minDistance = 14;
 controls.maxDistance = 72;

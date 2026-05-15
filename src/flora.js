@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { state } from "./state.js";
 import { jitterGeo, applyWindSway, TRUNK } from "./util.js";
 import { BLOOM_LAYER } from "./postfx.js";
 
@@ -98,6 +99,117 @@ function pooled(key, factory) {
   return v;
 }
 
+function applyLeafPlateWind(material, strength = 0.16) {
+  const prev = material.onBeforeCompile;
+  material.onBeforeCompile = (shader) => {
+    if (prev) prev(shader);
+    shader.uniforms.uTime = state.windUniforms.uTime;
+    shader.uniforms.uFoliageWind = state.windUniforms.uFoliageWind;
+    shader.uniforms.uLeafPlateWind = { value: strength };
+    shader.vertexShader = shader.vertexShader
+      .replace(
+        "#include <common>",
+        "#include <common>\nuniform float uTime;\nuniform float uFoliageWind;\nuniform float uLeafPlateWind;"
+      )
+      .replace(
+        "#include <begin_vertex>",
+        `#include <begin_vertex>
+        {
+          vec3 leafOrigin = vec3(modelMatrix[3].x, modelMatrix[3].y, modelMatrix[3].z);
+          float phase = leafOrigin.x * 2.1 + leafOrigin.z * 1.6 + leafOrigin.y * 0.7;
+          float tipFlex = smoothstep(-0.04, -0.42, position.y);
+          float gust = sin(uTime * 1.15 + phase) * 0.65 + sin(uTime * 2.05 + phase * 1.37) * 0.35;
+          float flutter = sin(uTime * 3.2 + phase * 1.9 + position.x * 8.0) * 0.45;
+          float wind = uLeafPlateWind * uFoliageWind * tipFlex;
+          transformed.x += (gust * 0.090 + flutter * 0.026) * wind;
+          transformed.y += flutter * 0.018 * wind;
+          transformed.z += (gust * 0.125 + flutter * 0.038) * wind;
+        }`
+      );
+  };
+  material.needsUpdate = true;
+  return material;
+}
+
+function applyLeafPlateGradient(
+  material,
+  { tipLift = 0.10, baseShade = 0.10, veinShade = 0.08, sideShade = 0.10 } = {}
+) {
+  const prev = material.onBeforeCompile;
+  material.onBeforeCompile = (shader) => {
+    if (prev) prev(shader);
+    shader.uniforms.uLeafTipLift = { value: tipLift };
+    shader.uniforms.uLeafBaseShade = { value: baseShade };
+    shader.uniforms.uLeafVeinShade = { value: veinShade };
+    shader.uniforms.uLeafSideShade = { value: sideShade };
+    shader.vertexShader = shader.vertexShader
+      .replace(
+        "#include <common>",
+        `#include <common>
+        varying float vLeafPlateGradient;
+        varying float vLeafPlateVein;
+        varying float vLeafPlateSide;`
+      )
+      .replace(
+        "#include <begin_vertex>",
+        `#include <begin_vertex>
+        vLeafPlateGradient = smoothstep(-0.42, 0.0, position.y);
+        vLeafPlateVein = 1.0 - smoothstep(0.0, 0.035, abs(position.x));
+        vLeafPlateSide = smoothstep(-0.16, 0.16, position.x);`
+      );
+    shader.fragmentShader = shader.fragmentShader
+      .replace(
+        "#include <common>",
+        `#include <common>
+        uniform float uLeafTipLift;
+        uniform float uLeafBaseShade;
+        uniform float uLeafVeinShade;
+        uniform float uLeafSideShade;
+        varying float vLeafPlateGradient;
+        varying float vLeafPlateVein;
+        varying float vLeafPlateSide;`
+      )
+      .replace(
+        "#include <color_fragment>",
+        `#include <color_fragment>
+        diffuseColor.rgb *= 1.0 - uLeafBaseShade * (1.0 - vLeafPlateGradient);
+        diffuseColor.rgb += diffuseColor.rgb * uLeafTipLift * vLeafPlateGradient;
+        diffuseColor.rgb *= 1.0 - uLeafSideShade * (1.0 - vLeafPlateSide);
+        diffuseColor.rgb += diffuseColor.rgb * uLeafSideShade * 0.45 * vLeafPlateSide;
+        diffuseColor.rgb *= 1.0 - uLeafVeinShade * vLeafPlateVein;`
+      );
+  };
+  material.needsUpdate = true;
+  return material;
+}
+
+function applySporeDrift(material, strength = 0.035) {
+  const prev = material.onBeforeCompile;
+  material.onBeforeCompile = (shader) => {
+    if (prev) prev(shader);
+    shader.uniforms.uTime = state.windUniforms.uTime;
+    shader.uniforms.uSporeDrift = { value: strength };
+    shader.vertexShader = shader.vertexShader
+      .replace(
+        "#include <common>",
+        "#include <common>\nuniform float uTime;\nuniform float uSporeDrift;"
+      )
+      .replace(
+        "#include <begin_vertex>",
+        `#include <begin_vertex>
+        {
+          vec4 wp = modelMatrix * vec4(transformed, 1.0);
+          float phase = wp.x * 0.72 + wp.z * 0.57;
+          transformed.x += sin(uTime * 1.1 + phase) * uSporeDrift;
+          transformed.y += sin(uTime * 1.6 + phase * 1.3) * uSporeDrift * 0.85;
+          transformed.z += cos(uTime * 1.0 + phase * 0.8) * uSporeDrift;
+        }`
+      );
+  };
+  material.needsUpdate = true;
+  return material;
+}
+
 function addGroveMushroomFamily(group, biome, { radius = 0.44, count = 3, capY = 0.35 } = {}) {
   if (!biome.groveDetails?.mushroomFamilies) return;
   const stemGeo = pooled("grove.babyMushroom.stem.geo", () =>
@@ -139,16 +251,16 @@ function addGroveMushroomFamily(group, biome, { radius = 0.44, count = 3, capY =
   }
 
   if (!biome.groveDetails?.sporeGlow) return;
-  const sporeGeo = pooled("grove.spore.geo", () => new THREE.SphereGeometry(0.026, 6, 5));
+  const sporeGeo = pooled("grove.spore.geo", () => new THREE.SphereGeometry(0.0195, 6, 5));
   const sporeMat = pooled("grove.spore.mat", () => {
     const color = new THREE.Color("#ffc36b");
-    return new THREE.MeshStandardMaterial({
+    return applySporeDrift(new THREE.MeshStandardMaterial({
       color,
-      emissive: color.clone().multiplyScalar(1.6),
-      emissiveIntensity: 1.3,
+      emissive: color.clone().multiplyScalar(1.35),
+      emissiveIntensity: 1.05,
       flatShading: true,
       roughness: 0.45,
-    });
+    }));
   });
   const spores = 3 + Math.floor(Math.random() * 4);
   for (let i = 0; i < spores; i++) {
@@ -196,6 +308,196 @@ export const FLORA_BUILDERS = {
     const leaves = new THREE.Mesh(leafGeo, leafMat);
     leaves.castShadow = true;
     g.add(leaves);
+    return g;
+  },
+
+  leafballtree(biome) {
+    const g = new THREE.Group();
+    const trunkMat = pooled("leafballtree.trunk.mat", () =>
+      new THREE.MeshStandardMaterial({
+        color: new THREE.Color(TRUNK).lerp(new THREE.Color("#c38b45"), 0.52),
+        flatShading: true,
+        roughness: 0.95,
+      })
+    );
+    const trunkGeo = pooled("leafballtree.trunk.geo", () => {
+      const geo = new THREE.CylinderGeometry(0.12, 0.24, 1.45, 8, 6).translate(0, 0.725, 0);
+      const pos = geo.attributes.position;
+      for (let i = 0; i < pos.count; i++) {
+        const y = pos.getY(i);
+        const t = y / 1.45;
+        const bend = Math.sin(t * Math.PI) * 0.07;
+        const taperTwist = Math.sin(t * Math.PI * 2.2) * 0.026;
+        pos.setX(i, pos.getX(i) + bend);
+        pos.setZ(i, pos.getZ(i) + taperTwist);
+      }
+      geo.computeVertexNormals();
+      return geo;
+    });
+    const trunk = new THREE.Mesh(trunkGeo, trunkMat);
+    trunk.castShadow = true;
+    g.add(trunk);
+
+    const leafMats = [
+      pooled("leafballtree.leaf.mat.shadow", () =>
+        applyLeafPlateWind(
+          applyLeafPlateGradient(
+            new THREE.MeshStandardMaterial({
+              color: new THREE.Color(biome.ground[0]).lerp(new THREE.Color("#1d4f29"), 0.30),
+              side: THREE.DoubleSide,
+              flatShading: true,
+              roughness: 0.82,
+            }),
+            { tipLift: 0.08, baseShade: 0.12, veinShade: 0.06, sideShade: 0.11 }
+          ),
+          0.10
+        )
+      ),
+      pooled("leafballtree.leaf.mat.mid", () =>
+        applyLeafPlateWind(
+          applyLeafPlateGradient(
+            new THREE.MeshStandardMaterial({
+              color: new THREE.Color(biome.ground[1]).lerp(new THREE.Color("#69b85b"), 0.34),
+              side: THREE.DoubleSide,
+              flatShading: true,
+              roughness: 0.78,
+            }),
+            { tipLift: 0.10, baseShade: 0.10, veinShade: 0.07, sideShade: 0.12 }
+          ),
+          0.13
+        )
+      ),
+      pooled("leafballtree.leaf.mat.light", () =>
+        applyLeafPlateWind(
+          applyLeafPlateGradient(
+            new THREE.MeshStandardMaterial({
+              color: new THREE.Color(biome.ground[1]).lerp(new THREE.Color("#64ad58"), 0.18),
+              side: THREE.DoubleSide,
+              flatShading: true,
+              roughness: 0.82,
+            }),
+            { tipLift: 0.045, baseShade: 0.08, veinShade: 0.055, sideShade: 0.10 }
+          ),
+          0.12
+        )
+      ),
+    ];
+    const leafGeo = pooled("leafballtree.leaf.geo", () => {
+      // Curved, anchored leaf. Local y=0 is the upper attachment point and
+      // local -Y is the tip. Local +Z bows outward, so upper-row tips sit in
+      // front of lower-row bases like overlapping shingles instead of coplanar
+      // cards fighting for depth.
+      const lengthSegs = 7;
+      const widthSegs = 4;
+      const positions = [];
+      const uvs = [];
+      const indices = [];
+      for (let iy = 0; iy <= lengthSegs; iy++) {
+        const v = iy / lengthSegs;
+        const halfWidth = Math.max(0.006, 0.165 * Math.sin(Math.PI * v) ** 0.72 * (1 - v * 0.16));
+        for (let ix = 0; ix <= widthSegs; ix++) {
+          const u = ix / widthSegs;
+          const side = u * 2 - 1;
+          const centerLift = (1 - Math.abs(side)) * 0.010 * (1 - v * 0.35);
+          const tipCurl = 0.060 * v ** 1.45;
+          const edgeCurl = -Math.abs(side) * 0.010 * Math.sin(Math.PI * v);
+          positions.push(side * halfWidth, -v * 0.42, tipCurl + centerLift + edgeCurl);
+          uvs.push(u, v);
+        }
+      }
+      for (let iy = 0; iy < lengthSegs; iy++) {
+        for (let ix = 0; ix < widthSegs; ix++) {
+          const a = iy * (widthSegs + 1) + ix;
+          const b = a + 1;
+          const c = a + widthSegs + 1;
+          const d = c + 1;
+          indices.push(a, c, b, b, c, d);
+        }
+      }
+      const geo = new THREE.BufferGeometry();
+      geo.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
+      geo.setAttribute("uv", new THREE.Float32BufferAttribute(uvs, 2));
+      geo.setIndex(indices);
+      geo.computeVertexNormals();
+      return geo;
+    });
+
+    const canopyCenter = new THREE.Vector3(0, 1.46, 0);
+    const canopyRadius = new THREE.Vector3(0.88, 0.68, 0.88);
+    const up = new THREE.Vector3(0, 1, 0);
+    const basis = new THREE.Matrix4();
+    const orientLeaf = (leaf, normal, shingleLift = 0.10) => {
+      const tangentDown = up.clone().sub(normal.clone().multiplyScalar(up.dot(normal)));
+      if (tangentDown.lengthSq() < 0.0001) tangentDown.set(0, 0, 1);
+      tangentDown.normalize().multiplyScalar(-1);
+      // Point each teardrop down the dome, then tip its face slightly outward.
+      // That shingle lift gives rows visible overlap without leaf planes
+      // slicing through each other like a flat shell.
+      const faceNormal = normal.clone().addScaledVector(tangentDown, shingleLift).normalize();
+      // ShapeGeometry leaf tip is local -Y; map local -Y to tangentDown so
+      // upper leaves point down over lower leaves, not underneath them.
+      const yAxis = tangentDown.clone().multiplyScalar(-1);
+      const xAxis = yAxis.clone().cross(faceNormal).normalize();
+      basis.makeBasis(xAxis, yAxis, faceNormal);
+      leaf.quaternion.setFromRotationMatrix(basis);
+    };
+
+    const rowCounts = [8, 14, 17, 20, 24, 24, 21, 17, 13, 9, 6];
+    const addLeafRing = ({ count, phi, shell = 1, scale = 0.8, mat = leafMats[1], phase = 0, lift = 0.12, yOffset = 0 }) => {
+      for (let i = 0; i < count; i++) {
+        const a = (i / count) * Math.PI * 2 + phase + (Math.random() - 0.5) * 0.04;
+        const normal = new THREE.Vector3(
+          Math.sin(phi) * Math.cos(a),
+          Math.cos(phi),
+          Math.sin(phi) * Math.sin(a)
+        ).normalize();
+        const leaf = new THREE.Mesh(leafGeo, mat);
+        leaf.position.set(
+          canopyCenter.x + normal.x * canopyRadius.x * shell,
+          canopyCenter.y + normal.y * canopyRadius.y * shell + yOffset,
+          canopyCenter.z + normal.z * canopyRadius.z * shell
+        );
+        orientLeaf(leaf, normal, lift);
+        leaf.rotateX(0.02 + lift * 0.18);
+        leaf.rotateZ((Math.random() - 0.5) * 0.08);
+        const s = scale * (0.92 + Math.random() * 0.16);
+        leaf.scale.set(s * 0.94, s * 1.18, s);
+        leaf.castShadow = true;
+        g.add(leaf);
+      }
+    };
+
+    addLeafRing({ count: 7, phi: 0.07, shell: 0.54, scale: 0.72, mat: leafMats[1], phase: 0.18, lift: 0.32, yOffset: 0.40 });
+    for (let row = 0; row < rowCounts.length; row++) {
+      const t = row / (rowCounts.length - 1);
+      const phi = 0.18 + t * 2.50;
+      const rowScale = 0.76 + Math.sin((1 - t) * Math.PI * 0.5) * 0.16;
+      const mat = leafMats[row === 0 ? 2 : row > 5 ? 0 : 1];
+      addLeafRing({
+        count: rowCounts[row],
+        phi,
+        shell: 1.09 - t * 0.15 + (Math.random() - 0.5) * 0.01,
+        scale: rowScale,
+        mat,
+        phase: (row % 2) * (Math.PI / rowCounts[row]),
+        lift: 0.22 - t * 0.10,
+      });
+    }
+
+    const branchGeo = pooled("leafballtree.branch.geo", () => new THREE.CylinderGeometry(0.045, 0.075, 1, 6));
+    const yAxis = new THREE.Vector3(0, 1, 0);
+    for (let i = 0; i < 5; i++) {
+      const a = (i / 5) * Math.PI * 2 + 0.24;
+      const start = new THREE.Vector3(0.03 * Math.cos(a), 1.10 + i * 0.025, 0.03 * Math.sin(a));
+      const end = new THREE.Vector3(Math.cos(a) * 0.46, 1.34 + (i % 2) * 0.10, Math.sin(a) * 0.46);
+      const delta = end.clone().sub(start);
+      const branch = new THREE.Mesh(branchGeo, trunkMat);
+      branch.position.copy(start).add(end).multiplyScalar(0.5);
+      branch.quaternion.setFromUnitVectors(yAxis, delta.clone().normalize());
+      branch.scale.set(1, delta.length(), 1);
+      branch.castShadow = true;
+      g.add(branch);
+    }
     return g;
   },
 
@@ -890,15 +1192,15 @@ export const FLORA_BUILDERS = {
     }
 
     if (biome.groveDetails?.sporeGlow) {
-      const sporeGeo = new THREE.SphereGeometry(0.032, 6, 5);
+      const sporeGeo = new THREE.SphereGeometry(0.024, 6, 5);
       const glow = new THREE.Color("#ffc36b");
-      const sporeMat = new THREE.MeshStandardMaterial({
+      const sporeMat = applySporeDrift(new THREE.MeshStandardMaterial({
         color: glow,
-        emissive: glow.clone().multiplyScalar(1.8),
-        emissiveIntensity: 1.4,
+        emissive: glow.clone().multiplyScalar(1.45),
+        emissiveIntensity: 1.1,
         flatShading: true,
         roughness: 0.35,
-      });
+      }), 0.045);
       for (let i = 0; i < 8; i++) {
         const a = Math.random() * Math.PI * 2;
         const r = 0.35 + Math.random() * 0.82;
@@ -1149,33 +1451,63 @@ export const FLORA_BUILDERS = {
   balloontree(biome) {
     const g = new THREE.Group();
     const trunkH = 1.1 + Math.random() * 0.5;
-    const trunkMat = pooled("balloontree.trunk.mat", () =>
-      new THREE.MeshStandardMaterial({
-        color: new THREE.Color(biome.cliff).offsetHSL(0, 0, 0.15),
-        flatShading: true,
-        roughness: 1,
-      })
-    );
+    const trunkMat = biome.cloudlike
+      ? pooled("balloontree.trunk.cloud.mat", () =>
+        new THREE.MeshStandardMaterial({
+          color: new THREE.Color("#e1e8f8"),
+          flatShading: false,
+          roughness: 0.88,
+        })
+      )
+      : pooled("balloontree.trunk.mat", () =>
+        new THREE.MeshStandardMaterial({
+          color: new THREE.Color(biome.cliff).offsetHSL(0, 0, 0.15),
+          flatShading: true,
+          roughness: 1,
+        })
+      );
+    const trunkTopR = biome.cloudlike ? 0.032 : 0.07;
+    const trunkBaseR = biome.cloudlike ? 0.052 : 0.1;
+    const trunkSegments = biome.cloudlike ? 8 : 6;
     const trunk = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.07, 0.1, trunkH, 6),
+      new THREE.CylinderGeometry(trunkTopR, trunkBaseR, trunkH, trunkSegments),
       trunkMat
     );
     trunk.position.y = trunkH / 2;
     trunk.castShadow = true;
     g.add(trunk);
+    if (biome.cloudlike) {
+      const ribbonMat = pooled("balloontree.trunk.ribbon.cloud.mat", () =>
+        new THREE.MeshBasicMaterial({
+          color: new THREE.Color("#f7fbff"),
+          transparent: true,
+          opacity: 0.58,
+          depthWrite: false,
+        })
+      );
+      for (const side of [-1, 1]) {
+        const ribbon = new THREE.Mesh(
+          new THREE.PlaneGeometry(0.012, trunkH * 0.94, 1, 3),
+          ribbonMat
+        );
+        ribbon.position.set(side * trunkTopR * 0.72, trunkH * 0.52, 0.002);
+        ribbon.rotation.y = side * 0.18;
+        g.add(ribbon);
+      }
+    }
     const puffMat = pooled("balloontree.puff.mat", () =>
       applyWindSway(
         new THREE.MeshStandardMaterial({
           color: new THREE.Color(biome.ground[2]).lerp(new THREE.Color("#ffffff"), 0.6),
-          flatShading: true,
+          flatShading: false,
           roughness: 0.95,
         }),
         0.3
       )
     );
-    const puffs = 4 + Math.floor(Math.random() * 3);
+    const puffs = biome.cloudlike ? 7 + Math.floor(Math.random() * 4) : 4 + Math.floor(Math.random() * 3);
     for (let i = 0; i < puffs; i++) {
-      const r = 0.32 + Math.random() * 0.18;
+      const r = biome.cloudlike ? 0.22 + Math.random() * 0.34 : 0.32 + Math.random() * 0.18;
       const puff = new THREE.Mesh(
         jitterGeo(new THREE.IcosahedronGeometry(r, 1), r * 0.12),
         puffMat
@@ -1198,6 +1530,23 @@ export const FLORA_BUILDERS = {
     crown.position.y = trunkH + 0.5;
     crown.castShadow = true;
     g.add(crown);
+    const satellitePuffs = biome.cloudlike ? 5 + Math.floor(Math.random() * 4) : 0;
+    for (let i = 0; i < satellitePuffs; i++) {
+      const r = 0.12 + Math.random() * 0.12;
+      const puff = new THREE.Mesh(
+        jitterGeo(new THREE.IcosahedronGeometry(r, 1), r * 0.10),
+        puffMat
+      );
+      const a = Math.random() * Math.PI * 2;
+      const ring = 0.34 + Math.random() * 0.22;
+      puff.position.set(
+        Math.cos(a) * ring,
+        trunkH + 0.32 + Math.random() * 0.46,
+        Math.sin(a) * ring
+      );
+      puff.castShadow = true;
+      g.add(puff);
+    }
     return g;
   },
 
