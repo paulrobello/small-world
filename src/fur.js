@@ -126,7 +126,6 @@ export function applyShellFur(body, biome, opts = {}) {
 
   sharedFurUniforms.uLayers.value = Math.max(sharedFurUniforms.uLayers.value, layers);
 
-  const hasVertexColor = !!(body.geometry && body.geometry.attributes && body.geometry.attributes.color);
   const template = makeFurTemplate(baseColor, tipColor, furLength, hasVertexColor);
   const shells = [];
   for (let i = 1; i <= layers; i++) {
