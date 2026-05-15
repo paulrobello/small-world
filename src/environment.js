@@ -494,17 +494,19 @@ export function stepDirtPuffs(puffs, dt) {
 // ─── footstep dust kicks ───
 const KICK_PARTICLES = 4;
 const KICK_LIFE = 0.5;
-export function makeDustKick(x, y, z, baseColor) {
-  const positions = new Float32Array(KICK_PARTICLES * 3);
-  const velocities = new Float32Array(KICK_PARTICLES * 3);
-  for (let i = 0; i < KICK_PARTICLES; i++) {
+export function makeDustKick(x, y, z, baseColor, opts = {}) {
+  const count = opts.count ?? KICK_PARTICLES;
+  const positions = new Float32Array(count * 3);
+  const velocities = new Float32Array(count * 3);
+  const velocityScale = opts.velocityScale ?? 1;
+  for (let i = 0; i < count; i++) {
     positions[i * 3 + 0] = x;
     positions[i * 3 + 1] = y + 0.02;
     positions[i * 3 + 2] = z;
     const ang = Math.random() * Math.PI * 2;
-    const sp = 0.4 + Math.random() * 0.5;
+    const sp = (0.4 + Math.random() * 0.5) * velocityScale;
     velocities[i * 3 + 0] = Math.cos(ang) * sp;
-    velocities[i * 3 + 1] = 0.5 + Math.random() * 0.4;
+    velocities[i * 3 + 1] = (0.5 + Math.random() * 0.4) * velocityScale;
     velocities[i * 3 + 2] = Math.sin(ang) * sp;
   }
   const geo = new THREE.BufferGeometry();
@@ -513,14 +515,21 @@ export function makeDustKick(x, y, z, baseColor) {
   geo.setAttribute("position", posAttr);
   const mat = new THREE.PointsMaterial({
     color: new THREE.Color(baseColor).offsetHSL(0, -0.1, 0.12),
-    size: 0.08,
+    size: opts.size ?? 0.08,
     transparent: true,
-    opacity: 0.7,
+    opacity: opts.opacity ?? 0.7,
     depthWrite: false,
     sizeAttenuation: true,
   });
   const points = new THREE.Points(geo, mat);
-  points.userData = { velocities, age: 0 };
+  points.userData = {
+    velocities,
+    age: 0,
+    count,
+    life: opts.life ?? KICK_LIFE,
+    opacity: opts.opacity ?? 0.7,
+    poof: opts.poof ?? false,
+  };
   return points;
 }
 
@@ -532,7 +541,8 @@ export function stepDustKicks(kicks, dt) {
     d.age += dt;
     const pos = kick.geometry.attributes.position.array;
     const v = d.velocities;
-    for (let i = 0; i < KICK_PARTICLES; i++) {
+    const count = d.count ?? KICK_PARTICLES;
+    for (let i = 0; i < count; i++) {
       const ix = i * 3;
       pos[ix + 0] += v[ix + 0] * dt;
       pos[ix + 1] += v[ix + 1] * dt;
@@ -542,14 +552,180 @@ export function stepDustKicks(kicks, dt) {
       v[ix + 2] *= 0.9;
     }
     kick.geometry.attributes.position.needsUpdate = true;
-    kick.material.opacity = Math.max(0, 0.7 * (1 - d.age / KICK_LIFE));
-    if (d.age >= KICK_LIFE) {
+    const life = d.life ?? KICK_LIFE;
+    const opacity = d.opacity ?? 0.7;
+    kick.material.opacity = Math.max(0, opacity * (1 - d.age / life));
+    if (d.age >= life) {
       if (kick.parent) kick.parent.remove(kick);
       kick.geometry.dispose();
       kick.material.dispose();
       kicks.splice(p, 1);
     }
   }
+}
+
+// ─── soft-ground creature marks ───
+const GROUND_MARK_LIFT = 0.035;
+const GROUND_MARK_MIN_Y = 0.04;
+const GROUND_MARK_CAP = LOWFX ? 80 : 240;
+
+const _groundMarkVS = `
+attribute float aAlpha;
+varying vec2 vUv;
+varying float vAlpha;
+void main() {
+  vUv = uv;
+  vAlpha = aAlpha;
+  vec4 worldPosition = modelMatrix * instanceMatrix * vec4(position, 1.0);
+  gl_Position = projectionMatrix * viewMatrix * worldPosition;
+}
+`;
+
+const _groundMarkFS = `
+precision highp float;
+uniform vec3 uColor;
+varying vec2 vUv;
+varying float vAlpha;
+void main() {
+  vec2 p = vUv - 0.5;
+  float d = length(vec2(p.x * 0.82, p.y * 1.18));
+  float oval = smoothstep(0.5, 0.18, d);
+  float center = smoothstep(0.36, 0.04, d);
+  float alpha = oval * (0.72 + center * 0.28) * vAlpha;
+  if (alpha <= 0.005) discard;
+  gl_FragColor = vec4(uColor, alpha);
+}
+`;
+
+const _markM = new THREE.Matrix4();
+const _markQ = new THREE.Quaternion();
+const _markP = new THREE.Vector3();
+const _markS = new THREE.Vector3();
+const _markHiddenScale = new THREE.Vector3(0, 0, 0);
+const _markUp = new THREE.Vector3(0, 1, 0);
+
+function _hideGroundMark(system, i) {
+  const d = system.userData;
+  d.active[i] = 0;
+  d.alphas[i] = 0;
+  _markP.set(0, -999, 0);
+  _markQ.identity();
+  _markM.compose(_markP, _markQ, _markHiddenScale);
+  system.setMatrixAt(i, _markM);
+}
+
+function _writeGroundMark(system, i, alphaScale) {
+  const d = system.userData;
+  const y = d.ys[i] + GROUND_MARK_LIFT;
+  _markP.set(d.xs[i], y, d.zs[i]);
+  _markQ.setFromAxisAngle(_markUp, d.headings[i]);
+  _markS.set(d.widths[i], 1, d.lengths[i]);
+  _markM.compose(_markP, _markQ, _markS);
+  system.setMatrixAt(i, _markM);
+  d.alphas[i] = d.opacities[i] * alphaScale;
+}
+
+export function makeGroundMarks(biome) {
+  const cfg = biome.groundMarks;
+  if (!cfg) return null;
+
+  const capacity = Math.max(1, Math.round(cfg.capacity ?? GROUND_MARK_CAP));
+  const geo = new THREE.PlaneGeometry(1, 1, 1, 1).rotateX(-Math.PI / 2);
+  const alphas = new Float32Array(capacity);
+  geo.setAttribute("aAlpha", new THREE.InstancedBufferAttribute(alphas, 1));
+
+  const mat = new THREE.ShaderMaterial({
+    uniforms: {
+      uColor: { value: new THREE.Color(cfg.color) },
+    },
+    vertexShader: _groundMarkVS,
+    fragmentShader: _groundMarkFS,
+    transparent: true,
+    depthWrite: false,
+    depthTest: true,
+    polygonOffset: true,
+    polygonOffsetFactor: -1,
+    polygonOffsetUnits: -1,
+  });
+
+  const mesh = new THREE.InstancedMesh(geo, mat, capacity);
+  mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+  mesh.frustumCulled = false;
+  mesh.renderOrder = 3;
+  mesh.userData = {
+    capacity,
+    cursor: 0,
+    active: new Uint8Array(capacity),
+    xs: new Float32Array(capacity),
+    ys: new Float32Array(capacity),
+    zs: new Float32Array(capacity),
+    headings: new Float32Array(capacity),
+    widths: new Float32Array(capacity),
+    lengths: new Float32Array(capacity),
+    ages: new Float32Array(capacity),
+    lifes: new Float32Array(capacity),
+    opacities: new Float32Array(capacity),
+    alphas,
+    alphaAttr: geo.getAttribute("aAlpha"),
+    cfg,
+  };
+
+  for (let i = 0; i < capacity; i++) _hideGroundMark(mesh, i);
+  mesh.instanceMatrix.needsUpdate = true;
+  mesh.userData.alphaAttr.needsUpdate = true;
+  return mesh;
+}
+
+export function emitGroundMark(system, opts = {}) {
+  if (!system || !system.userData) return;
+  const d = system.userData;
+  const x = opts.x;
+  const z = opts.z;
+  const y = opts.y ?? (state.heightFn ? state.heightFn(x, z) : 0);
+  if (!Number.isFinite(x) || !Number.isFinite(y) || !Number.isFinite(z)) return;
+  if (state.waterMesh && y < GROUND_MARK_MIN_Y) return;
+
+  const softness = d.cfg.softness ?? 1;
+  const i = d.cursor;
+  d.cursor = (d.cursor + 1) % d.capacity;
+  d.active[i] = 1;
+  d.xs[i] = x;
+  d.ys[i] = y;
+  d.zs[i] = z;
+  d.headings[i] = opts.heading ?? 0;
+  d.widths[i] = Math.max(0.01, (opts.width ?? 0.18) * softness);
+  d.lengths[i] = Math.max(0.01, (opts.length ?? 0.32) * softness);
+  d.ages[i] = 0;
+  d.lifes[i] = opts.life ?? d.cfg.life ?? 6;
+  d.opacities[i] = opts.opacity ?? d.cfg.opacity ?? 0.2;
+  _writeGroundMark(system, i, 1);
+  system.instanceMatrix.needsUpdate = true;
+  d.alphaAttr.needsUpdate = true;
+}
+
+export function stepGroundMarks(system, dt, heightFn) {
+  if (!system || !system.userData || dt <= 0) return;
+  const d = system.userData;
+  let matrixDirty = false;
+  let alphaDirty = false;
+  for (let i = 0; i < d.capacity; i++) {
+    if (!d.active[i]) continue;
+    d.ages[i] += dt;
+    if (d.ages[i] >= d.lifes[i]) {
+      _hideGroundMark(system, i);
+      matrixDirty = true;
+      alphaDirty = true;
+      continue;
+    }
+    if (heightFn) d.ys[i] = heightFn(d.xs[i], d.zs[i]);
+    const u = d.ages[i] / Math.max(0.001, d.lifes[i]);
+    const fade = 1 - u * u * (3 - 2 * u);
+    _writeGroundMark(system, i, fade);
+    matrixDirty = true;
+    alphaDirty = true;
+  }
+  if (matrixDirty) system.instanceMatrix.needsUpdate = true;
+  if (alphaDirty) d.alphaAttr.needsUpdate = true;
 }
 
 // ─── fly swarms (dark specks hovering over a fixed prop) ───

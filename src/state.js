@@ -45,6 +45,7 @@ export const state = {
   waterReflection: null,
   mountainBasePos: null,
   dustKicks: [],
+  groundMarks: null,
   // Collision discs for tall/solid flora. Populated in generateWorld during the
   // flora placement loop; consumed by stepCreature / stepCaterpillar for
   // tangent-slide obstacle avoidance. Entries: { x, z, r, top }. Empty array

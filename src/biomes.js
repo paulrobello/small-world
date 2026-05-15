@@ -18,6 +18,7 @@ export const BIOMES = [
     creatureCount: [10, 16],
     furProbability: 1.0,
     furLength: 0.075,
+    groundMarks: { color: "#20341f", opacity: 0.16, life: 5.5, softness: 1.15 },
     groveDetails: {
       mushroomFamilies: true,
       fairyRing: true,
@@ -47,6 +48,7 @@ export const BIOMES = [
     // Butterflies read as out-of-place over the dunes — the desert gets fly
     // swarms over skulls instead, set up during flora placement.
     noButterflies: true,
+    groundMarks: { color: "#5f2424", opacity: 0.34, life: 7.0, softness: 1.1, poof: "sand" },
     dusk: { sky: "#e07a4c", fog: "#b85a3a", sun: "#ff8050", ground: "#5e2828" },
     night: { sky: "#160a18", fog: "#0d0716", sun: "#7068a8", ground: "#1a0a0e" },
   },
@@ -68,6 +70,7 @@ export const BIOMES = [
     creatureColors: ["#1d3557", "#457b9d", "#a8dadc", "#f1faee"],
     creatureCount: [8, 13],
     furProbability: 0.85,
+    groundMarks: { color: "#5d6d78", opacity: 0.14, life: 6.0, softness: 1.25 },
     dusk: { sky: "#a6b0d0", fog: "#8a98b6", sun: "#d8c8e8", ground: "#3a4258" },
     night: { sky: "#0a1024", fog: "#070b1e", sun: "#a0b0d8", ground: "#0a0e1a" },
   },
@@ -151,6 +154,7 @@ export const BIOMES = [
     creatureColors: ["#283618", "#606c38", "#bc6c25", "#fefae0"],
     creatureCount: [10, 15],
     furProbability: 0.15,
+    groundMarks: { color: "#704218", opacity: 0.22, life: 6.2, softness: 1.0 },
     edgeAura: {
       pattern: "grass",
       colors: ["#743D15", "#743D15", "#743D15"],
@@ -185,6 +189,7 @@ export const BIOMES = [
     creatureColors: ["#a3b18a", "#cdef8f", "#7bb074", "#f6ffe0"],
     creatureCount: [8, 13],
     furProbability: 0.70,
+    groundMarks: { color: "#1f2d16", opacity: 0.18, life: 5.8, softness: 1.2 },
     edgeAura: {
       pattern: "grass",
       colors: ["#263216", "#263216", "#263216"],
@@ -218,6 +223,7 @@ export const BIOMES = [
     particle: "firefly",
     creatureColors: ["#ffd97a", "#ffb070", "#c9a8e8", "#fff2b3"],
     creatureCount: [10, 15],
+    groundMarks: { color: "#171d48", opacity: 0.16, life: 5.5, softness: 1.15 },
     furProbability: 0.45,
     glowFlowers: true,
     edgeAura: {
@@ -316,6 +322,7 @@ export const BIOMES = [
     particle: "pollen",
     creatureColors: ["#ff90c0", "#fff2b3", "#9c84d4", "#ffd1a3"],
     creatureCount: [10, 15],
+    groundMarks: { color: "#263016", opacity: 0.17, life: 5.8, softness: 1.2 },
     furProbability: 0.55,
     dusk: { sky: "#9a7ab0", fog: "#7a5e90", sun: "#ffb0e0", ground: "#2a253a" },
     night: { sky: "#08081e", fog: "#04041a", sun: "#c890d8", ground: "#08060e" },
