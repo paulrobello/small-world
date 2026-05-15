@@ -110,12 +110,19 @@ export function applyShellFur(body, biome, opts = {}) {
   // smaller windows, so skipping fur entirely made the two modes disagree.
   const layers = opts.layers ?? (LOWFX ? 4 : 8);
   const furLength = opts.length ?? biome.furLength ?? (LOWFX ? 0.082 : 0.072);
+  const hasVertexColor = !!(body.geometry && body.geometry.attributes && body.geometry.attributes.color);
+  // When vertex colors are present, use white as base/tip so the vertex
+  // colors pass through un-darkened (black base would zero out the pattern).
   const baseColor =
-    opts.baseColor ?? (body.material && body.material.color
-      ? body.material.color.clone()
-      : new THREE.Color(0xffffff));
+    opts.baseColor ?? (hasVertexColor
+      ? new THREE.Color(0xffffff)
+      : body.material && body.material.color
+        ? body.material.color.clone()
+        : new THREE.Color(0xffffff));
   const tipColor =
-    opts.tipColor ?? new THREE.Color(biome.furTip ?? biome.accent ?? "#ffffff");
+    opts.tipColor ?? (hasVertexColor
+      ? new THREE.Color(0xffffff)
+      : new THREE.Color(biome.furTip ?? biome.accent ?? "#ffffff"));
 
   sharedFurUniforms.uLayers.value = Math.max(sharedFurUniforms.uLayers.value, layers);
 
