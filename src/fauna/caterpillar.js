@@ -7,7 +7,7 @@ import { BLOOM_LAYER } from "../postfx.js";
 import { WATER_AVOID_Y, avoidObstacles } from "./shared.js";
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Caterpillar — head + 3-6 body spheres, body segments follow head's trail
+// Caterpillar — head + 3-8 body spheres, body segments follow head's trail
 // ─────────────────────────────────────────────────────────────────────────────
 function findTrailPointAt(trail, distance) {
   if (trail.length === 0) return null;
@@ -50,7 +50,7 @@ export function makeCaterpillar(biome, opts = {}) {
   const altCol = baseCol.clone().offsetHSL(0, 0.05, 0.12);
 
   const segments = [];
-  const segCount = isSnail ? 2 : 3 + Math.floor(Math.random() * 4); // snails: short body
+  const segCount = isSnail ? 2 : 3 + Math.floor(Math.random() * 6); // snails: short body
   // uniform radius for head + every body segment — keeps them touching
   const segRadius = isSnail ? 0.24 : 0.28;
 

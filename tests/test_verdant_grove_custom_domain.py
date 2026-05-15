@@ -70,11 +70,11 @@ class VerdantGroveCustomDomainTest(unittest.TestCase):
         self.assertIn("setting-grass-edge-discs", html)
         self.assertIn("if (isGrassAura && (LOWFX || state.userSettings.grassEdgeDiscs === false)) return null;", sky)
 
-    def test_verdant_grove_grass_density_is_doubled(self) -> None:
+    def test_verdant_grove_grass_density_is_doubled_again(self) -> None:
         biomes = (ROOT / "src" / "biomes.js").read_text()
-        self.assertIn("verdant: 150", biomes)
+        self.assertIn("verdant: 300", biomes)
         self.assertNotIn("verdant: 75", biomes)
-        self.assertNotIn("verdant: 300", biomes)
+        self.assertNotIn("verdant: 150", biomes)
         self.assertNotIn("verdant: 600", biomes)
 
     def test_settings_panel_has_reset_to_defaults_button(self) -> None:
@@ -118,6 +118,8 @@ class VerdantGroveCustomDomainTest(unittest.TestCase):
         self.assertIn("snail.ridge.mat.smooth", caterpillar)
         self.assertIn("new THREE.IcosahedronGeometry(segRadius, 1)", caterpillar)
         self.assertNotIn("new THREE.IcosahedronGeometry(segRadius, 0)", caterpillar)
+        self.assertIn("3 + Math.floor(Math.random() * 6)", caterpillar)
+        self.assertNotIn("3 + Math.floor(Math.random() * 4)", caterpillar)
         self.assertNotIn("caterpillar.head.mat.flat", caterpillar)
         self.assertNotIn("snail.shell.mat.flat", caterpillar)
 
@@ -207,6 +209,20 @@ class VerdantGroveCustomDomainTest(unittest.TestCase):
         self.assertNotIn("leafballtree.leaf.mat.inner", flora)
         self.assertNotIn("inner underside fill", flora)
         self.assertIn("leafballtree.branch.geo", flora)
+
+    def test_leafballtree_leaves_have_subtle_instanced_outlines(self) -> None:
+        flora = (ROOT / "src" / "flora.js").read_text()
+
+        self.assertIn("leafballtree.leaf.outline.geo", flora)
+        self.assertIn("leafballtree.leaf.outline.mat", flora)
+        self.assertIn("pos.setX(i, pos.getX(i) * 1.075)", flora)
+        self.assertIn("pos.setZ(i, pos.getZ(i) - 0.006)", flora)
+        self.assertIn("new THREE.MeshBasicMaterial", flora)
+        self.assertIn("color: \"#102416\"", flora)
+        self.assertIn("polygonOffset: true", flora)
+        self.assertIn("const outline = makeInstancedLeafBatch(leafOutlineGeo, leafOutlineMat, leafBuckets[i])", flora)
+        self.assertIn("outline.renderOrder = -1", flora)
+        self.assertLess(flora.index("const outline = makeInstancedLeafBatch"), flora.index("const leaves = makeInstancedLeafBatch"))
 
     def test_leafballtree_uses_instanced_leaf_batches(self) -> None:
         flora = (ROOT / "src" / "flora.js").read_text()

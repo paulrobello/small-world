@@ -440,6 +440,32 @@ export const FLORA_BUILDERS = {
       geo.computeVertexNormals();
       return geo;
     });
+    const leafOutlineGeo = pooled("leafballtree.leaf.outline.geo", () => {
+      const geo = leafGeo.clone();
+      const pos = geo.attributes.position;
+      for (let i = 0; i < pos.count; i++) {
+        const y = pos.getY(i);
+        pos.setX(i, pos.getX(i) * 1.075);
+        pos.setY(i, y < 0 ? y * 1.04 : y);
+        pos.setZ(i, pos.getZ(i) - 0.006);
+      }
+      pos.needsUpdate = true;
+      geo.computeVertexNormals();
+      return geo;
+    });
+    const leafOutlineMat = pooled("leafballtree.leaf.outline.mat", () =>
+      applyLeafPlateWind(
+        new THREE.MeshBasicMaterial({
+          name: "leafballtree.leaf.outline.mat",
+          color: "#102416",
+          side: THREE.DoubleSide,
+          polygonOffset: true,
+          polygonOffsetFactor: 1,
+          polygonOffsetUnits: 1,
+        }),
+        0.12
+      )
+    );
 
     const canopyCenter = new THREE.Vector3(0, 1.46 + canopyYOffset, 0);
     const canopyRadius = new THREE.Vector3(0.88, 0.68, 0.88);
@@ -506,6 +532,14 @@ export const FLORA_BUILDERS = {
       });
     }
 
+    for (let i = 0; i < leafBuckets.length; i++) {
+      const outline = makeInstancedLeafBatch(leafOutlineGeo, leafOutlineMat, leafBuckets[i]);
+      if (outline) {
+        outline.castShadow = false;
+        outline.renderOrder = -1;
+        g.add(outline);
+      }
+    }
     for (let i = 0; i < leafBuckets.length; i++) {
       const leaves = makeInstancedLeafBatch(leafGeo, leafMats[i], leafBuckets[i]);
       if (leaves) g.add(leaves);
