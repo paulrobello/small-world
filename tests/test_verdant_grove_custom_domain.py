@@ -113,6 +113,17 @@ class VerdantGroveCustomDomainTest(unittest.TestCase):
         self.assertNotIn("inner underside fill", flora)
         self.assertIn("leafballtree.branch.geo", flora)
 
+    def test_leafballtree_uses_instanced_leaf_batches(self) -> None:
+        flora = (ROOT / "src" / "flora.js").read_text()
+
+        self.assertIn("makeInstancedLeafBatch", flora)
+        self.assertIn("new THREE.InstancedMesh(geometry, material, matrices.length)", flora)
+        self.assertIn("leafBuckets", flora)
+        self.assertIn("leafBuckets[matIndex].push(matrix.clone())", flora)
+        self.assertIn("USE_INSTANCING", flora)
+        self.assertIn("modelMatrix * instanceMatrix * vec4(0.0, 0.0, 0.0, 1.0)", flora)
+        self.assertNotIn("const leaf = new THREE.Mesh(leafGeo, mat);", flora)
+
     def test_inspect_supports_initial_view_param_and_default_pause(self) -> None:
         inspect = (ROOT / "src" / "inspect.js").read_text()
         state = (ROOT / "src" / "state.js").read_text()

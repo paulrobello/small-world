@@ -115,7 +115,11 @@ function applyLeafPlateWind(material, strength = 0.16) {
         "#include <begin_vertex>",
         `#include <begin_vertex>
         {
-          vec3 leafOrigin = vec3(modelMatrix[3].x, modelMatrix[3].y, modelMatrix[3].z);
+          #ifdef USE_INSTANCING
+            vec3 leafOrigin = (modelMatrix * instanceMatrix * vec4(0.0, 0.0, 0.0, 1.0)).xyz;
+          #else
+            vec3 leafOrigin = vec3(modelMatrix[3].x, modelMatrix[3].y, modelMatrix[3].z);
+          #endif
           float phase = leafOrigin.x * 2.1 + leafOrigin.z * 1.6 + leafOrigin.y * 0.7;
           float tipFlex = smoothstep(-0.04, -0.42, position.y);
           float gust = sin(uTime * 1.15 + phase) * 0.65 + sin(uTime * 2.05 + phase * 1.37) * 0.35;
@@ -208,6 +212,19 @@ function applySporeDrift(material, strength = 0.035) {
   };
   material.needsUpdate = true;
   return material;
+}
+
+function makeInstancedLeafBatch(geometry, material, matrices) {
+  if (!matrices.length) return null;
+  const mesh = new THREE.InstancedMesh(geometry, material, matrices.length);
+  for (let i = 0; i < matrices.length; i++) {
+    mesh.setMatrixAt(i, matrices[i]);
+  }
+  mesh.instanceMatrix.setUsage(THREE.StaticDrawUsage);
+  mesh.instanceMatrix.needsUpdate = true;
+  mesh.castShadow = true;
+  mesh.computeBoundingSphere();
+  return mesh;
 }
 
 function addGroveMushroomFamily(group, biome, { radius = 0.44, count = 3, capY = 0.35 } = {}) {
@@ -426,6 +443,9 @@ export const FLORA_BUILDERS = {
     const canopyRadius = new THREE.Vector3(0.88, 0.68, 0.88);
     const up = new THREE.Vector3(0, 1, 0);
     const basis = new THREE.Matrix4();
+    const leafBuckets = leafMats.map(() => []);
+    const matrix = new THREE.Matrix4();
+    const scaleVec = new THREE.Vector3();
     const orientLeaf = (leaf, normal, shingleLift = 0.10) => {
       const tangentDown = up.clone().sub(normal.clone().multiplyScalar(up.dot(normal)));
       if (tangentDown.lengthSq() < 0.0001) tangentDown.set(0, 0, 1);
@@ -443,7 +463,7 @@ export const FLORA_BUILDERS = {
     };
 
     const rowCounts = [8, 14, 17, 20, 24, 24, 21, 17, 13, 9, 6];
-    const addLeafRing = ({ count, phi, shell = 1, scale = 0.8, mat = leafMats[1], phase = 0, lift = 0.12, yOffset = 0 }) => {
+    const addLeafRing = ({ count, phi, shell = 1, scale = 0.8, matIndex = 1, phase = 0, lift = 0.12, yOffset = 0 }) => {
       for (let i = 0; i < count; i++) {
         const a = (i / count) * Math.PI * 2 + phase + (Math.random() - 0.5) * 0.04;
         const normal = new THREE.Vector3(
@@ -451,7 +471,7 @@ export const FLORA_BUILDERS = {
           Math.cos(phi),
           Math.sin(phi) * Math.sin(a)
         ).normalize();
-        const leaf = new THREE.Mesh(leafGeo, mat);
+        const leaf = new THREE.Object3D();
         leaf.position.set(
           canopyCenter.x + normal.x * canopyRadius.x * shell,
           canopyCenter.y + normal.y * canopyRadius.y * shell + yOffset,
@@ -461,27 +481,32 @@ export const FLORA_BUILDERS = {
         leaf.rotateX(0.02 + lift * 0.18);
         leaf.rotateZ((Math.random() - 0.5) * 0.08);
         const s = scale * (0.92 + Math.random() * 0.16);
-        leaf.scale.set(s * 0.94, s * 1.18, s);
-        leaf.castShadow = true;
-        g.add(leaf);
+        scaleVec.set(s * 0.94, s * 1.18, s);
+        matrix.compose(leaf.position, leaf.quaternion, scaleVec);
+        leafBuckets[matIndex].push(matrix.clone());
       }
     };
 
-    addLeafRing({ count: 7, phi: 0.07, shell: 0.54, scale: 0.72, mat: leafMats[1], phase: 0.18, lift: 0.32, yOffset: 0.40 });
+    addLeafRing({ count: 7, phi: 0.07, shell: 0.54, scale: 0.72, matIndex: 1, phase: 0.18, lift: 0.32, yOffset: 0.40 });
     for (let row = 0; row < rowCounts.length; row++) {
       const t = row / (rowCounts.length - 1);
       const phi = 0.18 + t * 2.50;
       const rowScale = 0.76 + Math.sin((1 - t) * Math.PI * 0.5) * 0.16;
-      const mat = leafMats[row === 0 ? 2 : row > 5 ? 0 : 1];
+      const matIndex = row === 0 ? 2 : row > 5 ? 0 : 1;
       addLeafRing({
         count: rowCounts[row],
         phi,
         shell: 1.09 - t * 0.15 + (Math.random() - 0.5) * 0.01,
         scale: rowScale,
-        mat,
+        matIndex,
         phase: (row % 2) * (Math.PI / rowCounts[row]),
         lift: 0.22 - t * 0.10,
       });
+    }
+
+    for (let i = 0; i < leafBuckets.length; i++) {
+      const leaves = makeInstancedLeafBatch(leafGeo, leafMats[i], leafBuckets[i]);
+      if (leaves) g.add(leaves);
     }
 
     const branchGeo = pooled("leafballtree.branch.geo", () => new THREE.CylinderGeometry(0.045, 0.075, 1, 6));
