@@ -185,12 +185,9 @@ export function makeCreature(biome, opts = {}) {
   // The roll happens inside generateWorld's seeded Math.random window, so the
   // same seed reproduces the same fuzzy/smooth split.
   if (wantsFur) {
-    const furTipColor = biome.furTip
-      ? new THREE.Color(biome.furTip)
-      : bodyCol.clone().offsetHSL(0, -0.05, 0.10);
     furShells = applyShellFur(body, biome, {
       baseColor: bodyCol.clone(),
-      tipColor: furTipColor,
+      tipColor: bodyCol.clone(),
     });
   }
 

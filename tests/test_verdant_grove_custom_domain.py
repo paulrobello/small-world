@@ -137,8 +137,9 @@ class VerdantGroveCustomDomainTest(unittest.TestCase):
         creature = (ROOT / "src" / "fauna" / "creature.js").read_text()
         verdant_block = biomes[biomes.index('id: "verdant"') : biomes.index('id: "desert"')]
 
-        self.assertIn('creatureColors: ["#c8b86a", "#b9824d", "#9b6a46", "#d8cfa3"]', verdant_block)
+        self.assertIn('creatureColors: ["#53693e", "#657a45", "#7b7045", "#8a6a3f"]', verdant_block)
         self.assertNotIn("#fff8e0\"],", verdant_block)
+        self.assertNotIn("#d8cfa3", verdant_block)
         self.assertIn("walker.body.mat.smooth", creature)
         self.assertIn("walker.belly.mat.smooth", creature)
         self.assertIn("walker.leg.mat.smooth", creature)
@@ -168,8 +169,9 @@ class VerdantGroveCustomDomainTest(unittest.TestCase):
 
         self.assertIn("furProbability: 1.0", verdant_block)
         self.assertIn("furLength: 0.075", verdant_block)
-        self.assertIn('furTip: "#fff1b8"', verdant_block)
-        self.assertIn("new THREE.Color(biome.furTip)", creature)
+        self.assertNotIn("furTip", verdant_block)
+        self.assertIn("tipColor: bodyCol.clone()", creature)
+        self.assertNotIn("new THREE.Color(biome.furTip)", creature)
         self.assertIn("vec3 cell = floor(vPos * 80.0);", fur)
 
     def test_verdant_uses_leafballtree_with_custom_leaf_wind(self) -> None:

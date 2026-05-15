@@ -14,11 +14,10 @@ export const BIOMES = [
     flora: ["leafballtree", "leafballtree", "mushroom", "bigmushroom", "berrybush", "fern", "fern", "rock"],
     floraCount: 90,
     particle: "leaf",
-    creatureColors: ["#c8b86a", "#b9824d", "#9b6a46", "#d8cfa3"],
+    creatureColors: ["#53693e", "#657a45", "#7b7045", "#8a6a3f"],
     creatureCount: [10, 16],
     furProbability: 1.0,
     furLength: 0.075,
-    furTip: "#fff1b8",
     groveDetails: {
       mushroomFamilies: true,
       fairyRing: true,
