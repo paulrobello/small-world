@@ -195,11 +195,13 @@ export function makeCreature(biome, opts = {}) {
       flatShading: true,
       roughness: 0.45,
     });
-    const bandGeo = new THREE.IcosahedronGeometry(0.40, 0);
+    // Bands scale slightly larger than the body so they poke through
+    // the fur shells and read as colored stripes even at tiny scale.
+    const bandGeo = new THREE.IcosahedronGeometry(0.46, 0);
     for (let bi = -1; bi <= 1; bi++) {
       const band = new THREE.Mesh(bandGeo, stripeMat);
-      band.position.z = bi * 0.18;
-      band.scale.set(1.02, 1.02, 0.22);
+      band.position.z = bi * 0.20;
+      band.scale.set(1.12, 1.12, 0.18);
       body.add(band);
     }
   }

@@ -440,6 +440,24 @@ export function generateWorld(seed) {
   const CANOPY_SPACING_PAD = 2.8;
   const PLACEMENT_BLOCK_KINDS = new Set(["lavafissure"]);
   const floraPlacementBlocks = [];
+  function flattenTerrainCircle(cx, cz, r, flatY) {
+    const mesh = state.terrainMesh;
+    if (!mesh) return;
+    const pos = mesh.geometry.attributes.position;
+    const r2 = r * r;
+    for (let i = 0; i < pos.count; i++) {
+      const dx = pos.getX(i) - cx;
+      const dz = pos.getZ(i) - cz;
+      const d2 = dx * dx + dz * dz;
+      if (d2 >= r2) continue;
+      // Smooth blend: full flatten at centre, taper to original at the edge.
+      const t = 1 - d2 / r2; // 1 at centre, 0 at edge
+      const blend = t * t * (3 - 2 * t); // smoothstep
+      pos.setY(i, pos.getY(i) + (flatY - pos.getY(i)) * blend);
+    }
+    pos.needsUpdate = true;
+    mesh.geometry.computeVertexNormals();
+  }
   function blocksPlacement(x, z, r, kinds = PLACEMENT_BLOCK_KINDS) {
     const kindSet = kinds instanceof Set ? kinds : new Set(kinds);
     for (const obstacle of state.obstacles) {
@@ -536,6 +554,8 @@ export function generateWorld(seed) {
       landmark.position.set(p.x, y, p.z);
       landmark.rotation.y = Math.random() * Math.PI * 2;
       landmark.scale.setScalar(s);
+      // Flatten terrain vertices inside the ring so mushrooms sit level.
+      flattenTerrainCircle(p.x, p.z, fp * 1.25, y);
       conformSurfaceChildrenToTerrain(landmark);
       state.world.add(landmark);
       floraPlacementBlocks.push({ kind: "fairyring", x: p.x, z: p.z, r: fp * 1.1 });
