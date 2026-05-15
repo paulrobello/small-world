@@ -190,24 +190,31 @@ export function makeCreature(biome, opts = {}) {
     body.material.name = "bumblebee.body.mat";
     bodyBaseZ *= 1.25; // 25% elongation
     body.scale.set(bodyBaseX, bodyBaseY, bodyBaseZ);
-    // Paint stripes directly onto the body surface via vertex colors
-    // so they conform perfectly instead of looking like wrapped toruses.
+    // Paint stripes directly onto the body surface via vertex colors.
+    // Bumblebees are mostly dark with wide yellow bands — not the reverse.
     const darkCol = new THREE.Color(stripes[0]);
     const lightCol = new THREE.Color(stripes[1]);
     const pos = body.geometry.attributes.position;
     const colors = new Float32Array(pos.count * 3);
-    // Stripe zones in local Z — three bands centered at -0.22, 0, +0.22
-    // with a half-width of 0.08. Outside those bands = dark.
+    // Three wide yellow bands (half-width 0.14) with dark gaps between.
+    // Default each vertex to dark, then override vertices inside a band.
+    for (let i = 0; i < pos.count; i++) {
+      colors[i * 3] = darkCol.r;
+      colors[i * 3 + 1] = darkCol.g;
+      colors[i * 3 + 2] = darkCol.b;
+    }
+    const bandCenters = [-0.18, 0.06, 0.28];
+    const bandHalf = 0.10;
     for (let i = 0; i < pos.count; i++) {
       const z = pos.getZ(i);
-      const inBand =
-        Math.abs(z - (-0.22)) < 0.08 ||
-        Math.abs(z - 0.00) < 0.08 ||
-        Math.abs(z - 0.22) < 0.08;
-      const col = inBand ? lightCol : darkCol;
-      colors[i * 3] = col.r;
-      colors[i * 3 + 1] = col.g;
-      colors[i * 3 + 2] = col.b;
+      for (const bc of bandCenters) {
+        if (Math.abs(z - bc) < bandHalf) {
+          colors[i * 3] = lightCol.r;
+          colors[i * 3 + 1] = lightCol.g;
+          colors[i * 3 + 2] = lightCol.b;
+          break;
+        }
+      }
     }
     body.geometry.setAttribute("color", new THREE.BufferAttribute(colors, 3));
     body.material.vertexColors = true;
