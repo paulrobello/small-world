@@ -56,12 +56,12 @@ export function makeCaterpillar(biome, opts = {}) {
 
   // ── head ───────────────────────────────────────────────────────────────
   const headGeo = jitterGeo(
-    new THREE.IcosahedronGeometry(segRadius, 0),
+    new THREE.IcosahedronGeometry(segRadius, 1),
     0.05
   );
   const headMat = new THREE.MeshStandardMaterial({
+    name: isSnail ? "snail.head.mat.smooth" : "caterpillar.head.mat.smooth",
     color: baseCol,
-    flatShading: true,
     roughness: 0.55,
     metalness: 0.02,
   });
@@ -128,12 +128,12 @@ export function makeCaterpillar(biome, opts = {}) {
   // ── body segments — all the same radius as the head ──────────────────
   for (let i = 0; i < segCount; i++) {
     const segGeo = jitterGeo(
-      new THREE.IcosahedronGeometry(segRadius, 0),
+      new THREE.IcosahedronGeometry(segRadius, 1),
       segRadius * 0.14
     );
     const mat = new THREE.MeshStandardMaterial({
+      name: isSnail ? "snail.segment.mat.smooth" : "caterpillar.segment.mat.smooth",
       color: i % 2 === 0 ? altCol : baseCol,
-      flatShading: true,
       roughness: 0.6,
     });
     const seg = new THREE.Mesh(segGeo, mat);
@@ -154,8 +154,8 @@ export function makeCaterpillar(biome, opts = {}) {
     const shell = new THREE.Mesh(
       shellGeo,
       new THREE.MeshStandardMaterial({
+        name: "snail.shell.mat.smooth",
         color: shellCol,
-        flatShading: true,
         roughness: 0.45,
         metalness: 0.05,
       })
@@ -165,8 +165,8 @@ export function makeCaterpillar(biome, opts = {}) {
     shell.castShadow = true;
     // a couple of darker "ridges" — small thin rings around the equator
     const ridgeMat = new THREE.MeshStandardMaterial({
+      name: "snail.ridge.mat.smooth",
       color: shellCol.clone().offsetHSL(0, 0, -0.18),
-      flatShading: true,
     });
     for (let r = 0; r < 2; r++) {
       const ring = new THREE.Mesh(

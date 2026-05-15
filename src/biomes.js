@@ -14,7 +14,7 @@ export const BIOMES = [
     flora: ["leafballtree", "leafballtree", "mushroom", "bigmushroom", "berrybush", "fern", "fern", "rock"],
     floraCount: 90,
     particle: "leaf",
-    creatureColors: ["#e9c46a", "#f4a261", "#e76f51", "#fff8e0"],
+    creatureColors: ["#c8b86a", "#b9824d", "#9b6a46", "#d8cfa3"],
     creatureCount: [10, 16],
     furProbability: 0.30,
     groveDetails: {
@@ -376,7 +376,7 @@ export const WILDFLOWER_PALETTES = {
 
 // 0 = no grass field (burnt/volcanic biomes and bare atolls read wrong with grass blades).
 export const GRASS_DENSITY = {
-  verdant: 75, desert:   0, frozen: 240,
+  verdant: 150, desert:  0, frozen: 240,
   marsh:   500, ashen:    0, golden: 750,
   mossy:   650, twilight: 540, coral: 0,
   cloud:     0, grove:   400, obsidian: 0,

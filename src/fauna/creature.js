@@ -26,6 +26,31 @@ function fishMaxGroundY(scale) {
   return WATER_AVOID_Y - 0.24 - 0.66 * scale;
 }
 
+function currentPerchPoint(perch) {
+  if (!perch?.perchWind) return perch;
+  const wind = perch.perchWind;
+  const t = state.windUniforms.uTime.value;
+  const foliageWind = state.windUniforms.uFoliageWind.value;
+  const windY = Math.max(wind.localY ?? 0, 0);
+  const windAmp = windY * windY * (wind.strength ?? 1) * foliageWind;
+  const baseX = wind.baseX ?? perch.x;
+  const baseZ = wind.baseZ ?? perch.z;
+  // Mirror applyWindSway's non-instanced shader path: it samples
+  // modelMatrix * vec4(transformed, 1.0), offsets local X/Z, then lets the
+  // flora group's rotation/scale carry that offset into world space.
+  const localX = Math.sin(t * 1.4 + baseX * 0.30 + baseZ * 0.40) * windAmp * 0.06;
+  const localZ = Math.sin(t * 0.9 + baseX * 0.15 - baseZ * 0.25) * windAmp * 0.05;
+  const rot = wind.rotationY ?? 0;
+  const scale = wind.scale ?? 1;
+  const c = Math.cos(rot);
+  const s = Math.sin(rot);
+  return {
+    x: perch.x + (c * localX + s * localZ) * scale,
+    y: perch.y,
+    z: perch.z + (-s * localX + c * localZ) * scale,
+  };
+}
+
 // Per-regen creature resource pool — shared eye/pupil materials and the
 // constant geometries used by every creature. `resetCreaturePool()` is
 // called at the top of each generateWorld, so disposeGroup correctly tears
@@ -130,14 +155,19 @@ export function makeCreature(biome, opts = {}) {
   const bodyCol = new THREE.Color(
     palette[Math.floor(Math.random() * palette.length)]
   );
+  // Roll fur before geometry jitter consumes a variable number of random
+  // values. That keeps a seed's fuzzy/smooth outcome stable when body detail
+  // changes, and restores inspect seeds that were fuzzy before smoothing.
+  const furProb = biome.furProbability ?? 0;
+  const wantsFur = furProb > 0 && !flies && Math.random() < furProb;
 
   // body — rounder for fliers, more elongated for walkers
-  const bodyGeo = jitterGeo(new THREE.IcosahedronGeometry(0.42, 0), 0.06);
+  const bodyGeo = jitterGeo(new THREE.IcosahedronGeometry(0.42, 1), 0.06);
   const body = new THREE.Mesh(
     bodyGeo,
     new THREE.MeshStandardMaterial({
+      name: flies ? "flier.body.mat.smooth" : "walker.body.mat.smooth",
       color: bodyCol,
-      flatShading: true,
       roughness: 0.55,
       metalness: 0.02,
     })
@@ -154,8 +184,7 @@ export function makeCreature(biome, opts = {}) {
   // override fall back to 0 (no fur) — fliers/fish never get fur regardless.
   // The roll happens inside generateWorld's seeded Math.random window, so the
   // same seed reproduces the same fuzzy/smooth split.
-  const furProb = biome.furProbability ?? 0;
-  if (furProb > 0 && !flies && Math.random() < furProb) {
+  if (wantsFur) {
     furShells = applyShellFur(body, biome, {
       baseColor: bodyCol.clone(),                              // exact body color
       tipColor: bodyCol.clone().offsetHSL(0, -0.05, 0.10),     // grass-style: slightly desat + lighter tips
@@ -166,8 +195,8 @@ export function makeCreature(biome, opts = {}) {
   const belly = new THREE.Mesh(
     new THREE.SphereGeometry(0.28, 10, 8),
     new THREE.MeshStandardMaterial({
+      name: flies ? "flier.belly.mat.smooth" : "walker.belly.mat.smooth",
       color: bodyCol.clone().offsetHSL(0, -0.2, 0.18),
-      flatShading: true,
     })
   );
   belly.position.set(0, -0.12, 0.05);
@@ -360,13 +389,13 @@ export function makeCreature(biome, opts = {}) {
   } else {
     // walkers: visible legs + feet
     const legMat = new THREE.MeshStandardMaterial({
+      name: "walker.leg.mat.smooth",
       color: bodyCol.clone().offsetHSL(0, 0, -0.18),
-      flatShading: true,
       roughness: 0.75,
     });
     const footMat = new THREE.MeshStandardMaterial({
+      name: "walker.foot.mat.smooth",
       color: bodyCol.clone().offsetHSL(0, 0, -0.3),
-      flatShading: true,
     });
     // cylinder of length 1 with its origin at the top so scale.y = length.
     // Geometry data is identical for every leg of every creature — pool a
@@ -471,6 +500,8 @@ export function makeCreature(biome, opts = {}) {
     // Mushroom cap to land on (or null for an ordinary ground landing).
     // Picked on flying→descending; cleared on ascending→flying.
     perchTarget: null,
+    perchOffsetX: 0,
+    perchOffsetZ: 0,
     // Smoothed blend factor from terrain ground → perch top. Lerps toward
     // a closeness target each frame so the floor change can never snap,
     // even if the perch was picked at close range or the flier crosses
@@ -629,8 +660,9 @@ function pickPerchForFlier(c) {
   let nearestD2 = 36; // within 6 units
   for (let i = 0; i < perches.length; i++) {
     const p = perches[i];
-    const dx = p.x - pos.x;
-    const dz = p.z - pos.z;
+    const perchPoint = currentPerchPoint(p);
+    const dx = perchPoint.x - pos.x;
+    const dz = perchPoint.z - pos.z;
     const d2 = dx * dx + dz * dz;
     if (d2 < nearestD2) {
       nearestD2 = d2;
@@ -863,6 +895,8 @@ export function stepCreature(c, dt, t, heightFn) {
       c.landState = "flying";
       c.landTimer = 4 + Math.random() * 8;
       c.perchTarget = null;
+      c.perchOffsetX = 0;
+      c.perchOffsetZ = 0;
       const ceil = c.hoverHeight * (1 - 0.7 * c.sleepiness);
       if (c.currentHover < ceil) c.currentHover = ceil;
     }
@@ -899,8 +933,9 @@ export function stepCreature(c, dt, t, heightFn) {
     // out. Once roughly over the cap, the normal restH target kicks in
     // and the actual touchdown onto the cap happens.
     if (c.perchTarget && c.landState === "descending") {
-      const dxp = c.perchTarget.x - c.group.position.x;
-      const dzp = c.perchTarget.z - c.group.position.z;
+      const perchPoint = currentPerchPoint(c.perchTarget);
+      const dxp = perchPoint.x - c.group.position.x;
+      const dzp = perchPoint.z - c.group.position.z;
       if (dxp * dxp + dzp * dzp > 1.0) {
         targetH = Math.max(restH, Math.min(hoverCeil, 0.6 * c.hoverHeight));
       }
@@ -913,9 +948,14 @@ export function stepCreature(c, dt, t, heightFn) {
       // perch). Otherwise the flier would freeze in mid-air partway across.
       let canLand = true;
       if (c.perchTarget) {
-        const dxp = c.perchTarget.x - c.group.position.x;
-        const dzp = c.perchTarget.z - c.group.position.z;
+        const perchPoint = currentPerchPoint(c.perchTarget);
+        const dxp = perchPoint.x - c.group.position.x;
+        const dzp = perchPoint.z - c.group.position.z;
         canLand = dxp * dxp + dzp * dzp < 0.16;
+        if (canLand) {
+          c.perchOffsetX = c.group.position.x - perchPoint.x;
+          c.perchOffsetZ = c.group.position.z - perchPoint.z;
+        }
       }
       if (canLand) {
         c.landState = "landed";
@@ -943,6 +983,8 @@ export function stepCreature(c, dt, t, heightFn) {
     ) {
       c.perchTarget = null;
       c.perchFloorWeight = 0;
+      c.perchOffsetX = 0;
+      c.perchOffsetZ = 0;
     }
   }
 
@@ -988,8 +1030,9 @@ export function stepCreature(c, dt, t, heightFn) {
   // bumped (and stronger when close) so the flier resolves heading
   // errors quickly instead of orbiting the cap on its way in.
   if (c.flies && c.perchTarget && c.landState === "descending") {
-    const dx = c.perchTarget.x - c.group.position.x;
-    const dz = c.perchTarget.z - c.group.position.z;
+    const perchPoint = currentPerchPoint(c.perchTarget);
+    const dx = perchPoint.x - c.group.position.x;
+    const dz = perchPoint.z - c.group.position.z;
     const target = Math.atan2(dz, dx);
     let diff = target - c.heading;
     while (diff > Math.PI) diff -= Math.PI * 2;
@@ -1028,8 +1071,9 @@ export function stepCreature(c, dt, t, heightFn) {
     // the cap rather than zooming past it and lapping around for another
     // pass. Falls from full speed at xzDist 2.5 down to 30% at xzDist 0.
     if (c.flies && c.perchTarget && c.landState === "descending") {
-      const dxp = c.perchTarget.x - pos.x;
-      const dzp = c.perchTarget.z - pos.z;
+      const perchPoint = currentPerchPoint(c.perchTarget);
+      const dxp = perchPoint.x - pos.x;
+      const dzp = perchPoint.z - pos.z;
       const xzDist = Math.sqrt(dxp * dxp + dzp * dzp);
       const k = Math.max(0, Math.min(1, xzDist / 2.5));
       speedFactor *= 0.3 + 0.7 * k;
@@ -1089,6 +1133,7 @@ export function stepCreature(c, dt, t, heightFn) {
       // A flier targeting a mushroom passes its perch coords as skipX/skipZ
       // so it doesn't get pushed away from the very cap it's trying to land
       // on.
+      const skipPerch = c.perchTarget ? currentPerchPoint(c.perchTarget) : null;
       const slide = avoidObstacles(
         pos.x,
         pos.z,
@@ -1098,8 +1143,8 @@ export function stepCreature(c, dt, t, heightFn) {
         step,
         0.25 * c.scale,
         c.flies ? pos.y : undefined,
-        c.perchTarget?.x,
-        c.perchTarget?.z,
+        skipPerch?.x,
+        skipPerch?.z,
         c
       );
       if (slide) {
@@ -1136,6 +1181,12 @@ export function stepCreature(c, dt, t, heightFn) {
     c.bob += dt * c.bobSpeed;
   } else {
     c.bob += dt * 2;
+  }
+
+  if (grounded && c.perchTarget) {
+    const perchPoint = currentPerchPoint(c.perchTarget);
+    pos.x = perchPoint.x + c.perchOffsetX;
+    pos.z = perchPoint.z + c.perchOffsetZ;
   }
 
   const ground = heightFn(pos.x, pos.z);
@@ -1183,8 +1234,9 @@ export function stepCreature(c, dt, t, heightFn) {
     }
     const restH = 0.35 * c.scale;
     if (c.perchTarget) {
-      const dxp = c.perchTarget.x - pos.x;
-      const dzp = c.perchTarget.z - pos.z;
+      const perchPoint = currentPerchPoint(c.perchTarget);
+      const dxp = perchPoint.x - pos.x;
+      const dzp = perchPoint.z - pos.z;
       const xzDist = Math.sqrt(dxp * dxp + dzp * dzp);
       const NEAR = 0.5;
       const FAR = 4.0;
@@ -1202,7 +1254,7 @@ export function stepCreature(c, dt, t, heightFn) {
       // because the flier body's half-Y is just a hair larger than restH,
       // so a small bias is needed to keep the contact convincing).
       const perchLift = -0.04 * c.scale;
-      floorY = ground * (1 - weight) + (c.perchTarget.y + perchLift) * weight;
+      floorY = ground * (1 - weight) + (perchPoint.y + perchLift) * weight;
     }
     // bob amplitude scales with current hover — perched creatures only quiver
     const bobAmp = grounded

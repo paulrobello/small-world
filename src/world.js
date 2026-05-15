@@ -621,7 +621,7 @@ export function generateWorld(seed) {
       r: fp * (CANOPY_SPACING_KINDS.has(kind) ? CANOPY_SPACING_PAD : 1.2),
     });
     if (OBSTACLE_KINDS.has(kind)) {
-      const topLocal = (OBSTACLE_TOP[kind] ?? OBSTACLE_TOP_DEFAULT) * s;
+      const topLocal = (f.userData.obstacleTopY ?? OBSTACLE_TOP[kind] ?? OBSTACLE_TOP_DEFAULT) * s;
       const fissurePts = kind === "lavafissure" ? f.userData.fissureObstaclePoints : null;
       if (Array.isArray(fissurePts) && fissurePts.length) {
         const c = Math.cos(f.rotation.y);
@@ -656,7 +656,14 @@ export function generateWorld(seed) {
       // OBSTACLE_TOP estimate, so fliers actually touch the cap.
       if (kind === "mushroom" || kind === "bigmushroom") {
         const capLocal = f.userData.capTopY ?? OBSTACLE_TOP[kind] ?? OBSTACLE_TOP_DEFAULT;
-        state.perchSpots.push({ x: p.x, z: p.z, y: y + capLocal * s });
+        state.perchSpots.push({
+          x: p.x,
+          z: p.z,
+          y: y + capLocal * s,
+          perchWind: f.userData.perchWind
+            ? { ...f.userData.perchWind, scale: s, rotationY: f.rotation.y, baseX: p.x, baseZ: p.z }
+            : null,
+        });
       }
     }
     // Tight, ominous fly cloud over some skulls — not every skull gets one,

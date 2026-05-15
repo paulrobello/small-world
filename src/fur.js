@@ -98,12 +98,11 @@ function makeFurTemplate(baseColor, tipColor, furLength) {
 // shells so the caller can store them (disposeGroup handles cleanup when
 // state.world is rebuilt, since shells parent into the world via body).
 export function applyShellFur(body, biome, opts = {}) {
-  // LOWFX skips fur entirely — the 8 extra draws per fuzzy creature plus the
-  // per-fragment 3D hash + discard is the biggest single GPU cost added by
-  // the visual-polish pass.
-  if (LOWFX) return null;
-  const layers = opts.layers ?? 8;
-  const furLength = opts.length ?? 0.072;
+  // Keep fur visible in LOWFX, but use a cheaper, shorter stack. The inspector
+  // is often viewed full-size while the live world may auto-enter LOWFX on
+  // smaller windows, so skipping fur entirely made the two modes disagree.
+  const layers = opts.layers ?? (LOWFX ? 4 : 8);
+  const furLength = opts.length ?? (LOWFX ? 0.082 : 0.072);
   const baseColor =
     opts.baseColor ?? (body.material && body.material.color
       ? body.material.color.clone()

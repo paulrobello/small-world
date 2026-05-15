@@ -237,13 +237,12 @@ function addGroveMushroomFamily(group, biome, { radius = 0.44, count = 3, capY =
       .scale(1.25, 0.72, 1.25)
       .translate(0, 0.18, 0)
   );
-  const stemMat = pooled("grove.babyMushroom.stem.mat", () =>
-    new THREE.MeshStandardMaterial({ color: "#f4e6c9", flatShading: true, roughness: 0.95 })
+  const stemMat = pooled("grove.babyMushroom.stem.mat.smooth", () =>
+    new THREE.MeshStandardMaterial({ color: "#f4e6c9", roughness: 0.95 })
   );
-  const capMat = pooled("grove.babyMushroom.cap.mat", () =>
+  const capMat = pooled("grove.babyMushroom.cap.mat.smooth", () =>
     new THREE.MeshStandardMaterial({
       color: new THREE.Color(biome.accent).lerp(new THREE.Color("#b85f2a"), 0.18),
-      flatShading: true,
       roughness: 0.68,
     })
   );
@@ -352,6 +351,9 @@ export const FLORA_BUILDERS = {
       return geo;
     });
     const trunk = new THREE.Mesh(trunkGeo, trunkMat);
+    const leafballtreeTrunkHeightMul = 1 + Math.random() * 0.25;
+    const canopyYOffset = 1.45 * (leafballtreeTrunkHeightMul - 1);
+    trunk.scale.y = leafballtreeTrunkHeightMul;
     trunk.castShadow = true;
     g.add(trunk);
 
@@ -439,7 +441,7 @@ export const FLORA_BUILDERS = {
       return geo;
     });
 
-    const canopyCenter = new THREE.Vector3(0, 1.46, 0);
+    const canopyCenter = new THREE.Vector3(0, 1.46 + canopyYOffset, 0);
     const canopyRadius = new THREE.Vector3(0.88, 0.68, 0.88);
     const up = new THREE.Vector3(0, 1, 0);
     const basis = new THREE.Matrix4();
@@ -513,8 +515,8 @@ export const FLORA_BUILDERS = {
     const yAxis = new THREE.Vector3(0, 1, 0);
     for (let i = 0; i < 5; i++) {
       const a = (i / 5) * Math.PI * 2 + 0.24;
-      const start = new THREE.Vector3(0.03 * Math.cos(a), 1.10 + i * 0.025, 0.03 * Math.sin(a));
-      const end = new THREE.Vector3(Math.cos(a) * 0.46, 1.34 + (i % 2) * 0.10, Math.sin(a) * 0.46);
+      const start = new THREE.Vector3(0.03 * Math.cos(a), 1.10 + canopyYOffset + i * 0.025, 0.03 * Math.sin(a));
+      const end = new THREE.Vector3(Math.cos(a) * 0.46, 1.34 + canopyYOffset + (i % 2) * 0.10, Math.sin(a) * 0.46);
       const delta = end.clone().sub(start);
       const branch = new THREE.Mesh(branchGeo, trunkMat);
       branch.position.copy(start).add(end).multiplyScalar(0.5);
@@ -523,6 +525,7 @@ export const FLORA_BUILDERS = {
       branch.castShadow = true;
       g.add(branch);
     }
+    g.userData.obstacleTopY = 2.25 + canopyYOffset;
     return g;
   },
 
@@ -613,9 +616,9 @@ export const FLORA_BUILDERS = {
     const stemGeo = pooled("mushroom.stem.geo", () =>
       new THREE.CylinderGeometry(0.07, 0.1, 0.35, 6).translate(0, 0.175, 0)
     );
-    const stemMat = pooled("mushroom.stem.mat", () =>
+    const stemMat = pooled("mushroom.stem.mat.smooth", () =>
       applyWindSway(
-        new THREE.MeshStandardMaterial({ color: "#f1e8d8", flatShading: true }),
+        new THREE.MeshStandardMaterial({ color: "#f1e8d8" }),
         MUSH_WIND
       )
     );
@@ -627,11 +630,10 @@ export const FLORA_BUILDERS = {
         .scale(1.4, 0.9, 1.4)
         .translate(0, STEM_TOP + 0.01, 0)
     );
-    const capMat = pooled("mushroom.cap.mat", () =>
+    const capMat = pooled("mushroom.cap.mat.smooth", () =>
       applyWindSway(
         new THREE.MeshStandardMaterial({
           color: new THREE.Color(biome.accent),
-          flatShading: true,
           roughness: 0.6,
         }),
         MUSH_WIND
@@ -657,6 +659,7 @@ export const FLORA_BUILDERS = {
     // spot for fliers. Sphere radius 0.22 with Y-scale 0.9 puts the apex at
     // cap.position.y + 0.22*0.9.
     g.userData.capTopY = 0.36 + 0.22 * 0.9;
+    g.userData.perchWind = { strength: MUSH_WIND, localY: g.userData.capTopY };
     addGroveMushroomFamily(g, biome, { radius: 0.42, count: 2, capY: g.userData.capTopY });
     return g;
   },
@@ -1074,9 +1077,9 @@ export const FLORA_BUILDERS = {
     // ground up so the slim stem flexes more than the cap (whose vertices
     // share nearly identical y ~ stemH and so move as a rigid block).
     const BIG_WIND = 0.45;
-    const stemMat = pooled("bigmushroom.stem.mat", () =>
+    const stemMat = pooled("bigmushroom.stem.mat.smooth", () =>
       applyWindSway(
-        new THREE.MeshStandardMaterial({ color: "#f1e8d8", flatShading: true, roughness: 0.95 }),
+        new THREE.MeshStandardMaterial({ color: "#f1e8d8", roughness: 0.95 }),
         BIG_WIND
       )
     );
@@ -1088,11 +1091,10 @@ export const FLORA_BUILDERS = {
     const capGeo = new THREE.SphereGeometry(0.8, 12, 8, 0, Math.PI * 2, 0, Math.PI / 2)
       .scale(1, 0.55, 1)
       .translate(0, stemH, 0);
-    const capMat = pooled("bigmushroom.cap.mat", () =>
+    const capMat = pooled("bigmushroom.cap.mat.smooth", () =>
       applyWindSway(
         new THREE.MeshStandardMaterial({
           color: new THREE.Color(biome.accent),
-          flatShading: true,
           roughness: 0.55,
         }),
         BIG_WIND
@@ -1105,6 +1107,7 @@ export const FLORA_BUILDERS = {
     // so world.js needs to read it off userData rather than guess from a
     // static per-kind table.
     g.userData.capTopY = stemH + 0.8 * 0.55;
+    g.userData.perchWind = { strength: BIG_WIND, localY: g.userData.capTopY };
     // Underside disc — closes the hemisphere so walking under the cap in
     // first-person doesn't see through into empty space above. Uses the
     // stem material (cream) which reads as a fresh mushroom gill plate.
@@ -1188,10 +1191,9 @@ export const FLORA_BUILDERS = {
     const capGeo = new THREE.SphereGeometry(0.09, 7, 5, 0, Math.PI * 2, 0, Math.PI / 2)
       .scale(1.28, 0.72, 1.28)
       .translate(0, 0.18, 0);
-    const stemMat = new THREE.MeshStandardMaterial({ color: "#f4e6c9", flatShading: true, roughness: 0.95 });
+    const stemMat = new THREE.MeshStandardMaterial({ color: "#f4e6c9", roughness: 0.95 });
     const capMat = new THREE.MeshStandardMaterial({
       color: new THREE.Color(biome.accent).lerp(new THREE.Color("#b85f2a"), 0.18),
-      flatShading: true,
       roughness: 0.68,
     });
     const mushrooms = 10 + Math.floor(Math.random() * 4);

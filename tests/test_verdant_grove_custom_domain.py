@@ -70,10 +70,10 @@ class VerdantGroveCustomDomainTest(unittest.TestCase):
         self.assertIn("setting-grass-edge-discs", html)
         self.assertIn("if (isGrassAura && (LOWFX || state.userSettings.grassEdgeDiscs === false)) return null;", sky)
 
-    def test_verdant_grove_grass_density_is_reduced_again(self) -> None:
+    def test_verdant_grove_grass_density_is_doubled(self) -> None:
         biomes = (ROOT / "src" / "biomes.js").read_text()
-        self.assertIn("verdant: 75", biomes)
-        self.assertNotIn("verdant: 150", biomes)
+        self.assertIn("verdant: 150", biomes)
+        self.assertNotIn("verdant: 75", biomes)
         self.assertNotIn("verdant: 300", biomes)
         self.assertNotIn("verdant: 600", biomes)
 
@@ -84,6 +84,81 @@ class VerdantGroveCustomDomainTest(unittest.TestCase):
         self.assertIn("reset all to defaults", html)
         self.assertIn("localStorage.removeItem(SETTINGS_KEY)", ui)
         self.assertIn("window.location.reload()", ui)
+
+    def test_mushroom_perches_follow_wind_sway(self) -> None:
+        flora = (ROOT / "src" / "flora.js").read_text()
+        world = (ROOT / "src" / "world.js").read_text()
+        creature = (ROOT / "src" / "fauna" / "creature.js").read_text()
+
+        self.assertIn("g.userData.perchWind", flora)
+        self.assertIn("perchWind: f.userData.perchWind", world)
+        self.assertIn("function currentPerchPoint(perch)", creature)
+        self.assertIn("state.windUniforms.uTime.value", creature)
+        self.assertIn("modelMatrix * vec4(transformed, 1.0)", creature)
+        self.assertIn("perchOffsetX", creature)
+        self.assertIn("perchOffsetZ", creature)
+        self.assertIn("currentPerchPoint(c.perchTarget)", creature)
+
+    def test_mushrooms_caterpillars_and_snails_use_smooth_shading(self) -> None:
+        flora = (ROOT / "src" / "flora.js").read_text()
+        caterpillar = (ROOT / "src" / "fauna" / "caterpillar.js").read_text()
+
+        for marker in [
+            "mushroom.stem.mat.smooth",
+            "mushroom.cap.mat.smooth",
+            "bigmushroom.stem.mat.smooth",
+            "bigmushroom.cap.mat.smooth",
+            "grove.babyMushroom.stem.mat.smooth",
+            "grove.babyMushroom.cap.mat.smooth",
+        ]:
+            self.assertIn(marker, flora)
+        self.assertIn("caterpillar.head.mat.smooth", caterpillar)
+        self.assertIn("caterpillar.segment.mat.smooth", caterpillar)
+        self.assertIn("snail.shell.mat.smooth", caterpillar)
+        self.assertIn("snail.ridge.mat.smooth", caterpillar)
+        self.assertIn("new THREE.IcosahedronGeometry(segRadius, 1)", caterpillar)
+        self.assertNotIn("new THREE.IcosahedronGeometry(segRadius, 0)", caterpillar)
+        self.assertNotIn("caterpillar.head.mat.flat", caterpillar)
+        self.assertNotIn("snail.shell.mat.flat", caterpillar)
+
+    def test_leafballtree_trunk_height_varies_up_to_twenty_five_percent(self) -> None:
+        flora = (ROOT / "src" / "flora.js").read_text()
+        world = (ROOT / "src" / "world.js").read_text()
+
+        self.assertIn("leafballtreeTrunkHeightMul = 1 + Math.random() * 0.25", flora)
+        self.assertIn("canopyYOffset = 1.45 * (leafballtreeTrunkHeightMul - 1)", flora)
+        self.assertIn("trunk.scale.y = leafballtreeTrunkHeightMul", flora)
+        self.assertIn("canopyCenter = new THREE.Vector3(0, 1.46 + canopyYOffset, 0)", flora)
+        self.assertIn("g.userData.obstacleTopY = 2.25 + canopyYOffset", flora)
+        self.assertIn("f.userData.obstacleTopY ?? OBSTACLE_TOP[kind]", world)
+
+    def test_verdant_walker_palette_is_softer_and_walker_parts_are_smooth(self) -> None:
+        biomes = (ROOT / "src" / "biomes.js").read_text()
+        creature = (ROOT / "src" / "fauna" / "creature.js").read_text()
+        verdant_block = biomes[biomes.index('id: "verdant"') : biomes.index('id: "desert"')]
+
+        self.assertIn('creatureColors: ["#c8b86a", "#b9824d", "#9b6a46", "#d8cfa3"]', verdant_block)
+        self.assertNotIn("#fff8e0\"],", verdant_block)
+        self.assertIn("walker.body.mat.smooth", creature)
+        self.assertIn("walker.belly.mat.smooth", creature)
+        self.assertIn("walker.leg.mat.smooth", creature)
+        self.assertIn("walker.foot.mat.smooth", creature)
+        self.assertIn("new THREE.IcosahedronGeometry(0.42, 1)", creature)
+        self.assertNotIn("new THREE.IcosahedronGeometry(0.42, 0)", creature)
+
+    def test_walker_fur_roll_happens_before_geometry_jitter(self) -> None:
+        creature = (ROOT / "src" / "fauna" / "creature.js").read_text()
+
+        self.assertIn("const wantsFur = furProb > 0 && !flies && Math.random() < furProb", creature)
+        self.assertLess(creature.index("const wantsFur"), creature.index("const bodyGeo"))
+        self.assertIn("if (wantsFur) {", creature)
+
+    def test_lowfx_keeps_a_reduced_fur_stack(self) -> None:
+        fur = (ROOT / "src" / "fur.js").read_text()
+
+        self.assertNotIn("if (LOWFX) return null", fur)
+        self.assertIn("const layers = opts.layers ?? (LOWFX ? 4 : 8);", fur)
+        self.assertIn("const furLength = opts.length ?? (LOWFX ? 0.082 : 0.072);", fur)
 
     def test_verdant_uses_leafballtree_with_custom_leaf_wind(self) -> None:
         biomes = (ROOT / "src" / "biomes.js").read_text()
