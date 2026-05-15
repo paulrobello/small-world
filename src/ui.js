@@ -9,10 +9,6 @@ import { LOWFX } from "./lowfx.js";
 
 let followTarget = null;
 let selectingCreature = false;
-// Auto-release timestamp for transient focus (click-to-focus). performance.now()
-// in ms; 0 means "follow indefinitely until manually released".
-let _transientUntil = 0;
-const TRANSIENT_FOCUS_MS = 5000;
 
 // First-person stroll state — populated when enabled, null otherwise.
 let _stroll = null;
@@ -121,9 +117,6 @@ function saveBiomeFilter(set) {
 }
 
 export function getFollowTarget() {
-  if (followTarget && _transientUntil && performance.now() > _transientUntil) {
-    setFollowTarget(null);
-  }
   return followTarget;
 }
 
@@ -245,19 +238,12 @@ let _followButton = null;
 let _followBanner = null;
 let _canvas = null;
 
-export function setFollowTarget(creatureOrNull, opts = {}) {
+export function setFollowTarget(creatureOrNull) {
   followTarget = creatureOrNull;
-  _transientUntil = creatureOrNull && opts.transient
-    ? performance.now() + TRANSIENT_FOCUS_MS
-    : 0;
   if (!_followButton) return;
   _followButton.classList.toggle("active", !!followTarget);
-  const label = followTarget
-    ? (opts.transient ? "focusing…" : "release follow")
-    : "follow a creature";
-  const hint = followTarget
-    ? (opts.transient ? "auto-release shortly · esc to cancel" : "tracking · click to release")
-    : "click to select";
+  const label = followTarget ? "release follow" : "follow a creature";
+  const hint = followTarget ? "tracking · click to release" : "click to select";
   _followButton.querySelector(".setting-button-label").textContent = label;
   _followButton.querySelector(".setting-button-hint").textContent = hint;
 }
@@ -1172,11 +1158,10 @@ export function initUi({ camera, canvas, controls, renderer }) {
   window.addEventListener("resize", handleResize);
   window.addEventListener("orientationchange", handleResize);
 
-  // Click-to-pick a creature. In selection mode, a hit promotes to permanent
-  // follow. Outside selection mode, a hit triggers a transient focus that
-  // auto-releases after a few seconds (so casual clicks linger but don't trap
-  // the camera). Drags are distinguished from clicks by motion threshold so
-  // OrbitControls can still rotate freely.
+  // Click-to-pick a creature. Selection mode pauses the sim and shows the
+  // crosshair, but any creature hit now promotes to persistent follow so the
+  // camera keeps tracking until the user releases it. Drags are distinguished
+  // from clicks by motion threshold so OrbitControls can still rotate freely.
   const _raycaster = new THREE.Raycaster();
   const _ndc = new THREE.Vector2();
   let _downX = 0;
@@ -1243,12 +1228,8 @@ export function initUi({ camera, canvas, controls, renderer }) {
     if (!creature) return;
     // brief look-at-camera response — applies to creatures, not caterpillars/birds
     if (state.creatures.includes(creature)) lookAtCreature(creature);
-    if (selectingCreature) {
-      setFollowTarget(creature);
-      setSelectingCreature(false);
-    } else {
-      setFollowTarget(creature, { transient: true });
-    }
+    setFollowTarget(creature);
+    if (selectingCreature) setSelectingCreature(false);
   });
 
   // Hover behavior — wakes sleepers, and triggers a brief look-at-camera
