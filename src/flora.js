@@ -1193,19 +1193,6 @@ export const FLORA_BUILDERS = {
 
   fairyring(biome) {
     const g = new THREE.Group();
-    const mossGeo = new THREE.RingGeometry(0.62, 1.28, 36, 4);
-    mossGeo.rotateX(-Math.PI / 2);
-    const mossMat = new THREE.MeshStandardMaterial({
-      color: new THREE.Color(biome.ground[0]).lerp(new THREE.Color("#b6d48a"), 0.32),
-      flatShading: true,
-      roughness: 1,
-    });
-    const moss = new THREE.Mesh(mossGeo, mossMat);
-    moss.userData.surfaceLift = 0.024;
-    moss.userData.surfaceConformVertices = true;
-    moss.receiveShadow = true;
-    g.add(moss);
-
     const stumpMat = new THREE.MeshStandardMaterial({ color: TRUNK, flatShading: true, roughness: 1 });
     const stump = new THREE.Mesh(
       jitterGeo(new THREE.CylinderGeometry(0.18, 0.24, 0.38, 8).translate(0, 0.19, 0), 0.025),

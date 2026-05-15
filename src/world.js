@@ -850,7 +850,15 @@ export function generateWorld(seed) {
     } else if (allowGroundVariants && r < 0.38) {
       if (placeOnGround(makeCreature(biome, { burrower: true }))) budget--;
     } else {
-      if (placeOnGround(makeCreature(biome))) budget--;
+      const bumbleConfig = biome.flyerVariants?.[0];
+      if (bumbleConfig && Math.random() < 0.35) {
+        if (placeOnGround(makeCreature(biome, {
+          variant: bumbleConfig.kind,
+          stripeColors: bumbleConfig.stripeOverride,
+        }))) budget--;
+      } else {
+        if (placeOnGround(makeCreature(biome))) budget--;
+      }
     }
   }
 

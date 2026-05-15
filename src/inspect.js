@@ -56,6 +56,10 @@ const CREATURE_VARIANTS = [
       }
       return makeCreature(biome, opts);
     } },
+  { name: "bumblebee", kind: "creature", build: (biome, opts = {}) => {
+      const stripeOverride = biome.flyerVariants?.find(v => v.kind === "bumblebee")?.stripeOverride;
+      return makeCreature(biome, { ...opts, variant: "bumblebee", stripeColors: stripeOverride });
+    }},
   { name: "fish",     kind: "creature",    build: (biome, opts = {}) => makeCreature({ ...biome, creatureKind: "fish" }, opts) },
   { name: "angler",   kind: "creature",    build: (biome, opts = {}) => makeCreature({ ...biome, creatureKind: "fish", anglerFish: true }, { ...opts, angler: true }) },
   { name: "sleeper",  kind: "creature",    build: (biome, opts = {}) => makeCreature(biome, { ...opts, sleeper: true }) },
