@@ -229,7 +229,7 @@ export function makeGrassMaterial(biome, opts = {}) {
   return { blade, material: mat, uniforms, baseCol };
 }
 
-export function makeGrassField(biome, heightFn) {
+export function makeGrassField(biome, heightFn, excludedCircles = []) {
   // Per-biome 0 = no grass field at all (burnt/volcanic biomes). Caller
   // handles the null and skips the .add() rather than allocating an empty
   // InstancedMesh.
@@ -283,6 +283,14 @@ export function makeGrassField(biome, heightFn) {
     // the inner noise amplitude is ±3.2 so any negative under -4 is the
     // edge plunge. Don't reject mid-island dips.
     if (y < -4.0) continue;
+
+    // Exclude fairy-ring circles — mushrooms should sit on bare earth.
+    let excluded = false;
+    for (const c of excludedCircles) {
+      const dx = x - c.x, dz = z - c.z;
+      if (dx * dx + dz * dz < c.r * c.r) { excluded = true; break; }
+    }
+    if (excluded) continue;
 
     // Density rejection — simplex returns [-1, 1], remap to [0, 1].
     // Noise frequency 0.55 gives bald patches ~1-2 units across (small,

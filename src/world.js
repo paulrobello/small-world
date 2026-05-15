@@ -656,8 +656,8 @@ export function generateWorld(seed) {
       // toward it. Use the builder-supplied local cap-top (accurate to the
       // per-instance random stemH on bigmushroom) rather than the coarse
       // OBSTACLE_TOP estimate, so fliers actually touch the cap.
-      if (kind === "mushroom" || kind === "bigmushroom") {
-        const capLocal = f.userData.capTopY ?? OBSTACLE_TOP[kind] ?? OBSTACLE_TOP_DEFAULT;
+      if (kind === "mushroom" || kind === "bigmushroom" || kind === "leafballtree") {
+        const capLocal = f.userData.capTopY ?? f.userData.obstacleTopY ?? OBSTACLE_TOP[kind] ?? OBSTACLE_TOP_DEFAULT;
         state.perchSpots.push({
           x: p.x,
           z: p.z,
@@ -722,7 +722,11 @@ export function generateWorld(seed) {
   }
 
   // ground cover — instanced grass / wildflowers / pebbles
-  const grass = makeGrassField(biome, state.heightFn);
+  // Collect fairy-ring circles so grass can exclude them.
+  const grassExclusions = floraPlacementBlocks
+    .filter(b => b.kind === "fairyring")
+    .map(b => ({ x: b.x, z: b.z, r: b.r }));
+  const grass = makeGrassField(biome, state.heightFn, grassExclusions);
   if (grass) state.world.add(grass);
   for (const m of makeWildflowerField(biome, state.heightFn)) {
     state.world.add(m);
