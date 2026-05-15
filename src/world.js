@@ -35,6 +35,7 @@ import {
   makeGrassField,
   makeWildflowerField,
   makePebbleField,
+  makeGroundMarks,
   makeVerdantGroveDetails,
   makeCloudPuffField,
   makeBeachcombField,
@@ -211,6 +212,7 @@ export function generateWorld(seed) {
   state.flySwarms = [];
   state.dirtPuffs = [];
   state.dustKicks = [];
+  state.groundMarks = null;
   state.flowerSpots = [];
   state.obstacles = [];
   state.perchSpots = [];
@@ -734,6 +736,8 @@ export function generateWorld(seed) {
   if (beachcomb) state.world.add(beachcomb);
   const pebbles = makePebbleField(biome, state.heightFn);
   if (pebbles) state.world.add(pebbles);
+  state.groundMarks = makeGroundMarks(biome);
+  if (state.groundMarks) state.world.add(state.groundMarks);
 
   // creatures — fish biomes don't get sleepers/burrowers (they float).
   // We treat ncreatures as a budget; family parents consume +1 per kid,

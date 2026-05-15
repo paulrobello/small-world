@@ -10,7 +10,14 @@ import {
 } from "./src/world.js";
 import { stepCreature, stepCaterpillar, stepButterfly, stepBee, wakeCreature } from "./src/fauna.js";
 import { stepFlock } from "./src/birds.js";
-import { stepParticles, stepWater, stepDirtPuffs, stepDustKicks, stepFlySwarms } from "./src/environment.js";
+import {
+  stepParticles,
+  stepWater,
+  stepDirtPuffs,
+  stepDustKicks,
+  stepFlySwarms,
+  stepGroundMarks,
+} from "./src/environment.js";
 import { stepGrass } from "./src/grass.js";
 import { stepShadowDisks } from "./src/shadows.js";
 import { stepClouds } from "./src/sky.js";
@@ -223,6 +230,7 @@ function animate() {
   stepWater(state.waterMesh, dt, t);
   stepDirtPuffs(state.dirtPuffs, dt);
   stepDustKicks(state.dustKicks, dt);
+  stepGroundMarks(state.groundMarks, dt, state.heightFn);
   stepFlySwarms(state.flySwarms, t);
   stepShadowDisks(state.shadowDisks, state.heightFn);
   stepClouds(state.clouds, dt);
