@@ -17,21 +17,18 @@ const _furVS = `
 uniform float uShellLayer;
 uniform float uLayers;
 uniform float uFurLength;
-uniform float uHasVertexColor;
 varying vec3 vPos;
 varying float vLayerT;
 varying vec3 vNormal;
-varying vec3 vBodyColor;
-attribute vec3 color;
 void main() {
   vLayerT = uShellLayer / uLayers;
   vec3 p = position + normal * uFurLength * vLayerT;
+  // Pass the ORIGINAL (un-displaced) position so the fragment shader can
+  // compute a stable per-cell hash that matches across all shells — that's
+  // what makes a single hair appear as one column running through every
+  // layer instead of disconnected stripes.
   vPos = position;
   vNormal = normalMatrix * normal;
-  // Inherit vertex colors from the body geometry when present
-  // (e.g. bumblebee stripes). The attribute is always declared so the
-  // shader compiles; uHasVertexColor gates whether it's actually used.
-  vBodyColor = uHasVertexColor > 0.5 ? color : vec3(1.0);
   gl_Position = projectionMatrix * modelViewMatrix * vec4(p, 1.0);
 }
 `;
@@ -41,10 +38,13 @@ precision highp float;
 uniform vec3 uBaseColor;
 uniform vec3 uTipColor;
 uniform vec3 uLightDir;
+uniform vec3 uStripeColor;
+uniform float uStripeBandCount;
+uniform float uStripeBandWidth;
+uniform float uStripeOffset;
 varying vec3 vPos;
 varying float vLayerT;
 varying vec3 vNormal;
-varying vec3 vBodyColor;
 
 // 3D point hash — irrational multipliers in each axis decorrelate the
 // output so adjacent cells get visually random values. Returns [0, 1].
@@ -64,9 +64,22 @@ void main() {
   if (h < threshold) discard;
   vec3 N = normalize(vNormal);
   float lam = max(0.0, dot(N, normalize(uLightDir)));
-  // Modulate base→tip gradient by the body vertex color so painted patterns
-  // (e.g. bumblebee stripes) carry through into the fur.
-  vec3 c = mix(uBaseColor * vBodyColor, uTipColor * vBodyColor, vLayerT);
+
+  // Analytical stripe pattern — continuous bands along the Z axis
+  // computed per-fragment, so resolution is independent of vertex count.
+  // When uStripeBandCount <= 0, no stripes and uBaseColor is used as-is.
+  vec3 baseCol = uBaseColor;
+  if (uStripeBandCount > 0.5) {
+    float z = vPos.z + uStripeOffset;
+    float period = 1.0 / uStripeBandCount;
+    float phase = mod(z, period);
+    float halfBand = uStripeBandWidth * period * 0.5;
+    if (phase < halfBand || phase > period - halfBand) {
+      baseCol = uStripeColor;
+    }
+  }
+
+  vec3 c = mix(baseCol, uTipColor, vLayerT);
   // flat lambert response — keep colour close to body PBR; avoid blowing out
   c *= 0.7 + 0.3 * lam;
   gl_FragColor = vec4(c, 1.0 - vLayerT * 0.35);
@@ -82,7 +95,7 @@ export const sharedFurUniforms = {
 // Build a fur material template. Clone()ing it gives per-shell instances
 // that share the above uniforms (Three's ShaderMaterial.clone copies the
 // uniforms object shallowly), and we then overwrite uShellLayer per clone.
-function makeFurTemplate(baseColor, tipColor, furLength, hasVertexColor) {
+function makeFurTemplate(baseColor, tipColor, furLength) {
   return new THREE.ShaderMaterial({
     vertexShader: _furVS,
     fragmentShader: _furFS,
@@ -96,7 +109,10 @@ function makeFurTemplate(baseColor, tipColor, furLength, hasVertexColor) {
       uBaseColor: { value: baseColor.clone() },
       uTipColor: { value: tipColor.clone() },
       uLightDir: sharedFurUniforms.uLightDir,
-      uHasVertexColor: { value: hasVertexColor ? 1.0 : 0.0 },
+      uStripeColor: { value: new THREE.Color(0xffd13b) },
+      uStripeBandCount: { value: 0.0 },
+      uStripeBandWidth: { value: 0.0 },
+      uStripeOffset: { value: 0.0 },
     },
   });
 }
@@ -110,21 +126,16 @@ export function applyShellFur(body, biome, opts = {}) {
   // smaller windows, so skipping fur entirely made the two modes disagree.
   const layers = opts.layers ?? (LOWFX ? 4 : 8);
   const furLength = opts.length ?? biome.furLength ?? (LOWFX ? 0.082 : 0.072);
-  const hasVertexColor = !!(body.geometry && body.geometry.attributes && body.geometry.attributes.color);
-  // When vertex colors are present, override to white base/tip so vertex
-  // colors pass through un-darkened — even if the caller passed explicit colors.
-  const baseColor = hasVertexColor
-    ? new THREE.Color(0xffffff)
-    : (opts.baseColor ?? (body.material && body.material.color
-        ? body.material.color.clone()
-        : new THREE.Color(0xffffff)));
-  const tipColor = hasVertexColor
-    ? new THREE.Color(0xffffff)
-    : (opts.tipColor ?? new THREE.Color(biome.furTip ?? biome.accent ?? "#ffffff"));
+  const baseColor =
+    opts.baseColor ?? (body.material && body.material.color
+      ? body.material.color.clone()
+      : new THREE.Color(0xffffff));
+  const tipColor =
+    opts.tipColor ?? new THREE.Color(biome.furTip ?? biome.accent ?? "#ffffff");
 
   sharedFurUniforms.uLayers.value = Math.max(sharedFurUniforms.uLayers.value, layers);
 
-  const template = makeFurTemplate(baseColor, tipColor, furLength, hasVertexColor);
+  const template = makeFurTemplate(baseColor, tipColor, furLength);
   const shells = [];
   for (let i = 1; i <= layers; i++) {
     const mat = template.clone();
@@ -132,6 +143,13 @@ export function applyShellFur(body, biome, opts = {}) {
     // Shared uniforms: re-bind so the clone reads the same object refs.
     mat.uniforms.uLayers = sharedFurUniforms.uLayers;
     mat.uniforms.uLightDir = sharedFurUniforms.uLightDir;
+    // Stripe uniforms — all shells share the same pattern
+    if (opts.stripeColor) {
+      mat.uniforms.uStripeColor = { value: new THREE.Color(opts.stripeColor) };
+      mat.uniforms.uStripeBandCount = { value: opts.stripeBandCount ?? 3.0 };
+      mat.uniforms.uStripeBandWidth = { value: opts.stripeBandWidth ?? 0.4 };
+      mat.uniforms.uStripeOffset = { value: opts.stripeOffset ?? 0.0 };
+    }
     const shell = new THREE.Mesh(body.geometry, mat);
     shell.userData.isFurShell = true;
     // Children of body inherit body's animated scale/rotation/squash.

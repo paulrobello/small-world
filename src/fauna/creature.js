@@ -190,38 +190,8 @@ export function makeCreature(biome, opts = {}) {
     body.material.name = "bumblebee.body.mat";
     bodyBaseZ *= 1.25; // 25% elongation
     body.scale.set(bodyBaseX, bodyBaseY, bodyBaseZ);
-    // Paint stripes directly onto the body surface via vertex colors.
-    // Bumblebees are mostly dark with a few wide yellow bands.
-    const darkCol = new THREE.Color(stripes[0]);
-    const lightCol = new THREE.Color(stripes[1]);
-    const pos = body.geometry.attributes.position;
-    const colors = new Float32Array(pos.count * 3);
-    // Default all vertices to dark first
-    for (let i = 0; i < pos.count; i++) {
-      colors[i * 3] = darkCol.r;
-      colors[i * 3 + 1] = darkCol.g;
-      colors[i * 3 + 2] = darkCol.b;
-    }
-    // Two yellow bands — rear abdomen and mid-body. Keep them narrow
-    // so most of the body stays dark (head + tail tip = black).
-    const bands = [
-      { center: -0.28, half: 0.06 },  // rear abdomen
-      { center:  0.10, half: 0.06 },  // mid body
-    ];
-    for (let i = 0; i < pos.count; i++) {
-      const z = pos.getZ(i);
-      for (const b of bands) {
-        if (Math.abs(z - b.center) < b.half) {
-          colors[i * 3] = lightCol.r;
-          colors[i * 3 + 1] = lightCol.g;
-          colors[i * 3 + 2] = lightCol.b;
-          break;
-        }
-      }
-    }
-    body.geometry.setAttribute("color", new THREE.BufferAttribute(colors, 3));
-    body.material.vertexColors = true;
-    body.material.needsUpdate = true;
+    // Don't paint vertex colors — the icosahedron is too coarse for bands.
+    // Instead the fur shader will compute stripes analytically from vPos.
   }
 
   let furShells = null;
@@ -234,6 +204,12 @@ export function makeCreature(biome, opts = {}) {
     furShells = applyShellFur(body, biome, {
       baseColor: bodyCol.clone(),
       tipColor: bodyCol.clone(),
+      ...(isBumblebee ? {
+        stripeColor: (opts.stripeColors || ["#111111", "#ffd13b"])[1],
+        stripeBandCount: 3.0,
+        stripeBandWidth: 0.35,
+        stripeOffset: 0.12,
+      } : {}),
     });
   }
   group.userData.inspect.fur = furShells ? "1" : "0";
