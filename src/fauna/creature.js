@@ -2,7 +2,7 @@ import * as THREE from "three";
 import { state } from "../state.js";
 import { jitterGeo } from "../util.js";
 import { nearestCenter } from "../terrain.js";
-import { makeDirtPuff, makeDustKick } from "../environment.js";
+import { makeDirtPuff, makeDustKick, emitGroundMark } from "../environment.js";
 import { applyShellFur } from "../fur.js";
 import { BLOOM_LAYER } from "../postfx.js";
 import { WATER_AVOID_Y, avoidObstacles, colorsClose } from "./shared.js";
@@ -425,6 +425,7 @@ export function makeCreature(biome, opts = {}) {
       const foot = new THREE.Mesh(footGeo, footMat);
       foot.position.set(fx, -0.32, fz);
       foot.scale.set(1.15, 0.55, 1.3);
+      foot.userData.groundMarkOffset = { x: fx, z: fz };
       foot.castShadow = true;
       group.add(foot);
       feet.push(foot);
@@ -588,6 +589,80 @@ function nearestBuzzer(pos) {
     if (best < 1.0) return Math.sqrt(best);
   }
   return Math.sqrt(best);
+}
+
+function _localFootToWorld(c, localX, localZ) {
+  const rot = -c.heading + Math.PI / 2;
+  const cr = Math.cos(rot);
+  const sr = Math.sin(rot);
+  const lx = localX * c.scale;
+  const lz = localZ * c.scale;
+  return {
+    x: c.group.position.x + cr * lx + sr * lz,
+    z: c.group.position.z - sr * lx + cr * lz,
+  };
+}
+
+function emitWalkerFootprint(c, footIndex, heightFn) {
+  const marks = state.groundMarks;
+  const cfg = state.currentBiome?.groundMarks;
+  if (!marks || !cfg || c.flies || c.isFish) return;
+  const foot = c.feet[footIndex];
+  const off = foot?.userData?.groundMarkOffset;
+  if (!off) return;
+  const p = _localFootToWorld(c, off.x, off.z);
+  const y = heightFn(p.x, p.z);
+  if (y <= 0.04) return;
+  const side = off.x < 0 ? -1 : 1;
+  emitGroundMark(marks, {
+    x: p.x,
+    y,
+    z: p.z,
+    heading: c.heading + side * 0.16,
+    width: Math.max(0.08, 0.14 * c.scale),
+    length: Math.max(0.14, 0.26 * c.scale),
+    opacity: cfg.opacity,
+    life: cfg.life,
+  });
+}
+
+function emitFlierLandingMarks(c, heightFn) {
+  const marks = state.groundMarks;
+  const cfg = state.currentBiome?.groundMarks;
+  if (!marks || !cfg || !c.flies || c.isFish || c.perchTarget) return;
+  const y = heightFn(c.group.position.x, c.group.position.z);
+  if (y <= 0.04) return;
+  const offsets = [
+    [-0.16, 0.10],
+    [0.16, 0.10],
+    [-0.12, -0.12],
+    [0.12, -0.12],
+  ];
+  for (const [lx, lz] of offsets) {
+    const p = _localFootToWorld(c, lx, lz);
+    emitGroundMark(marks, {
+      x: p.x,
+      y: heightFn(p.x, p.z),
+      z: p.z,
+      heading: c.heading + (lx < 0 ? -0.12 : 0.12),
+      width: Math.max(0.07, 0.12 * c.scale),
+      length: Math.max(0.13, 0.24 * c.scale),
+      opacity: cfg.opacity * 0.9,
+      life: cfg.life,
+    });
+  }
+  if (cfg.poof === "sand") {
+    const kick = makeDustKick(c.group.position.x, y, c.group.position.z, cfg.color, {
+      count: 3,
+      size: 0.045,
+      opacity: 0.35,
+      velocityScale: 0.45,
+      life: 0.32,
+      poof: true,
+    });
+    state.world.add(kick);
+    state.dustKicks.push(kick);
+  }
 }
 
 // Nudge `c.heading` toward the nearest same-color creature so kin pair up
@@ -961,6 +1036,7 @@ export function stepCreature(c, dt, t, heightFn) {
       if (canLand) {
         c.landState = "landed";
         c.landTimer = 4 + Math.random() * 10;
+        emitFlierLandingMarks(c, heightFn);
       }
     } else if (
       c.landState === "ascending" &&
@@ -1387,19 +1463,26 @@ export function stepCreature(c, dt, t, heightFn) {
       c.feet[i].position.y = footY;
       c.legs[i].scale.y = -0.1 - footY;
       // Rising-edge footstep detection — fires once when sVal crosses 0.85
-      // upward. Emit a small dust kick on dry ground. Cooldown gates
-      // multiple kicks per stride.
+      // upward. Emit a soft-ground footprint and an optional tiny sand poof.
+      // Cooldown gates multiple kicks per stride.
       const prev = c.lastFootSin[i] ?? 0;
       if (sVal > 0.85 && prev <= 0.85 && t - c.lastDustAt > 0.18) {
+        emitWalkerFootprint(c, i, heightFn);
         const fx = c.group.position.x;
         const fz = c.group.position.z;
         const fy = heightFn(fx, fz);
-        if (fy > 0.1) {
-          const kick = makeDustKick(fx, fy, fz, c.dirtColor);
+        if (fy > 0.1 && state.currentBiome?.groundMarks?.poof === "sand") {
+          const kick = makeDustKick(fx, fy, fz, c.dirtColor, {
+            count: 2,
+            size: 0.045,
+            opacity: 0.28,
+            velocityScale: 0.35,
+            life: 0.28,
+          });
           state.world.add(kick);
           state.dustKicks.push(kick);
-          c.lastDustAt = t;
         }
+        c.lastDustAt = t;
       }
       c.lastFootSin[i] = sVal;
     }
