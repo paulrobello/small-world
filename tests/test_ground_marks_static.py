@@ -59,6 +59,10 @@ class GroundMarksStaticTest(unittest.TestCase):
         self.assertIn("vGroundMarkXZ", section)
         self.assertIn("texture2D(uGroundMarkTex", section)
         self.assertIn("diffuseColor.rgb = mix", section)
+        self.assertIn("state.waterMesh && y < WATER_AVOID_Y", section)
+        self.assertIn("mark.age += dt", section)
+        self.assertIn("mark.life", section)
+        self.assertIn("texture.dispose", section)
         self.assertNotIn("GROUND_MARK_LIFT", section)
         self.assertNotIn("new THREE.InstancedMesh", section)
         self.assertNotIn("new THREE.PlaneGeometry", section)
@@ -66,6 +70,7 @@ class GroundMarksStaticTest(unittest.TestCase):
         self.assertNotIn("polygonOffset: true", section)
         self.assertNotIn("uGroundMarkA", section)
         self.assertNotIn("uGroundMarkB", section)
+        self.assertNotIn("GROUND_MARK_MIN_Y", section)
 
     def test_state_world_and_main_wire_ground_marks(self) -> None:
         state_source = STATE_JS.read_text()

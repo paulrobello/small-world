@@ -10,6 +10,7 @@ import {
 } from "./biomes.js";
 import { LOWFX, LOWFX_DENSITY } from "./lowfx.js";
 import { BLOOM_LAYER } from "./postfx.js";
+import { WATER_AVOID_Y } from "./fauna/shared.js";
 
 const _lowfxScale = (n) => (LOWFX ? Math.max(1, Math.round(n * LOWFX_DENSITY)) : n);
 
@@ -565,8 +566,8 @@ export function stepDustKicks(kicks, dt) {
 }
 
 // ─── soft-ground creature marks ───
-const GROUND_MARK_MIN_Y = 0.04;
 const GROUND_MARK_TEX_SIZE = LOWFX ? 256 : 512;
+const GROUND_MARK_MAX_MARKS = LOWFX ? 192 : 512;
 
 const _groundMarkPaint = `
 vec2 groundMarkUv = vGroundMarkXZ * uGroundMarkInvSize + 0.5;
@@ -643,8 +644,6 @@ function _toGroundMarkPixel(d, x, z) {
 
 function _drawGroundMarkStamp(d, x, z, heading, width, length, opacity) {
   const p = _toGroundMarkPixel(d, x, z);
-  // Allow long trail segments to draw slightly off-canvas at island edges;
-  // canvas clipping handles the final crop.
   const pad = Math.max(width, length) * d.pxPerWorld * 1.4;
   if (p.x < -pad || p.x > d.size + pad || p.y < -pad || p.y > d.size + pad) return;
 
@@ -664,37 +663,45 @@ function _drawGroundMarkStamp(d, x, z, heading, width, length, opacity) {
   ctx.arc(0, 0, 1, 0, Math.PI * 2);
   ctx.fill();
   ctx.restore();
-  d.texture.needsUpdate = true;
 }
 
-function _paintGroundMark(system, opts, opacity) {
+function _paintGroundMark(system, mark, opacity) {
   const d = system.userData;
-  const x = opts.x;
-  const z = opts.z;
-  const heading = opts.heading ?? 0;
-  const width = opts.width ?? 0.18;
-  const length = opts.length ?? 0.32;
-  if (Number.isFinite(opts.fromX) && Number.isFinite(opts.fromZ)) {
-    const dx = x - opts.fromX;
-    const dz = z - opts.fromZ;
+  const x = mark.x;
+  const z = mark.z;
+  if (Number.isFinite(mark.fromX) && Number.isFinite(mark.fromZ)) {
+    const dx = x - mark.fromX;
+    const dz = z - mark.fromZ;
     const dist = Math.sqrt(dx * dx + dz * dz);
-    const spacing = Math.max(0.04, Math.min(width, length) * 0.42);
+    const spacing = Math.max(0.04, Math.min(mark.width, mark.length) * 0.42);
     const steps = Math.max(1, Math.ceil(dist / spacing));
     for (let i = 0; i <= steps; i++) {
       const u = i / steps;
       _drawGroundMarkStamp(
         d,
-        opts.fromX + dx * u,
-        opts.fromZ + dz * u,
-        heading,
-        width,
-        length,
+        mark.fromX + dx * u,
+        mark.fromZ + dz * u,
+        mark.heading,
+        mark.width,
+        mark.length,
         opacity
       );
     }
   } else {
-    _drawGroundMarkStamp(d, x, z, heading, width, length, opacity);
+    _drawGroundMarkStamp(d, x, z, mark.heading, mark.width, mark.length, opacity);
   }
+}
+
+function _repaintGroundMarks(system) {
+  const d = system.userData;
+  d.ctx.clearRect(0, 0, d.size, d.size);
+  for (const mark of d.marks) {
+    const u = mark.age / Math.max(0.001, mark.life);
+    const fade = 1 - u * u * (3 - 2 * u);
+    _paintGroundMark(system, mark, mark.opacity * fade);
+  }
+  d.texture.needsUpdate = true;
+  d.active[0] = d.marks.length > 0 ? 1 : 0;
 }
 
 export function makeGroundMarks(biome) {
@@ -706,6 +713,9 @@ export function makeGroundMarks(biome) {
   const system = new THREE.Object3D();
   system.name = "terrain-painted-ground-marks";
   system.visible = false;
+  // disposeGroup() only knows about geometry/material, so provide a tiny
+  // material-like disposer for the CanvasTexture owned by this Object3D.
+  system.material = { dispose: () => texture.dispose() };
   system.userData = {
     canvas,
     ctx,
@@ -713,7 +723,8 @@ export function makeGroundMarks(biome) {
     size,
     invWorldSize: 1 / state.ISLAND_SIZE,
     pxPerWorld: size / state.ISLAND_SIZE,
-    fadeAccumulator: 0,
+    marks: [],
+    maxMarks: cfg.maxMarks ?? GROUND_MARK_MAX_MARKS,
     active: new Uint8Array(1),
     uniforms: {
       uGroundMarkColor: { value: new THREE.Color(cfg.color) },
@@ -735,15 +746,25 @@ export function emitGroundMark(system, opts = {}) {
   const z = opts.z;
   const y = opts.y ?? (state.heightFn ? state.heightFn(x, z) : 0);
   if (!Number.isFinite(x) || !Number.isFinite(y) || !Number.isFinite(z)) return;
-  if (state.waterMesh && y < GROUND_MARK_MIN_Y) return;
+  if (state.waterMesh && y < WATER_AVOID_Y) return;
 
   const softness = d.cfg.softness ?? 1;
-  const paintOpts = {
-    ...opts,
+  const mark = {
+    x,
+    z,
+    fromX: opts.fromX,
+    fromZ: opts.fromZ,
+    heading: opts.heading ?? 0,
     width: Math.max(0.01, (opts.width ?? 0.18) * softness),
     length: Math.max(0.01, (opts.length ?? 0.32) * softness),
+    opacity: opts.opacity ?? d.cfg.opacity ?? 0.2,
+    life: opts.life ?? d.cfg.life ?? 6,
+    age: 0,
   };
-  _paintGroundMark(system, paintOpts, opts.opacity ?? d.cfg.opacity ?? 0.2);
+  if (d.marks.length >= d.maxMarks) d.marks.shift();
+  d.marks.push(mark);
+  _paintGroundMark(system, mark, mark.opacity);
+  d.texture.needsUpdate = true;
   d.active[0] = 1;
 }
 
@@ -751,17 +772,13 @@ export function stepGroundMarks(system, dt) {
   if (!system || !system.userData || dt <= 0) return;
   installGroundMarkShader(system);
   const d = system.userData;
-  d.fadeAccumulator += dt;
-  if (d.fadeAccumulator < 1 / 30) return;
-  const fadeDt = d.fadeAccumulator;
-  d.fadeAccumulator = 0;
-  const fadeAlpha = Math.min(0.18, fadeDt / Math.max(0.001, d.cfg.life ?? 6));
-  d.ctx.save();
-  d.ctx.globalCompositeOperation = "destination-out";
-  d.ctx.fillStyle = `rgba(0,0,0,${fadeAlpha})`;
-  d.ctx.fillRect(0, 0, d.size, d.size);
-  d.ctx.restore();
-  d.texture.needsUpdate = true;
+  if (!d.marks.length) return;
+  for (let i = d.marks.length - 1; i >= 0; i--) {
+    const mark = d.marks[i];
+    mark.age += dt;
+    if (mark.age >= mark.life) d.marks.splice(i, 1);
+  }
+  _repaintGroundMarks(system);
 }
 
 // ─── fly swarms (dark specks hovering over a fixed prop) ───
