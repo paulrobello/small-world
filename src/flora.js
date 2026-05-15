@@ -1227,14 +1227,12 @@ export const FLORA_BUILDERS = {
       const stem = new THREE.Mesh(stemGeo, stemMat);
       stem.position.set(x, 0, z);
       stem.scale.setScalar(scale);
-      stem.userData.surfaceLift = 0;
       stem.castShadow = true;
       g.add(stem);
       const cap = new THREE.Mesh(capGeo, capMat);
       cap.position.set(x, 0, z);
       cap.rotation.y = a + Math.PI / 2;
       cap.scale.setScalar(scale);
-      cap.userData.surfaceLift = 0;
       cap.castShadow = true;
       g.add(cap);
     }

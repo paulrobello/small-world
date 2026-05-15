@@ -797,6 +797,7 @@ export function placeInstanced(geo, mat, count, heightFn, opts = {}) {
     avoidObstacleKinds = null,
     avoidRadius = 0,
     visualRadius = false,
+    excludedCircles = [],
   } = opts;
   const avoidObstacleKindSet = avoidObstacleKinds
     ? (avoidObstacleKinds instanceof Set ? avoidObstacleKinds : new Set(avoidObstacleKinds))
@@ -836,6 +837,12 @@ export function placeInstanced(geo, mat, count, heightFn, opts = {}) {
       }
       if (blocked) continue;
     }
+    let excluded = false;
+    for (const c of excludedCircles) {
+      const dx = x - c.x, dz = z - c.z;
+      if (dx * dx + dz * dz < c.r * c.r) { excluded = true; break; }
+    }
+    if (excluded) continue;
     const y = heightFn(x, z);
     if (y < minHeight || y > maxHeight) continue;
 
@@ -860,7 +867,7 @@ export function placeInstanced(geo, mat, count, heightFn, opts = {}) {
 
 export { makeGrassField } from "./grass.js";
 
-export function makeWildflowerField(biome, heightFn) {
+export function makeWildflowerField(biome, heightFn, excludedCircles = []) {
   const palette = WILDFLOWER_PALETTES[biome.id] ?? ["#ffffff"];
   const total = _coverScale(FLOWER_DENSITY[biome.id] ?? 100, 1.6);
   const perColor = Math.max(8, Math.floor(total / palette.length));
@@ -888,6 +895,7 @@ export function makeWildflowerField(biome, heightFn) {
       avoidObstacleKinds: ["lavafissure"],
       avoidRadius: 0.12,
       visualRadius: true,
+      excludedCircles,
     });
     if (biome.glowFlowers) inst.layers.enable(BLOOM_LAYER);
     inst.userData.inspect = { category: "flora", variant: "wildflower" };
@@ -896,7 +904,7 @@ export function makeWildflowerField(biome, heightFn) {
   return meshes;
 }
 
-export function makeVerdantGroveDetails(biome, heightFn) {
+export function makeVerdantGroveDetails(biome, heightFn, excludedCircles = []) {
   if (!biome.groveDetails?.groundCover) return null;
 
   const group = new THREE.Group();
@@ -920,6 +928,7 @@ export function makeVerdantGroveDetails(biome, heightFn) {
     avoidObstacleKinds: ["lavafissure"],
     avoidRadius: 0.12,
     visualRadius: true,
+    excludedCircles,
   });
   mossPads.name = "moss-pads";
   mossPads.userData.inspect = { category: "flora", variant: "grassblade" };
@@ -943,6 +952,7 @@ export function makeVerdantGroveDetails(biome, heightFn) {
     avoidObstacleKinds: ["lavafissure"],
     avoidRadius: 0.12,
     visualRadius: true,
+    excludedCircles,
   });
   leaves.name = "leaf-litter";
   leaves.userData.inspect = { category: "flora", variant: "wildflower" };
@@ -967,6 +977,7 @@ export function makeVerdantGroveDetails(biome, heightFn) {
     avoidObstacleKinds: ["lavafissure"],
     avoidRadius: 0.12,
     visualRadius: true,
+    excludedCircles,
   });
   clover.name = "clover-tufts";
   clover.userData.inspect = { category: "flora", variant: "grassblade" };
@@ -990,6 +1001,7 @@ export function makeVerdantGroveDetails(biome, heightFn) {
     avoidObstacleKinds: ["lavafissure"],
     avoidRadius: 0.12,
     visualRadius: true,
+    excludedCircles,
   });
   dew.name = "dew-beads";
   dew.userData.inspect = { category: "flora", variant: "wildflower" };
@@ -999,7 +1011,7 @@ export function makeVerdantGroveDetails(biome, heightFn) {
   return group;
 }
 
-export function makeCloudPuffField(biome, heightFn) {
+export function makeCloudPuffField(biome, heightFn, excludedCircles = []) {
   if (!biome.cloudlike) return null;
 
   const count = _coverScale(LOWFX ? 38 : 64);
@@ -1023,6 +1035,7 @@ export function makeCloudPuffField(biome, heightFn) {
     tilt: 0.08,
     maxRadiusFrac: 0.84,
     minHeight: -0.25,
+    excludedCircles,
   });
   mesh.name = "cloud-puff-pads";
   mesh.castShadow = false;
@@ -1036,6 +1049,7 @@ export function makeCloudPuffField(biome, heightFn) {
     tilt: 0.18,
     maxRadiusFrac: 0.72,
     minHeight: -0.25,
+    excludedCircles,
   });
   floatingCloudlets.name = "floatingCloudlets";
   floatingCloudlets.castShadow = false;
@@ -1045,7 +1059,7 @@ export function makeCloudPuffField(biome, heightFn) {
   return group;
 }
 
-export function makePebbleField(biome, heightFn) {
+export function makePebbleField(biome, heightFn, excludedCircles = []) {
   const count = _coverScale(PEBBLE_DENSITY[biome.id] ?? 80);
   if (count <= 0) return null;
   const g = jitterGeo(new THREE.IcosahedronGeometry(0.08, 0), 0.025);
@@ -1066,6 +1080,7 @@ export function makePebbleField(biome, heightFn) {
     avoidObstacleKinds: ["lavafissure"],
     avoidRadius: 0.12,
     visualRadius: true,
+    excludedCircles,
   });
   mesh.userData.inspect = { category: "flora", variant: "pebble" };
   return mesh;
@@ -1087,7 +1102,7 @@ function makeStarfishGeometry() {
   return geo;
 }
 
-export function makeBeachcombField(biome, heightFn) {
+export function makeBeachcombField(biome, heightFn, excludedCircles = []) {
   const total = BEACHCOMB_DENSITY[biome.id] ?? 0;
   if (total <= 0) return null;
 
@@ -1110,6 +1125,7 @@ export function makeBeachcombField(biome, heightFn) {
     minHeight: -0.08,
     maxHeight: 0.32,
     tilt: 0.35,
+    excludedCircles,
   });
   shells.userData.inspect = { category: "flora", variant: "shell" };
   group.add(shells);
@@ -1129,6 +1145,7 @@ export function makeBeachcombField(biome, heightFn) {
     minHeight: -0.12,
     maxHeight: 0.22,
     tilt: 0.12,
+    excludedCircles,
   });
   stars.userData.inspect = { category: "flora", variant: "starfish" };
   group.add(stars);

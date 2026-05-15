@@ -440,6 +440,8 @@ export function generateWorld(seed) {
   const CANOPY_SPACING_PAD = 2.8;
   const PLACEMENT_BLOCK_KINDS = new Set(["lavafissure"]);
   const floraPlacementBlocks = [];
+  // Track fairy-ring flatten zones so heightFn can be patched afterward.
+  const fairyFlat = []; // { cx, cz, r, flatY }
   function flattenTerrainCircle(cx, cz, r, flatY) {
     const mesh = state.terrainMesh;
     if (!mesh) return;
@@ -457,6 +459,7 @@ export function generateWorld(seed) {
     }
     pos.needsUpdate = true;
     mesh.geometry.computeVertexNormals();
+    fairyFlat.push({ cx, cz, r, flatY });
   }
   function blocksPlacement(x, z, r, kinds = PLACEMENT_BLOCK_KINDS) {
     const kindSet = kinds instanceof Set ? kinds : new Set(kinds);
@@ -555,7 +558,7 @@ export function generateWorld(seed) {
       landmark.rotation.y = Math.random() * Math.PI * 2;
       landmark.scale.setScalar(s);
       // Flatten terrain vertices inside the ring so mushrooms sit level.
-      flattenTerrainCircle(p.x, p.z, fp * 1.25, y);
+      flattenTerrainCircle(p.x, p.z, fp * 1.66, y);
       conformSurfaceChildrenToTerrain(landmark);
       state.world.add(landmark);
       floraPlacementBlocks.push({ kind: "fairyring", x: p.x, z: p.z, r: fp * 1.1 });
@@ -568,6 +571,25 @@ export function generateWorld(seed) {
       });
       placed++;
     }
+  }
+
+  // Patch heightFn to reflect fairy-ring flattening so all subsequent
+  // flora placement and conformSurfaceChildren see the real mesh heights.
+  if (fairyFlat.length) {
+    const rawHeightFn = state.heightFn;
+    state.heightFn = (x, z) => {
+      const h = rawHeightFn(x, z);
+      for (const { cx, cz, r, flatY } of fairyFlat) {
+        const dx = x - cx, dz = z - cz;
+        const d2 = dx * dx + dz * dz;
+        const r2 = r * r;
+        if (d2 >= r2) continue;
+        const t = 1 - d2 / r2;
+        const blend = t * t * (3 - 2 * t);
+        return h + (flatY - h) * blend;
+      }
+      return h;
+    };
   }
 
   while (placed < floraTarget && attempts < floraTarget * 6) {
@@ -742,23 +764,23 @@ export function generateWorld(seed) {
   }
 
   // ground cover — instanced grass / wildflowers / pebbles
-  // Collect fairy-ring circles so grass can exclude them.
-  const grassExclusions = floraPlacementBlocks
+  // Exclude fairy-ring circles from all ground cover placement.
+  const coverExclusions = floraPlacementBlocks
     .filter(b => b.kind === "fairyring")
     .map(b => ({ x: b.x, z: b.z, r: b.r }));
-  const grass = makeGrassField(biome, state.heightFn, grassExclusions);
+  const grass = makeGrassField(biome, state.heightFn, coverExclusions);
   if (grass) state.world.add(grass);
-  for (const m of makeWildflowerField(biome, state.heightFn)) {
+  for (const m of makeWildflowerField(biome, state.heightFn, coverExclusions)) {
     state.world.add(m);
     if (m.userData.positions) state.flowerSpots.push(...m.userData.positions);
   }
-  const groveDetails = makeVerdantGroveDetails(biome, state.heightFn);
+  const groveDetails = makeVerdantGroveDetails(biome, state.heightFn, coverExclusions);
   if (groveDetails) state.world.add(groveDetails);
-  const cloudPuffs = makeCloudPuffField(biome, state.heightFn);
+  const cloudPuffs = makeCloudPuffField(biome, state.heightFn, coverExclusions);
   if (cloudPuffs) state.world.add(cloudPuffs);
-  const beachcomb = makeBeachcombField(biome, state.heightFn);
+  const beachcomb = makeBeachcombField(biome, state.heightFn, coverExclusions);
   if (beachcomb) state.world.add(beachcomb);
-  const pebbles = makePebbleField(biome, state.heightFn);
+  const pebbles = makePebbleField(biome, state.heightFn, coverExclusions);
   if (pebbles) state.world.add(pebbles);
   state.groundMarks = makeGroundMarks(biome);
   if (state.groundMarks) state.world.add(state.groundMarks);
