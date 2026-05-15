@@ -240,12 +240,7 @@ function addGroveMushroomFamily(group, biome, { radius = 0.44, count = 3, capY =
   const stemMat = pooled("grove.babyMushroom.stem.mat.smooth", () =>
     new THREE.MeshStandardMaterial({ color: "#f4e6c9", roughness: 0.95 })
   );
-  const capMat = pooled("grove.babyMushroom.cap.mat.smooth", () =>
-    new THREE.MeshStandardMaterial({
-      color: new THREE.Color(biome.accent).lerp(new THREE.Color("#b85f2a"), 0.18),
-      roughness: 0.68,
-    })
-  );
+  const baseCapColor = new THREE.Color(biome.accent).lerp(new THREE.Color("#b85f2a"), 0.18);
   const babies = count + Math.floor(Math.random() * 3);
   for (let i = 0; i < babies; i++) {
     const a = Math.random() * Math.PI * 2;
@@ -258,7 +253,15 @@ function addGroveMushroomFamily(group, biome, { radius = 0.44, count = 3, capY =
     stem.scale.setScalar(scale);
     stem.castShadow = true;
     group.add(stem);
-    const cap = new THREE.Mesh(capGeo, capMat);
+    const babyCapColor = baseCapColor.clone().offsetHSL(
+      (Math.random() - 0.5) * 0.06,
+      (Math.random() - 0.5) * 0.15,
+      (Math.random() - 0.5) * 0.10
+    );
+    const cap = new THREE.Mesh(capGeo, new THREE.MeshStandardMaterial({
+      color: babyCapColor,
+      roughness: 0.68,
+    }));
     cap.position.set(x, 0, z);
     cap.scale.setScalar(scale);
     cap.rotation.y = Math.random() * Math.PI * 2;
@@ -664,14 +667,14 @@ export const FLORA_BUILDERS = {
         .scale(1.4, 0.9, 1.4)
         .translate(0, STEM_TOP + 0.01, 0)
     );
-    const capMat = pooled("mushroom.cap.mat.smooth", () =>
-      applyWindSway(
-        new THREE.MeshStandardMaterial({
-          color: new THREE.Color(biome.accent),
-          roughness: 0.6,
-        }),
-        MUSH_WIND
-      )
+    const capColor = new THREE.Color(biome.accent).offsetHSL(
+      (Math.random() - 0.5) * 0.06,
+      (Math.random() - 0.5) * 0.15,
+      (Math.random() - 0.5) * 0.10
+    );
+    const capMat = applyWindSway(
+      new THREE.MeshStandardMaterial({ color: capColor, roughness: 0.6 }),
+      MUSH_WIND
     );
     const cap = new THREE.Mesh(capGeo, capMat);
     cap.castShadow = true;
@@ -1125,14 +1128,14 @@ export const FLORA_BUILDERS = {
     const capGeo = new THREE.SphereGeometry(0.8, 12, 8, 0, Math.PI * 2, 0, Math.PI / 2)
       .scale(1, 0.55, 1)
       .translate(0, stemH, 0);
-    const capMat = pooled("bigmushroom.cap.mat.smooth", () =>
-      applyWindSway(
-        new THREE.MeshStandardMaterial({
-          color: new THREE.Color(biome.accent),
-          roughness: 0.55,
-        }),
-        BIG_WIND
-      )
+    const capColor = new THREE.Color(biome.accent).offsetHSL(
+      (Math.random() - 0.5) * 0.06,
+      (Math.random() - 0.5) * 0.15,
+      (Math.random() - 0.5) * 0.10
+    );
+    const capMat = applyWindSway(
+      new THREE.MeshStandardMaterial({ color: capColor, roughness: 0.55 }),
+      BIG_WIND
     );
     const cap = new THREE.Mesh(capGeo, capMat);
     cap.castShadow = true;
@@ -1213,10 +1216,7 @@ export const FLORA_BUILDERS = {
       .scale(1.28, 0.72, 1.28)
       .translate(0, 0.18, 0);
     const stemMat = new THREE.MeshStandardMaterial({ color: "#f4e6c9", roughness: 0.95 });
-    const capMat = new THREE.MeshStandardMaterial({
-      color: new THREE.Color(biome.accent).lerp(new THREE.Color("#b85f2a"), 0.18),
-      roughness: 0.68,
-    });
+    const capBaseColor = new THREE.Color(biome.accent).lerp(new THREE.Color("#b85f2a"), 0.18);
     const mushrooms = 10 + Math.floor(Math.random() * 4);
     for (let i = 0; i < mushrooms; i++) {
       const a = (i / mushrooms) * Math.PI * 2 + (Math.random() - 0.5) * 0.18;
@@ -1229,7 +1229,15 @@ export const FLORA_BUILDERS = {
       stem.scale.setScalar(scale);
       stem.castShadow = true;
       g.add(stem);
-      const cap = new THREE.Mesh(capGeo, capMat);
+      const capColor = capBaseColor.clone().offsetHSL(
+        (Math.random() - 0.5) * 0.06,
+        (Math.random() - 0.5) * 0.15,
+        (Math.random() - 0.5) * 0.10
+      );
+      const cap = new THREE.Mesh(capGeo, new THREE.MeshStandardMaterial({
+        color: capColor,
+        roughness: 0.68,
+      }));
       cap.position.set(x, 0, z);
       cap.rotation.y = a + Math.PI / 2;
       cap.scale.setScalar(scale);
