@@ -10,6 +10,8 @@ BIOMES_JS = ROOT / "src" / "biomes.js"
 ENVIRONMENT_JS = ROOT / "src" / "environment.js"
 WORLD_JS = ROOT / "src" / "world.js"
 MAIN_JS = ROOT / "main.js"
+INDEX_HTML = ROOT / "index.html"
+UI_JS = ROOT / "src" / "ui.js"
 CREATURE_JS = ROOT / "src" / "fauna" / "creature.js"
 CATERPILLAR_JS = ROOT / "src" / "fauna" / "caterpillar.js"
 
@@ -61,7 +63,8 @@ class GroundMarksStaticTest(unittest.TestCase):
         self.assertIn("diffuseColor.rgb = mix", section)
         self.assertIn("state.waterMesh && y < WATER_AVOID_Y", section)
         self.assertIn("mark.age += dt", section)
-        self.assertIn("mark.life", section)
+        self.assertIn("groundMarkLifeScale", section)
+        self.assertIn("mark.baseLife", section)
         self.assertIn("texture.dispose", section)
         self.assertNotIn("GROUND_MARK_LIFT", section)
         self.assertNotIn("new THREE.InstancedMesh", section)
@@ -83,6 +86,18 @@ class GroundMarksStaticTest(unittest.TestCase):
         self.assertIn("state.groundMarks = makeGroundMarks(biome)", world_source)
         self.assertIn("stepGroundMarks", main_source)
         self.assertIn("stepGroundMarks(state.groundMarks, dt, state.heightFn)", main_source)
+
+    def test_print_and_trail_lifetime_has_settings_control(self) -> None:
+        state_source = STATE_JS.read_text()
+        ui_source = UI_JS.read_text()
+        html_source = INDEX_HTML.read_text()
+
+        self.assertIn("groundMarkLifeScale: 1.0", state_source)
+        self.assertIn('"groundMarkLifeScale"', ui_source)
+        self.assertIn('id="setting-ground-mark-life"', html_source)
+        self.assertIn('id="setting-ground-mark-life-value"', html_source)
+        self.assertIn("state.userSettings.groundMarkLifeScale", ui_source)
+        self.assertIn("saveSettings()", ui_source)
 
     def test_soft_ground_biomes_are_configured(self) -> None:
         source = BIOMES_JS.read_text()

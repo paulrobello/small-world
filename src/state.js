@@ -123,6 +123,7 @@ export const state = {
     terrainSmoothShading: true,
     foliageWindEnabled: true,
     bloomRadius: 1.0,
+    groundMarkLifeScale: 1.0,
   },
   // Set by world.js after makeTerrain. Used by the smooth-shading toggle in
   // ui.js to flip mat.flatShading at runtime without rebuilding geometry.

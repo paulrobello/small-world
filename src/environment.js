@@ -692,11 +692,16 @@ function _paintGroundMark(system, mark, opacity) {
   }
 }
 
+function _groundMarkLife(mark) {
+  const scale = state.userSettings.groundMarkLifeScale ?? 1;
+  return mark.baseLife * Math.max(0.01, scale);
+}
+
 function _repaintGroundMarks(system) {
   const d = system.userData;
   d.ctx.clearRect(0, 0, d.size, d.size);
   for (const mark of d.marks) {
-    const u = mark.age / Math.max(0.001, mark.life);
+    const u = mark.age / Math.max(0.001, _groundMarkLife(mark));
     const fade = 1 - u * u * (3 - 2 * u);
     _paintGroundMark(system, mark, mark.opacity * fade);
   }
@@ -758,7 +763,7 @@ export function emitGroundMark(system, opts = {}) {
     width: Math.max(0.01, (opts.width ?? 0.18) * softness),
     length: Math.max(0.01, (opts.length ?? 0.32) * softness),
     opacity: opts.opacity ?? d.cfg.opacity ?? 0.2,
-    life: opts.life ?? d.cfg.life ?? 6,
+    baseLife: opts.life ?? d.cfg.life ?? 6,
     age: 0,
   };
   if (d.marks.length >= d.maxMarks) d.marks.shift();
@@ -776,7 +781,7 @@ export function stepGroundMarks(system, dt) {
   for (let i = d.marks.length - 1; i >= 0; i--) {
     const mark = d.marks[i];
     mark.age += dt;
-    if (mark.age >= mark.life) d.marks.splice(i, 1);
+    if (mark.age >= _groundMarkLife(mark)) d.marks.splice(i, 1);
   }
   _repaintGroundMarks(system);
 }

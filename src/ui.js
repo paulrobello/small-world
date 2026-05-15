@@ -35,6 +35,7 @@ const PERSISTED_KEYS = [
   "outline",
   "ao",
   "depthFog",
+  "groundMarkLifeScale",
   "fxPanelOpen",
   "showFps",
   "windEnabled",
@@ -751,6 +752,8 @@ export function initUi({ camera, canvas, controls, renderer }) {
   const aoEl = document.getElementById("setting-ao");
   const depthFogEl = document.getElementById("setting-depthfog");
   const terrainSmoothEl = document.getElementById("setting-terrain-smooth");
+  const groundMarkLifeEl = document.getElementById("setting-ground-mark-life");
+  const groundMarkLifeValueEl = document.getElementById("setting-ground-mark-life-value");
   const bloomRadiusEl = document.getElementById("setting-bloom-radius");
   const bloomRadiusValueEl = document.getElementById("setting-bloom-radius-value");
   const lowfxHint = document.getElementById("setting-lowfx-hint");
@@ -765,6 +768,9 @@ export function initUi({ camera, canvas, controls, renderer }) {
   const bloomRadius = state.userSettings.bloomRadius ?? 1.0;
   bloomRadiusEl.value = String(Math.round(bloomRadius * 100));
   bloomRadiusValueEl.textContent = bloomRadiusEl.value + "%";
+  const groundMarkLifeScale = state.userSettings.groundMarkLifeScale ?? 1.0;
+  groundMarkLifeEl.value = String(Math.round(groundMarkLifeScale * 100));
+  groundMarkLifeValueEl.textContent = groundMarkLifeEl.value + "%";
   tiltEl.checked = state.userSettings.tiltShift;
   softParticlesEl.checked = state.userSettings.softParticles;
   outlineEl.checked = state.userSettings.outline;
@@ -798,6 +804,12 @@ export function initUi({ camera, canvas, controls, renderer }) {
     if (state.postfx && state.postfx.setBloomRadius) {
       state.postfx.setBloomRadius(state.userSettings.bloomRadius);
     }
+    saveSettings();
+  });
+  groundMarkLifeEl.addEventListener("input", () => {
+    const v = Number(groundMarkLifeEl.value);
+    state.userSettings.groundMarkLifeScale = v / 100;
+    groundMarkLifeValueEl.textContent = v + "%";
     saveSettings();
   });
   tiltEl.addEventListener("change", () => {
