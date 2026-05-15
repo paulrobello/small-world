@@ -14,6 +14,29 @@ CREATURE_JS = ROOT / "src" / "fauna" / "creature.js"
 CATERPILLAR_JS = ROOT / "src" / "fauna" / "caterpillar.js"
 
 
+def extract_biome_block(source: str, biome_id: str) -> str:
+    marker = f'id: "{biome_id}"'
+    marker_index = source.find(marker)
+    if marker_index == -1:
+        raise AssertionError(f"Biome {biome_id!r} not found")
+
+    block_start = source.rfind("{", 0, marker_index)
+    if block_start == -1:
+        raise AssertionError(f"Biome {biome_id!r} block start not found")
+
+    depth = 0
+    for index in range(block_start, len(source)):
+        char = source[index]
+        if char == "{":
+            depth += 1
+        elif char == "}":
+            depth -= 1
+            if depth == 0:
+                return source[block_start : index + 1]
+
+    raise AssertionError(f"Biome {biome_id!r} block end not found")
+
+
 class GroundMarksStaticTest(unittest.TestCase):
     def test_ground_mark_system_exports_and_shader_alpha(self) -> None:
         source = ENVIRONMENT_JS.read_text()
@@ -40,11 +63,12 @@ class GroundMarksStaticTest(unittest.TestCase):
     def test_soft_ground_biomes_are_configured(self) -> None:
         source = BIOMES_JS.read_text()
 
-        self.assertGreaterEqual(source.count("groundMarks:"), 6)
-        self.assertIn('poof: "sand"', source)
-        self.assertIn('id: "desert"', source)
-        self.assertIn('id: "golden"', source)
-        self.assertIn('id: "mossy"', source)
+        for biome_id in ("verdant", "desert", "frozen", "golden", "mossy", "twilight", "grove"):
+            biome_block = extract_biome_block(source, biome_id)
+            self.assertIn("groundMarks:", biome_block, biome_id)
+
+        desert_block = extract_biome_block(source, "desert")
+        self.assertIn('poof: "sand"', desert_block)
 
     def test_walkers_and_fliers_emit_marks(self) -> None:
         source = CREATURE_JS.read_text()
