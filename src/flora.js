@@ -939,7 +939,7 @@ export const FLORA_BUILDERS = {
   skull() {
     const g = new THREE.Group();
     const mat = pooled("skull.mat", () =>
-      new THREE.MeshStandardMaterial({ color: "#f1ead8", flatShading: true, roughness: 0.8 })
+      new THREE.MeshStandardMaterial({ color: "#f1ead8", roughness: 0.8 })
     );
     const skullGeo = pooled("skull.geo", () => new THREE.SphereGeometry(0.18, 10, 8));
     const skull = new THREE.Mesh(skullGeo, mat);
