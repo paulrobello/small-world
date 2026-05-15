@@ -185,32 +185,33 @@ export function makeCreature(biome, opts = {}) {
 
   if (isBumblebee) {
     const stripes = opts.stripeColors || ["#111111", "#ffd13b"];
-    // Override bodyCol so fur, belly, legs all use the dark stripe color
     bodyCol.set(stripes[0]);
     body.material.color.set(stripes[0]);
     body.material.name = "bumblebee.body.mat";
     bodyBaseZ *= 1.25; // 25% elongation
     body.scale.set(bodyBaseX, bodyBaseY, bodyBaseZ);
-    // Stripe bands — furry yellow wraps around the dark body.
-    // Each band gets its own fur shells so the stripes read as fuzzy.
-    // Bands just slightly larger than the body radius (0.42) so they
-    // wrap tightly and read as stripes rather than bulging blobs.
-    const bandGeo = new THREE.IcosahedronGeometry(0.42, 1);
-    for (let bi = -1; bi <= 1; bi++) {
-      const band = new THREE.Mesh(bandGeo, new THREE.MeshStandardMaterial({
-        color: new THREE.Color(stripes[1]),
-        flatShading: true,
-        roughness: 0.55,
-      }));
-      band.position.z = bi * 0.22;
-      band.scale.set(1.01, 1.01, 0.18);
-      body.add(band);
-      // Furry stripes — apply shell fur to each band mesh
-      applyShellFur(band, biome, {
-        baseColor: new THREE.Color(stripes[1]).clone(),
-        tipColor: new THREE.Color(stripes[1]).offsetHSL(0, -0.1, 0.08),
-      });
+    // Paint stripes directly onto the body surface via vertex colors
+    // so they conform perfectly instead of looking like wrapped toruses.
+    const darkCol = new THREE.Color(stripes[0]);
+    const lightCol = new THREE.Color(stripes[1]);
+    const pos = body.geometry.attributes.position;
+    const colors = new Float32Array(pos.count * 3);
+    // Stripe zones in local Z — three bands centered at -0.22, 0, +0.22
+    // with a half-width of 0.08. Outside those bands = dark.
+    for (let i = 0; i < pos.count; i++) {
+      const z = pos.getZ(i);
+      const inBand =
+        Math.abs(z - (-0.22)) < 0.08 ||
+        Math.abs(z - 0.00) < 0.08 ||
+        Math.abs(z - 0.22) < 0.08;
+      const col = inBand ? lightCol : darkCol;
+      colors[i * 3] = col.r;
+      colors[i * 3 + 1] = col.g;
+      colors[i * 3 + 2] = col.b;
     }
+    body.geometry.setAttribute("color", new THREE.BufferAttribute(colors, 3));
+    body.material.vertexColors = true;
+    body.material.needsUpdate = true;
   }
 
   let furShells = null;
