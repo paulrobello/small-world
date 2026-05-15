@@ -18,6 +18,12 @@ export const BIOMES = [
     creatureCount: [10, 16],
     furProbability: 1.0,
     furLength: 0.075,
+    flyerVariants: [
+      {
+        kind: "bumblebee",
+        stripeOverride: ["#111111", "#ffd13b"],
+      },
+    ],
     groundMarks: { color: "#20341f", opacity: 0.16, life: 5.5, softness: 1.15 },
     groveDetails: {
       mushroomFamilies: true,
