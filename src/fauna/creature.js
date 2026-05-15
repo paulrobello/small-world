@@ -195,7 +195,7 @@ export function makeCreature(biome, opts = {}) {
     // Each band gets its own fur shells so the stripes read as fuzzy.
     // Bands just slightly larger than the body radius (0.42) so they
     // wrap tightly and read as stripes rather than bulging blobs.
-    const bandGeo = new THREE.IcosahedronGeometry(0.43, 1);
+    const bandGeo = new THREE.IcosahedronGeometry(0.42, 1);
     for (let bi = -1; bi <= 1; bi++) {
       const band = new THREE.Mesh(bandGeo, new THREE.MeshStandardMaterial({
         color: new THREE.Color(stripes[1]),
@@ -203,7 +203,7 @@ export function makeCreature(biome, opts = {}) {
         roughness: 0.55,
       }));
       band.position.z = bi * 0.22;
-      band.scale.set(1.02, 1.02, 0.22);
+      band.scale.set(1.01, 1.01, 0.18);
       body.add(band);
       // Furry stripes — apply shell fur to each band mesh
       applyShellFur(band, biome, {
@@ -409,32 +409,33 @@ export function makeCreature(biome, opts = {}) {
       }
 
       if (isBumblebee) {
-        // Six tiny legs — three pairs along the underside
+        // Six legs — three pairs along the underside. Larger than the
+        // original tiny proportions so they're readable at half scale.
         const legMat = new THREE.MeshStandardMaterial({
-          color: bodyCol.clone().offsetHSL(0, 0, -0.3),
-          flatShading: true,
+          color: 0x111111,
+          roughness: 0.6,
         });
-        const legGeo = new THREE.CylinderGeometry(0.018, 0.015, 0.2, 4);
-        legGeo.translate(0, -0.1, 0);
+        const legGeo = new THREE.CylinderGeometry(0.028, 0.022, 0.38, 4);
+        legGeo.translate(0, -0.19, 0);
         const legPositions = [
-          [-0.14, 0.08],
-          [ 0.14, 0.08],
-          [-0.14, 0.00],
-          [ 0.14, 0.00],
-          [-0.14,-0.08],
-          [ 0.14,-0.08],
+          [-0.16, 0.10],
+          [ 0.16, 0.10],
+          [-0.16, 0.00],
+          [ 0.16, 0.00],
+          [-0.16,-0.10],
+          [ 0.16,-0.10],
         ];
         for (const [fx, fz] of legPositions) {
           const leg = new THREE.Mesh(legGeo, legMat);
-          leg.position.set(fx, -0.18, fz);
+          leg.position.set(fx, -0.14, fz);
           leg.castShadow = true;
           group.add(leg);
           legs.push(leg);
           const foot = new THREE.Mesh(
-            new THREE.SphereGeometry(0.025, 4, 4),
+            new THREE.SphereGeometry(0.03, 4, 4),
             legMat
           );
-          foot.position.set(fx, -0.38, fz);
+          foot.position.set(fx, -0.52, fz);
           group.add(foot);
           feet.push(foot);
         }
