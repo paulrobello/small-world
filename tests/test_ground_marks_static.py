@@ -86,6 +86,8 @@ class GroundMarksStaticTest(unittest.TestCase):
         self.assertIn("emitGroundMark", source)
         self.assertIn("emitCrawlerGroundMark", source)
         self.assertIn("lastGroundMarkX", source)
+        self.assertIn("lastGroundSampleX", source)
+        self.assertIn("lastGroundSampleZ", source)
         self.assertIn("groundMarkDistance", source)
         self.assertIn('c.type === "snail"', source)
 

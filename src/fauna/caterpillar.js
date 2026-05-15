@@ -248,6 +248,8 @@ export function makeCaterpillar(biome, opts = {}) {
     headingTarget: startHeading,
     lastGroundMarkX: startX,
     lastGroundMarkZ: startZ,
+    lastGroundSampleX: startX,
+    lastGroundSampleZ: startZ,
     groundMarkDistance: 0,
     // rad/s the heading can slew toward headingTarget. Snails turn a bit
     // more leisurely than caterpillars; both are fast enough that edge
@@ -266,10 +268,12 @@ function emitCrawlerGroundMark(c, x, z, heading, heightFn) {
   const cfg = state.currentBiome?.groundMarks;
   if (!marks || !cfg) return;
 
-  const dx = x - c.lastGroundMarkX;
-  const dz = z - c.lastGroundMarkZ;
+  const dx = x - c.lastGroundSampleX;
+  const dz = z - c.lastGroundSampleZ;
   const moved = Math.sqrt(dx * dx + dz * dz);
   c.groundMarkDistance += moved;
+  c.lastGroundSampleX = x;
+  c.lastGroundSampleZ = z;
   const isSnail = c.type === "snail";
   const interval = (isSnail ? 0.16 : 0.20) * c.scale;
   if (c.groundMarkDistance < interval) return;
