@@ -283,8 +283,11 @@ export const BIOMES = [
     fogDensity: 0.026,
     accent: "#ff7a2a",
     sun: "#ff9050",
-    flora: ["obsidianshard", "obsidianshard", "rock", "rock", "skull", "deadtree"],
-    floraCount: 50,
+    flora: [
+      "lavafissure", "lavafissure", "lavafissure",
+      "obsidianshard", "obsidianshard", "rock", "rock", "skull", "deadtree",
+    ],
+    floraCount: 56,
     particle: "spark",
     creatureColors: ["#1a1018", "#3a2018", "#ff7a2a", "#ffb060"],
     creatureCount: [7, 11],
