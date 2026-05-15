@@ -1159,12 +1159,7 @@ export const FLORA_BUILDERS = {
     // at the group origin so applyWindSway's transformed.y reads the spot's
     // actual world-y above ground. Without this the spots float free of the
     // cap whenever wind nudges the cap material.
-    const spotMat = pooled("bigmushroom.spot.mat", () =>
-      applyWindSway(
-        new THREE.MeshStandardMaterial({ color: "#fbf3df", flatShading: true, roughness: 0.9 }),
-        BIG_WIND
-      )
-    );
+    const spotBaseColor = new THREE.Color("#fbf3df");
     const spots = 3 + Math.floor(Math.random() * 3);
     const capR = 0.8;
     const capSY = 0.55;
@@ -1187,6 +1182,15 @@ export const FLORA_BUILDERS = {
       tmpMat.makeRotationFromQuaternion(tmpQuat);
       spotGeo.applyMatrix4(tmpMat);
       spotGeo.translate(x - n.x * sink, stemH + yLocal - n.y * sink, z - n.z * sink);
+      const spotColor = spotBaseColor.clone().offsetHSL(
+        (Math.random() - 0.5) * 0.08,
+        (Math.random() - 0.5) * 0.12,
+        (Math.random() - 0.5) * 0.08
+      );
+      const spotMat = applyWindSway(
+        new THREE.MeshStandardMaterial({ color: spotColor, flatShading: true, roughness: 0.9 }),
+        BIG_WIND
+      );
       const spot = new THREE.Mesh(spotGeo, spotMat);
       g.add(spot);
     }
