@@ -11,3 +11,4 @@ export {
 export { makeCaterpillar, stepCaterpillar } from "./fauna/caterpillar.js";
 export { makeButterfly, stepButterfly } from "./fauna/butterfly.js";
 export { makeBee, makeSwarm, stepBee } from "./fauna/bee.js";
+export { makeWillOWisp, stepWillOWisp } from "./fauna/willowisp.js";

@@ -8,7 +8,7 @@ import {
   setSceneRef,
   setControlsRef,
 } from "./src/world.js";
-import { stepCreature, stepCaterpillar, stepButterfly, stepBee, wakeCreature } from "./src/fauna.js";
+import { stepCreature, stepCaterpillar, stepButterfly, stepBee, wakeCreature, stepWillOWisp } from "./src/fauna.js";
 import { stepFlock } from "./src/birds.js";
 import {
   stepParticles,
@@ -232,6 +232,7 @@ function animate() {
   stepDustKicks(state.dustKicks, dt);
   stepGroundMarks(state.groundMarks, dt, state.heightFn);
   stepFlySwarms(state.flySwarms, t);
+  for (const w of state.willowisps) stepWillOWisp(w, dt, t, state.heightFn);
   stepShadowDisks(state.shadowDisks, state.heightFn);
   stepClouds(state.clouds, dt);
 

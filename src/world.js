@@ -26,6 +26,7 @@ import {
   makeButterfly,
   makeBee,
   makeSwarm,
+  makeWillOWisp,
   resetCreaturePool,
 } from "./fauna.js";
 import { makeFlock } from "./birds.js";
@@ -210,6 +211,7 @@ export function generateWorld(seed) {
   state.butterflies = [];
   state.bees = [];
   state.flySwarms = [];
+  state.willowisps = [];
   state.dirtPuffs = [];
   state.dustKicks = [];
   state.groundMarks = null;
@@ -566,9 +568,16 @@ export function generateWorld(seed) {
         kind: "fairyring",
         x: p.x,
         z: p.z,
-        r: fp * 0.72,
+        r: fp * 1.1,
         top: y0 + (OBSTACLE_TOP.fairyring ?? OBSTACLE_TOP_DEFAULT) * s,
       });
+      // Spawn will-o-wisps around the fairy ring
+      const wispCount = landmark.userData.willowispCount ?? 0;
+      for (let wi = 0; wi < wispCount; wi++) {
+        const wisp = makeWillOWisp(p.x, y, p.z, fp * 2);
+        state.world.add(wisp.group);
+        state.willowisps.push(wisp);
+      }
       placed++;
     }
   }

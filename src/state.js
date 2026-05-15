@@ -22,6 +22,7 @@ export const state = {
   caterpillars: [],
   butterflies: [],
   bees: [],
+  willowisps: [],
   // Tiny dark fly clouds hovering above props (currently desert skulls).
   // Each entry is a THREE.Points parented to state.world, with userData
   // { centerX, centerY, centerZ, seeds, count }. Stepped each frame by

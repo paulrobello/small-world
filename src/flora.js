@@ -1237,24 +1237,12 @@ export const FLORA_BUILDERS = {
       g.add(cap);
     }
 
+    // Will-o-wisps replace the old static spores.
+    // Store how many to spawn (1-3); the world placement code
+    // creates the actual WillOWisp objects and parents them to
+    // the scene so they can move independently.
     if (biome.groveDetails?.sporeGlow) {
-      const sporeGeo = new THREE.SphereGeometry(0.024, 6, 5);
-      const glow = new THREE.Color("#ffc36b");
-      const sporeMat = applySporeDrift(new THREE.MeshStandardMaterial({
-        color: glow,
-        emissive: glow.clone().multiplyScalar(1.45),
-        emissiveIntensity: 1.1,
-        flatShading: true,
-        roughness: 0.35,
-      }), 0.045);
-      for (let i = 0; i < 8; i++) {
-        const a = Math.random() * Math.PI * 2;
-        const r = 0.35 + Math.random() * 0.82;
-        const spore = new THREE.Mesh(sporeGeo, sporeMat);
-        spore.position.set(Math.cos(a) * r, 0.16 + Math.random() * 0.62, Math.sin(a) * r);
-        spore.layers.enable(BLOOM_LAYER);
-        g.add(spore);
-      }
+      g.userData.willowispCount = 1 + Math.floor(Math.random() * 3);
     }
 
     g.userData.capTopY = 0.32;
