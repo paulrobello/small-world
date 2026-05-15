@@ -2,6 +2,7 @@ import * as THREE from "three";
 import { state } from "../state.js";
 import { jitterGeo } from "../util.js";
 import { pickGroundPoint, nearestCenter } from "../terrain.js";
+import { emitGroundMark } from "../environment.js";
 import { applyShellFur } from "../fur.js";
 import { BLOOM_LAYER } from "../postfx.js";
 import { WATER_AVOID_Y, avoidObstacles } from "./shared.js";
@@ -245,6 +246,9 @@ export function makeCaterpillar(biome, opts = {}) {
     scale,
     heading: startHeading,
     headingTarget: startHeading,
+    lastGroundMarkX: startX,
+    lastGroundMarkZ: startZ,
+    groundMarkDistance: 0,
     // rad/s the heading can slew toward headingTarget. Snails turn a bit
     // more leisurely than caterpillars; both are fast enough that edge
     // avoidance (which sets target every frame while over the buffer)
@@ -255,6 +259,37 @@ export function makeCaterpillar(biome, opts = {}) {
     age: Math.random() * 100,
     furShells,
   };
+}
+
+function emitCrawlerGroundMark(c, x, z, heading, heightFn) {
+  const marks = state.groundMarks;
+  const cfg = state.currentBiome?.groundMarks;
+  if (!marks || !cfg) return;
+
+  const dx = x - c.lastGroundMarkX;
+  const dz = z - c.lastGroundMarkZ;
+  const moved = Math.sqrt(dx * dx + dz * dz);
+  c.groundMarkDistance += moved;
+  const isSnail = c.type === "snail";
+  const interval = (isSnail ? 0.16 : 0.20) * c.scale;
+  if (c.groundMarkDistance < interval) return;
+
+  const y = heightFn(x, z);
+  if (y <= 0.04) return;
+  c.groundMarkDistance = 0;
+  c.lastGroundMarkX = x;
+  c.lastGroundMarkZ = z;
+
+  emitGroundMark(marks, {
+    x,
+    y,
+    z,
+    heading,
+    width: (isSnail ? 0.34 : 0.22) * c.scale,
+    length: (isSnail ? 0.46 : 0.36) * c.scale,
+    opacity: cfg.opacity * (isSnail ? 0.82 : 0.66),
+    life: cfg.life * (isSnail ? 1.15 : 0.9),
+  });
 }
 
 export function stepCaterpillar(c, dt, t, heightFn) {
@@ -372,6 +407,7 @@ export function stepCaterpillar(c, dt, t, heightFn) {
   const headY = heightFn(nx, nz) + baseOffset;
   head.position.set(nx, headY, nz);
   head.rotation.y = -c.heading + Math.PI / 2;
+  emitCrawlerGroundMark(c, nx, nz, c.heading, heightFn);
 
   // Terrain tilt — same slope-sampling shape walkers use in stepCreature.
   // Sample heightFn along heading (forward/back) and perpendicular to it
