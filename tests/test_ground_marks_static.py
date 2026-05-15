@@ -92,7 +92,7 @@ class GroundMarksStaticTest(unittest.TestCase):
         ui_source = UI_JS.read_text()
         html_source = INDEX_HTML.read_text()
 
-        self.assertIn("groundMarkLifeScale: 1.0", state_source)
+        self.assertIn("groundMarkLifeScale: 2.0", state_source)
         self.assertIn('"groundMarkLifeScale"', ui_source)
         self.assertIn('id="setting-ground-mark-life"', html_source)
         self.assertIn('id="setting-ground-mark-life-value"', html_source)
