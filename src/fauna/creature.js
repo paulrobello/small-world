@@ -193,7 +193,9 @@ export function makeCreature(biome, opts = {}) {
     body.scale.set(bodyBaseX, bodyBaseY, bodyBaseZ);
     // Stripe bands — furry yellow wraps around the dark body.
     // Each band gets its own fur shells so the stripes read as fuzzy.
-    const bandGeo = new THREE.IcosahedronGeometry(0.44, 1);
+    // Bands just slightly larger than the body radius (0.42) so they
+    // wrap tightly and read as stripes rather than bulging blobs.
+    const bandGeo = new THREE.IcosahedronGeometry(0.43, 1);
     for (let bi = -1; bi <= 1; bi++) {
       const band = new THREE.Mesh(bandGeo, new THREE.MeshStandardMaterial({
         color: new THREE.Color(stripes[1]),
@@ -201,7 +203,7 @@ export function makeCreature(biome, opts = {}) {
         roughness: 0.55,
       }));
       band.position.z = bi * 0.22;
-      band.scale.set(1.08, 1.08, 0.24);
+      band.scale.set(1.02, 1.02, 0.22);
       body.add(band);
       // Furry stripes — apply shell fur to each band mesh
       applyShellFur(band, biome, {
