@@ -159,7 +159,7 @@ export function makeCreature(biome, opts = {}) {
   // values. That keeps a seed's fuzzy/smooth outcome stable when body detail
   // changes, and restores inspect seeds that were fuzzy before smoothing.
   const furProb = biome.furProbability ?? 0;
-  const wantsFur = furProb > 0 && !flies && Math.random() < furProb;
+  const wantsFur = furProb > 0 && !isFish && Math.random() < furProb;
 
   // body — rounder for fliers, more elongated for walkers
   const bodyGeo = jitterGeo(new THREE.IcosahedronGeometry(0.42, 1), 0.06);
@@ -181,7 +181,8 @@ export function makeCreature(biome, opts = {}) {
 
   let furShells = null;
   // Per-creature fur roll. furProbability ∈ [0,1]; biomes without an
-  // override fall back to 0 (no fur) — fliers/fish never get fur regardless.
+  // override fall back to 0 (no fur). Fish never get fur; fliers use the same
+  // short body fur as walkers.
   // The roll happens inside generateWorld's seeded Math.random window, so the
   // same seed reproduces the same fuzzy/smooth split.
   if (wantsFur) {

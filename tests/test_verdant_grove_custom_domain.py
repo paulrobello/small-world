@@ -150,7 +150,7 @@ class VerdantGroveCustomDomainTest(unittest.TestCase):
     def test_walker_fur_roll_happens_before_geometry_jitter(self) -> None:
         creature = (ROOT / "src" / "fauna" / "creature.js").read_text()
 
-        self.assertIn("const wantsFur = furProb > 0 && !flies && Math.random() < furProb", creature)
+        self.assertIn("const wantsFur = furProb > 0 && !isFish && Math.random() < furProb", creature)
         self.assertLess(creature.index("const wantsFur"), creature.index("const bodyGeo"))
         self.assertIn("if (wantsFur) {", creature)
 
@@ -173,6 +173,12 @@ class VerdantGroveCustomDomainTest(unittest.TestCase):
         self.assertIn("tipColor: bodyCol.clone()", creature)
         self.assertNotIn("new THREE.Color(biome.furTip)", creature)
         self.assertIn("vec3 cell = floor(vPos * 80.0);", fur)
+
+    def test_verdant_fliers_get_fur_but_fish_do_not(self) -> None:
+        creature = (ROOT / "src" / "fauna" / "creature.js").read_text()
+
+        self.assertIn("const wantsFur = furProb > 0 && !isFish && Math.random() < furProb", creature)
+        self.assertIn("Fish never get fur; fliers use the same", creature)
 
     def test_verdant_uses_leafballtree_with_custom_leaf_wind(self) -> None:
         biomes = (ROOT / "src" / "biomes.js").read_text()
