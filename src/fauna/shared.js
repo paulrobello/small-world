@@ -32,10 +32,13 @@ export function colorsClose(a, b) {
 // other and a walker doesn't push itself.
 //
 // Returns null when both phases pass cleanly — caller commits the straight
-// step.
+// step. opts.staticResponse controls static flora hits: "slide" preserves the
+// walker/flier tangent-slide behavior; "turn" only retargets heading and keeps
+// the current position for crawlers whose body should follow a head-led path.
 export function avoidObstacles(
-  px, pz, nx, nz, heading, step, cr, y, skipX, skipZ, selfOwner
+  px, pz, nx, nz, heading, step, cr, y, skipX, skipZ, selfOwner, opts
 ) {
+  const staticResponse = opts?.staticResponse ?? "slide";
   let result = null;
   const obs = state.obstacles;
   if (obs && obs.length > 0) {
@@ -79,9 +82,12 @@ export function avoidObstacles(
           break;
         }
       }
+      const tangentHeading = Math.atan2(tz, tx);
       result = wedged
         ? { nx: px, nz: pz, heading: Math.atan2(nrz, nrx) + (Math.random() - 0.5) * 0.5 }
-        : { nx: sx, nz: sz, heading: Math.atan2(tz, tx) };
+        : staticResponse === "turn"
+          ? { nx: px, nz: pz, heading: tangentHeading }
+          : { nx: sx, nz: sz, heading: tangentHeading };
       break;
     }
   }

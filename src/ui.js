@@ -6,6 +6,7 @@ import { islandFalloff, nearestCenter } from "./terrain.js";
 import { wakeCreature, lookAtCreature } from "./fauna.js";
 import { BIOMES } from "./biomes.js";
 import { LOWFX } from "./lowfx.js";
+import { INSPECT } from "./inspect.js";
 
 let followTarget = null;
 let selectingCreature = false;
@@ -1200,6 +1201,8 @@ export function initUi({ camera, canvas, controls, renderer }) {
         sp.set("category", category);
         sp.set("biome", biomeId);
         sp.set("variant", variant);
+        if (n.userData.inspect.fur != null) sp.set("fur", n.userData.inspect.fur);
+        if (n.userData.inspect.color != null) sp.set("color", n.userData.inspect.color);
         const url = window.location.pathname + "?" + sp.toString();
         window.open(url, "_blank", "noopener,noreferrer");
         return;
@@ -1263,7 +1266,11 @@ export function initUi({ camera, canvas, controls, renderer }) {
     // wake fuzzy sleepers from cursor positions that aren't actually over the
     // visible body. Treat a fur-shell-only hit as a passive look-at.
     const furOnly = !!hitObj?.userData?.isFurShell;
-    if (c.isSleeper) {
+    const looksAsleep =
+      c.isSleeper ||
+      (!c.flies && c.sleepiness > 0.4) ||
+      (c.flies && !c.isFish && c.sleepiness > 0.4);
+    if (looksAsleep) {
       if (!furOnly) wakeCreature(c);
     } else if (c !== _lastLookedAt) {
       lookAtCreature(c);
@@ -1276,6 +1283,7 @@ export function initUi({ camera, canvas, controls, renderer }) {
     // address bar overlays aren't relevant — but a user-typed range is).
     const tag = e.target?.tagName;
     if (tag === "INPUT" || tag === "TEXTAREA") return;
+    if (INSPECT) return;
     if (e.key === "Escape") {
       if (_stroll) _exitStroll();
       else if (document.body.classList.contains("photo-mode")) setPhotoMode(false);

@@ -152,7 +152,9 @@ class VerdantGroveCustomDomainTest(unittest.TestCase):
     def test_walker_fur_roll_happens_before_geometry_jitter(self) -> None:
         creature = (ROOT / "src" / "fauna" / "creature.js").read_text()
 
-        self.assertIn("const wantsFur = furProb > 0 && !isFish && Math.random() < furProb", creature)
+        self.assertIn("const furRoll = furProb > 0 ? Math.random() : 1", creature)
+        self.assertIn("const wantsFur = !isFish && (opts.furry ?? (furProb > 0 && furRoll < furProb))", creature)
+        self.assertLess(creature.index("const furRoll"), creature.index("const bodyGeo"))
         self.assertLess(creature.index("const wantsFur"), creature.index("const bodyGeo"))
         self.assertIn("if (wantsFur) {", creature)
 
@@ -162,6 +164,13 @@ class VerdantGroveCustomDomainTest(unittest.TestCase):
         self.assertNotIn("if (LOWFX) return null", fur)
         self.assertIn("const layers = opts.layers ?? (LOWFX ? 4 : 8);", fur)
         self.assertIn("const furLength = opts.length ?? biome.furLength ?? (LOWFX ? 0.082 : 0.072);", fur)
+
+    def test_mushroom_grove_creature_palette_uses_muted_spore_tones(self) -> None:
+        biomes = (ROOT / "src" / "biomes.js").read_text()
+        grove_block = biomes[biomes.index('id: "grove"') : biomes.index('id: "obsidian"')]
+
+        self.assertIn('creatureColors: ["#ff90c0", "#c7a0c8", "#9c84d4", "#ffd1a3"]', grove_block)
+        self.assertNotIn('"#fff2b3"', grove_block)
 
     def test_verdant_fur_is_readable_in_live_world(self) -> None:
         biomes = (ROOT / "src" / "biomes.js").read_text()
@@ -179,7 +188,7 @@ class VerdantGroveCustomDomainTest(unittest.TestCase):
     def test_verdant_fliers_get_fur_but_fish_do_not(self) -> None:
         creature = (ROOT / "src" / "fauna" / "creature.js").read_text()
 
-        self.assertIn("const wantsFur = furProb > 0 && !isFish && Math.random() < furProb", creature)
+        self.assertIn("const wantsFur = !isFish && (opts.furry ?? (furProb > 0 && furRoll < furProb))", creature)
         self.assertIn("Fish never get fur; fliers use the same", creature)
 
     def test_verdant_uses_leafballtree_with_custom_leaf_wind(self) -> None:

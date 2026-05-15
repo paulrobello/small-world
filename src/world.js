@@ -417,7 +417,7 @@ export function generateWorld(seed) {
   // visually and adding collision there reads as fussy.
   const OBSTACLE_KINDS = new Set([
     "tree", "leafballtree", "pine", "deadtree", "mushroom", "bigmushroom",
-    "fairyring", "pillar", "archstone", "balloontree", "crystal",
+    "fairyring", "cactus", "pillar", "archstone", "balloontree", "crystal",
     "lantern", "obsidianshard", "skull", "lavafissure",
   ]);
   // Per-kind canopy top height (local Y of the highest visible mass at
@@ -425,7 +425,7 @@ export function generateWorld(seed) {
   // trunk; fliers above that altitude can pass over freely.
   const OBSTACLE_TOP = {
     tree: 2.3, leafballtree: 2.25, pine: 2.2, deadtree: 1.8, mushroom: 1.1,
-    bigmushroom: 2.6, fairyring: 0.9, pillar: 2.8, archstone: 2.6, balloontree: 3.2,
+    bigmushroom: 2.6, fairyring: 0.9, cactus: 1.2, pillar: 2.8, archstone: 2.6, balloontree: 3.2,
     crystal: 1.6, lantern: 1.7, obsidianshard: 2.2, skull: 1.5,
     lavafissure: 0.16,
   };

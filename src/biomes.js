@@ -320,7 +320,7 @@ export const BIOMES = [
     flora: ["bigmushroom", "bigmushroom", "mushroom", "mushroom", "mushroom", "fern", "rock"],
     floraCount: 95,
     particle: "pollen",
-    creatureColors: ["#ff90c0", "#fff2b3", "#9c84d4", "#ffd1a3"],
+    creatureColors: ["#ff90c0", "#c7a0c8", "#9c84d4", "#ffd1a3"],
     creatureCount: [10, 15],
     groundMarks: { color: "#263016", opacity: 0.17, life: 5.8, softness: 1.2 },
     furProbability: 0.55,

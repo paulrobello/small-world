@@ -152,14 +152,15 @@ export function makeCreature(biome, opts = {}) {
               : "walker",
   };
   const palette = biome.creatureColors;
-  const bodyCol = new THREE.Color(
-    palette[Math.floor(Math.random() * palette.length)]
-  );
+  const bodyCol = opts.color instanceof THREE.Color
+    ? opts.color.clone()
+    : new THREE.Color(palette[Math.floor(Math.random() * palette.length)]);
   // Roll fur before geometry jitter consumes a variable number of random
   // values. That keeps a seed's fuzzy/smooth outcome stable when body detail
   // changes, and restores inspect seeds that were fuzzy before smoothing.
   const furProb = biome.furProbability ?? 0;
-  const wantsFur = furProb > 0 && !isFish && Math.random() < furProb;
+  const furRoll = furProb > 0 ? Math.random() : 1;
+  const wantsFur = !isFish && (opts.furry ?? (furProb > 0 && furRoll < furProb));
 
   // body — rounder for fliers, more elongated for walkers
   const bodyGeo = jitterGeo(new THREE.IcosahedronGeometry(0.42, 1), 0.06);
@@ -191,6 +192,8 @@ export function makeCreature(biome, opts = {}) {
       tipColor: bodyCol.clone(),
     });
   }
+  group.userData.inspect.fur = furShells ? "1" : "0";
+  group.userData.inspect.color = bodyCol.getHexString();
 
   // belly highlight
   const belly = new THREE.Mesh(
@@ -709,17 +712,25 @@ function herdInfluence(c, dt) {
 // they'd re-curl immediately because state.nightFactor is still high).
 export function wakeCreature(c) {
   const naturallyAsleep = !c.flies && c.sleepiness > 0.05;
-  if (!c.isSleeper && !naturallyAsleep) return;
+  const drowsyFlier = c.flies && !c.isFish && c.sleepiness > 0.05;
+  if (!c.isSleeper && !naturallyAsleep && !drowsyFlier) return;
   c.isSleeper = false;
   c.sleepiness = 0;
+  c.alertUntil = (c.age ?? 0) + 8;
+  c.heading = Math.random() * Math.PI * 2;
+  c.nextThink = 0.3 + Math.random() * 0.6;
+  if (drowsyFlier) {
+    if (drowsyFlier && (c.landState === "landed" || c.landState === "descending")) {
+      c.landState = "ascending";
+      c.landTimer = 8 + Math.random() * 6;
+    }
+    return;
+  }
   c._waking = true;
   // Reset wakeProgress so the unfurl actually animates from curled → upright.
   // For natural sleepers wakeProgress was 1 (set at spawn), so without this
   // the eyes/body would snap open instantly on wake.
   c.wakeProgress = 0;
-  c.alertUntil = (c.age ?? 0) + 8;
-  c.heading = Math.random() * Math.PI * 2;
-  c.nextThink = 0.3 + Math.random() * 0.6;
 }
 
 // Pick a mushroom cap within reach as the next landing target. Called
@@ -778,6 +789,7 @@ export function stepCreature(c, dt, t, heightFn) {
     let target = (nf - a) / Math.max(0.001, b - a);
     if (target < 0) target = 0;
     else if (target > 1) target = 1;
+    if (c.alertUntil && c.age < c.alertUntil) target = 0;
     c.sleepiness += (target - c.sleepiness) * Math.min(1, dt * 0.6);
   }
 

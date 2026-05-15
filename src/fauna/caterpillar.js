@@ -10,6 +10,30 @@ import { WATER_AVOID_Y, avoidObstacles } from "./shared.js";
 // ─────────────────────────────────────────────────────────────────────────────
 // Caterpillar — head + 3-8 body spheres, body segments follow head's trail
 // ─────────────────────────────────────────────────────────────────────────────
+const TRAIL_RETENTION_PADDING = 1.0;
+const TRAIL_MIN_POINT_DISTANCE = 0.01;
+
+function trailSegmentLength(a, b) {
+  const dx = a.x - b.x;
+  const dy = (a.y ?? 0) - (b.y ?? 0);
+  const dz = a.z - b.z;
+  return Math.sqrt(dx * dx + dy * dy + dz * dz);
+}
+
+function trimTrailByDistance(trail, maxDistance) {
+  if (trail.length < 2) return;
+  let acc = 0;
+  for (let i = 1; i < trail.length; i++) {
+    acc += trailSegmentLength(trail[i - 1], trail[i]);
+    // Keep the first point beyond maxDistance so findTrailPointAt can still
+    // interpolate the rear-most segment instead of falling off the trail.
+    if (acc > maxDistance) {
+      trail.length = i + 1;
+      return;
+    }
+  }
+}
+
 function findTrailPointAt(trail, distance) {
   if (trail.length === 0) return null;
   if (trail.length === 1) return trail[0];
@@ -45,9 +69,9 @@ export function makeCaterpillar(biome, opts = {}) {
     variant: isSnail ? "snail" : "caterpillar",
   };
   const palette = biome.creatureColors;
-  const baseCol = new THREE.Color(
-    palette[Math.floor(Math.random() * palette.length)]
-  );
+  const baseCol = opts.color instanceof THREE.Color
+    ? opts.color.clone()
+    : new THREE.Color(palette[Math.floor(Math.random() * palette.length)]);
   const altCol = baseCol.clone().offsetHSL(0, 0.05, 0.12);
 
   const segments = [];
@@ -139,6 +163,10 @@ export function makeCaterpillar(biome, opts = {}) {
     });
     const seg = new THREE.Mesh(segGeo, mat);
     seg.castShadow = true;
+    // Body segments are visually spherical, but snails carry a shell parented
+    // to the rear segment. Yaw the segment along the sampled trail tangent so
+    // the shell stays behind the head instead of sliding sideways through turns.
+    seg.rotation.order = "YXZ";
     group.add(seg);
     segments.push(seg);
   }
@@ -220,7 +248,8 @@ export function makeCaterpillar(biome, opts = {}) {
   // a hairy rock, not as a snail).
   let furShells = null;
   const furProb = biome.furProbability ?? 0;
-  if (!isSnail && (opts.furry ?? (furProb > 0 && Math.random() < furProb))) {
+  const furRoll = furProb > 0 ? Math.random() : 1;
+  if (!isSnail && (opts.furry ?? (furProb > 0 && furRoll < furProb))) {
     furShells = [];
     // Length scaled to segment radius (creatures use 0.072 on radius 0.42,
     // ~17% — match that ratio here).
@@ -235,6 +264,8 @@ export function makeCaterpillar(biome, opts = {}) {
       if (shells) furShells.push(...shells);
     }
   }
+  group.userData.inspect.fur = furShells ? "1" : "0";
+  group.userData.inspect.color = baseCol.getHexString();
 
   return {
     type: isSnail ? "snail" : "caterpillar",
@@ -243,6 +274,7 @@ export function makeCaterpillar(biome, opts = {}) {
     segRadius,
     trail,
     segSpacing,
+    trailMaxDistance: segments.length * segSpacing + TRAIL_RETENTION_PADDING,
     scale,
     heading: startHeading,
     headingTarget: startHeading,
@@ -341,10 +373,11 @@ export function stepCaterpillar(c, dt, t, heightFn) {
       (Math.random() - 0.5) * 0.4;
   }
 
-  // Obstacle slide — small radius since caterpillars are skinny. Pass `c`
-  // as selfOwner so the head doesn't try to avoid its own body segments
-  // (every segment of this caterpillar is registered in dynamicObstacles
-  // with the same owner ref).
+  // Obstacle avoidance — small radius since caterpillars are skinny. Static
+  // flora should make the head turn in place, not tangent-slide the whole
+  // trail sideways; pass `c` as selfOwner so the head doesn't try to avoid its
+  // own body segments (every segment of this caterpillar is registered in
+  // dynamicObstacles with the same owner ref).
   const slide = avoidObstacles(
     head.position.x,
     head.position.z,
@@ -356,7 +389,8 @@ export function stepCaterpillar(c, dt, t, heightFn) {
     undefined,
     undefined,
     undefined,
-    c
+    c,
+    { staticResponse: "turn" }
   );
   if (slide) {
     nx = slide.nx;
@@ -436,18 +470,35 @@ export function stepCaterpillar(c, dt, t, heightFn) {
   head.rotation.x += (pitchTarget - head.rotation.x) * k;
   head.rotation.z += (rollTarget - head.rotation.z) * k;
 
-  // record path (3D so 3D-arclength following stays accurate on slopes)
-  c.trail.unshift({ x: nx, y: headY, z: nz });
-  if (c.trail.length > 300) c.trail.length = 300;
+  // record path (3D so 3D-arclength following stays accurate on slopes).
+  // Retain by arc length, not frame count: slow crawlers at high FPS produce
+  // dense samples, and a fixed point cap can cover less distance than the tail
+  // needs, collapsing multiple rear segments onto the oldest point.
+  const trailPoint = { x: nx, y: headY, z: nz };
+  if (c.trail.length > 0 && trailSegmentLength(c.trail[0], trailPoint) < TRAIL_MIN_POINT_DISTANCE) {
+    c.trail[0] = trailPoint;
+  } else {
+    c.trail.unshift(trailPoint);
+  }
+  trimTrailByDistance(c.trail, c.trailMaxDistance);
 
   // body segments sample the trail at fixed arc-length offsets
   for (let i = 1; i < c.segments.length; i++) {
-    const pt = findTrailPointAt(c.trail, i * c.segSpacing);
+    const seg = c.segments[i];
+    const d = i * c.segSpacing;
+    const pt = findTrailPointAt(c.trail, d);
     if (!pt) continue;
     const groundY = heightFn(pt.x, pt.z);
     // subtle wave along the body — small enough that they stay touching
     const bob = Math.sin(c.age * 3.5 - i * 0.7) * 0.03 * c.scale;
-    c.segments[i].position.set(pt.x, groundY + baseOffset + bob, pt.z);
-    c.segments[i].rotation.z = Math.sin(c.age * 2 - i * 0.5) * 0.06;
+    seg.position.set(pt.x, groundY + baseOffset + bob, pt.z);
+
+    const frontPt = findTrailPointAt(c.trail, Math.max(0, d - c.segSpacing * 0.5));
+    const backPt = findTrailPointAt(c.trail, d + c.segSpacing * 0.5);
+    if (frontPt && backPt) {
+      const bodyHeading = Math.atan2(frontPt.z - backPt.z, frontPt.x - backPt.x);
+      seg.rotation.y = -bodyHeading + Math.PI / 2;
+    }
+    seg.rotation.z = Math.sin(c.age * 2 - i * 0.5) * 0.06;
   }
 }

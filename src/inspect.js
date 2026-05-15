@@ -39,11 +39,11 @@ function _formatVectorParam(v) {
 }
 
 const CREATURE_VARIANTS = [
-  { name: "walker",   kind: "creature",    build: (biome) => makeCreature(biome) },
-  { name: "flier",    kind: "creature",    build: (biome) => {
+  { name: "walker",   kind: "creature",    build: (biome, opts = {}) => makeCreature(biome, opts) },
+  { name: "flier",    kind: "creature",    build: (biome, opts = {}) => {
       // re-roll until we get a flier (or, on fish biomes, a fish — they always fly)
       for (let i = 0; i < 30; i++) {
-        const c = makeCreature(biome);
+        const c = makeCreature(biome, opts);
         if (c.flies) return c;
         // dispose the rejected creature's geometry to avoid leaks
         c.group.traverse((o) => {
@@ -54,14 +54,14 @@ const CREATURE_VARIANTS = [
           }
         });
       }
-      return makeCreature(biome);
+      return makeCreature(biome, opts);
     } },
-  { name: "fish",     kind: "creature",    build: (biome) => makeCreature({ ...biome, creatureKind: "fish" }) },
-  { name: "angler",   kind: "creature",    build: (biome) => makeCreature({ ...biome, creatureKind: "fish", anglerFish: true }, { angler: true }) },
-  { name: "sleeper",  kind: "creature",    build: (biome) => makeCreature(biome, { sleeper: true }) },
-  { name: "burrower", kind: "creature",    build: (biome) => makeCreature(biome, { burrower: true }) },
-  { name: "caterpillar", kind: "caterpillar", build: (biome) => makeCaterpillar(biome) },
-  { name: "snail",       kind: "caterpillar", build: (biome) => makeCaterpillar(biome, { kind: "snail" }) },
+  { name: "fish",     kind: "creature",    build: (biome, opts = {}) => makeCreature({ ...biome, creatureKind: "fish" }, opts) },
+  { name: "angler",   kind: "creature",    build: (biome, opts = {}) => makeCreature({ ...biome, creatureKind: "fish", anglerFish: true }, { ...opts, angler: true }) },
+  { name: "sleeper",  kind: "creature",    build: (biome, opts = {}) => makeCreature(biome, { ...opts, sleeper: true }) },
+  { name: "burrower", kind: "creature",    build: (biome, opts = {}) => makeCreature(biome, { ...opts, burrower: true }) },
+  { name: "caterpillar", kind: "caterpillar", build: (biome, opts = {}) => makeCaterpillar(biome, opts) },
+  { name: "snail",       kind: "caterpillar", build: (biome, opts = {}) => makeCaterpillar(biome, { ...opts, kind: "snail" }) },
 ];
 
 // Single-instance stand-ins for things that exist only as InstancedMesh fields
@@ -367,6 +367,8 @@ function _findCategoryIdx(id) {
 //   &camera=<x,y,z>&target=<x,y,z> — exact initial camera pose; overrides view when both are valid
 //   &screenshot=1                 — download a PNG after the first framed render
 //   &wind=1                       — enable foliage wind in inspect (default: off)
+//   &fur=0|1                      — force fur off/on for fur-capable creature variants
+//   &color=<rrggbb>               — force creature body color to match a clicked live specimen
 //   &paused=0                     — start rotating/animating (default: paused)
 function _findBiomeIdx(id) {
   if (!id) return 0;
@@ -382,6 +384,18 @@ function _parseSeed(raw) {
   if (raw == null) return null;
   const n = raw.startsWith("0x") ? parseInt(raw, 16) : parseInt(raw, 10);
   return Number.isFinite(n) ? (n >>> 0) : null;
+}
+function _parseBoolParam(raw) {
+  if (raw == null) return null;
+  if (["1", "true", "on", "yes"].includes(raw.toLowerCase())) return true;
+  if (["0", "false", "off", "no"].includes(raw.toLowerCase())) return false;
+  return null;
+}
+function _parseColorParam(raw) {
+  if (!raw) return null;
+  const hex = raw.trim().replace(/^#/, "");
+  if (!/^[0-9a-fA-F]{6}$/.test(hex)) return null;
+  return new THREE.Color(`#${hex}`);
 }
 
 let _categoryIdx = _findCategoryIdx(_params.get("category"));
@@ -406,6 +420,10 @@ if (!_cameraOverride || !_targetOverride) {
 let _autoScreenshot = _params.get("screenshot") === "1";
 let _autoScreenshotDone = false;
 let _inspectWindEnabled = _params.get("wind") === "1";
+let _furOverride = _parseBoolParam(_params.get("fur"));
+let _inspectFurEnabled = _furOverride ?? false;
+let _specimenHasFur = false;
+let _colorOverride = _parseColorParam(_params.get("color"));
 let _paused = _params.get("paused") !== "0";
 // Pending single-frame step. 0 = no step. Positive = forward, negative = back.
 let _stepDt = 0;
@@ -432,6 +450,8 @@ function _syncUrl() {
   }
   if (_autoScreenshot) sp.set("screenshot", "1");
   if (_inspectWindEnabled) sp.set("wind", "1");
+  sp.set("fur", _inspectFurEnabled ? "1" : "0");
+  if (_colorOverride) sp.set("color", _colorOverride.getHexString());
   sp.set("paused", _paused ? "1" : "0");
   const next = window.location.pathname + "?" + sp.toString();
   if (next !== window.location.pathname + window.location.search) {
@@ -628,10 +648,16 @@ function spawnSpecimen(scene) {
   Math.random = mulberry32(seed);
   let c;
   try {
-    c = variant.build(biome);
+    c = variant.build(biome, {
+      ...(_furOverride == null ? {} : { furry: _furOverride }),
+      color: _colorOverride ?? undefined,
+    });
   } finally {
     Math.random = original;
   }
+
+  _specimenHasFur = !!(c?.furShells && c.furShells.length);
+  if (_furOverride == null) _inspectFurEnabled = _specimenHasFur;
 
   _specimen = c;
   _specimenKind = variant.kind;
@@ -701,9 +727,11 @@ function updateHud() {
   const category = CATEGORIES[_categoryIdx];
   const pauseTag = _paused ? `<span class="ihud-paused">PAUSED</span>` : "";
   const windTag = _inspectWindEnabled ? `<span class="ihud-paused">WIND</span>` : "";
+  const furTag = _specimenHasFur ? `<span class="ihud-paused">FUR</span>` : "";
   // Reroll has no visible effect for most flora; hide the hint there to
   // avoid implying we'll change something.
   const rerollHint = category === "flora" ? "" : " &nbsp; r reroll";
+  const furHint = category === "flora" ? "" : "f fur &nbsp; ";
   _hudEl.innerHTML =
     `<span class="ihud-key">INSPECT</span>` +
     `<span class="ihud-val">${biome.name}</span>` +
@@ -713,7 +741,8 @@ function updateHud() {
     `<span class="ihud-val">${variant.name}</span>` +
     pauseTag +
     windTag +
-    `<span class="ihud-keys">[/] biome &nbsp; k category &nbsp; ,/. variant${rerollHint} &nbsp; w wind &nbsp; s screenshot &nbsp; space pause &nbsp; ←/→ step</span>`;
+    furTag +
+    `<span class="ihud-keys">${furHint}[/] biome &nbsp; k category &nbsp; ,/. variant${rerollHint} &nbsp; w wind &nbsp; s screenshot &nbsp; space pause &nbsp; ←/→ step</span>`;
 }
 
 const _flatHeight = () => 0;
@@ -781,6 +810,10 @@ export function setupInspect(scene, renderer, camera, controls) {
   window.addEventListener("keydown", (e) => {
     const tag = e.target?.tagName;
     if (tag === "INPUT" || tag === "TEXTAREA") return;
+    const handledKeys = ["[", "]", ",", ".", "r", "s", "S", "w", "W", "f", "F", " ", "ArrowRight", "ArrowLeft", "k"];
+    if (!handledKeys.includes(e.key)) return;
+    e.preventDefault();
+    e.stopImmediatePropagation();
     if (e.key === "[") {
       _biomeIdx = (_biomeIdx - 1 + BIOMES.length) % BIOMES.length;
       _seedOverride = null; // new context — derive a fresh seed
@@ -810,6 +843,13 @@ export function setupInspect(scene, renderer, camera, controls) {
       applyInspectWindSetting();
       updateHud();
       _syncUrl();
+    } else if (e.key === "f" || e.key === "F") {
+      if (CATEGORIES[_categoryIdx] !== "flora") {
+        e.preventDefault();
+        _inspectFurEnabled = !_inspectFurEnabled;
+        _furOverride = _inspectFurEnabled;
+        spawnSpecimen(scene);
+      }
     } else if (e.key === " ") {
       _paused = !_paused;
       _stepDt = 0;
@@ -831,7 +871,7 @@ export function setupInspect(scene, renderer, camera, controls) {
       _seedOverride = null;
       spawnSpecimen(scene);
     }
-  });
+  }, { capture: true });
 
   spawnSpecimen(scene);
   scheduleAutoScreenshot(renderer);
