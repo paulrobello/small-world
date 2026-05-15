@@ -127,10 +127,11 @@ function spawnZ(c) {
 //   burrower     — spawn as burrower variant (walkers only)
 export function makeCreature(biome, opts = {}) {
   const isAngler = !!opts.angler;
+  const isBumblebee = opts.variant === "bumblebee";
   const isFish = biome.creatureKind === "fish" || isAngler;
   // sleepers and burrowers must be walkers — sleeping fliers in mid-air look broken
   const forceWalk = !!(opts.sleeper || opts.burrower);
-  const flies = isFish ? true : forceWalk ? false : Math.random() < 0.3;
+  const flies = isFish ? true : isBumblebee ? true : forceWalk ? false : Math.random() < 0.3;
 
   const group = new THREE.Group();
   // YXZ order so heading yaw applies first, then pitch/roll resolve in the
@@ -147,9 +148,11 @@ export function makeCreature(biome, opts = {}) {
           ? "angler"
           : isFish
             ? "fish"
-            : flies
-              ? "flier"
-              : "walker",
+            : isBumblebee
+              ? "bumblebee"
+              : flies
+                ? "flier"
+                : "walker",
   };
   const palette = biome.creatureColors;
   const bodyCol = opts.color instanceof THREE.Color
@@ -160,7 +163,7 @@ export function makeCreature(biome, opts = {}) {
   // changes, and restores inspect seeds that were fuzzy before smoothing.
   const furProb = biome.furProbability ?? 0;
   const furRoll = furProb > 0 ? Math.random() : 1;
-  const wantsFur = !isFish && (opts.furry ?? (furProb > 0 && furRoll < furProb));
+  const wantsFur = isBumblebee || (!isFish && (opts.furry ?? (furProb > 0 && furRoll < furProb)));
 
   // body — rounder for fliers, more elongated for walkers
   const bodyGeo = jitterGeo(new THREE.IcosahedronGeometry(0.42, 1), 0.06);
@@ -173,12 +176,33 @@ export function makeCreature(biome, opts = {}) {
       metalness: 0.02,
     })
   );
-  const bodyBaseY = isFish ? 0.72 : flies ? 0.92 : 0.82;
-  const bodyBaseX = isFish ? 0.9 : flies ? 1.05 : 1;
-  const bodyBaseZ = isFish ? 1.45 : flies ? 1.05 : 1.25;
+  let bodyBaseY = isFish ? 0.72 : flies ? 0.92 : 0.82;
+  let bodyBaseX = isFish ? 0.9 : flies ? 1.05 : 1;
+  let bodyBaseZ = isFish ? 1.45 : flies ? 1.05 : 1.25;
   body.scale.set(bodyBaseX, bodyBaseY, bodyBaseZ);
   body.castShadow = true;
   group.add(body);
+
+  if (isBumblebee) {
+    const stripes = opts.stripeColors || ["#111111", "#ffd13b"];
+    body.material.color.set(stripes[0]);
+    body.material.name = "bumblebee.body.mat";
+    bodyBaseZ *= 1.25; // 25% elongation
+    body.scale.set(bodyBaseX, bodyBaseY, bodyBaseZ);
+    // Stripe bands — small flattened icospheres wrapping the body
+    const stripeMat = new THREE.MeshStandardMaterial({
+      color: new THREE.Color(stripes[1]),
+      flatShading: true,
+      roughness: 0.45,
+    });
+    const bandGeo = new THREE.IcosahedronGeometry(0.40, 0);
+    for (let bi = -1; bi <= 1; bi++) {
+      const band = new THREE.Mesh(bandGeo, stripeMat);
+      band.position.z = bi * 0.18;
+      band.scale.set(1.02, 1.02, 0.22);
+      body.add(band);
+    }
+  }
 
   let furShells = null;
   // Per-creature fur roll. furProbability ∈ [0,1]; biomes without an
@@ -252,7 +276,7 @@ export function makeCreature(biome, opts = {}) {
 
   // antennae for some
   const antennae = [];
-  if (!isFish && Math.random() > 0.55) {
+  if (!isFish && (isBumblebee || Math.random() > 0.55)) {
     const antMat = new THREE.MeshStandardMaterial({
       color: bodyCol.clone().offsetHSL(0, 0, -0.2),
     });
@@ -375,19 +399,64 @@ export function makeCreature(biome, opts = {}) {
         wings.push(pivot);
       }
 
-      // two dangling feet for charm (no legs, just little nubs hanging)
-      const dangleMat = new THREE.MeshStandardMaterial({
-        color: bodyCol.clone().offsetHSL(0, 0, -0.25),
-        flatShading: true,
-      });
-      for (const sign of [-1, 1]) {
-        const dangle = new THREE.Mesh(
-          new THREE.CylinderGeometry(0.025, 0.04, 0.16, 5),
-          dangleMat
-        );
-        dangle.position.set(sign * 0.11, -0.36, 0.02);
-        dangle.castShadow = true;
-        group.add(dangle);
+      if (isBumblebee) {
+        // Six tiny legs — three pairs along the underside
+        const legMat = new THREE.MeshStandardMaterial({
+          color: bodyCol.clone().offsetHSL(0, 0, -0.3),
+          flatShading: true,
+        });
+        const legGeo = new THREE.CylinderGeometry(0.018, 0.015, 0.2, 4);
+        legGeo.translate(0, -0.1, 0);
+        const legPositions = [
+          [-0.14, 0.08],
+          [ 0.14, 0.08],
+          [-0.14, 0.00],
+          [ 0.14, 0.00],
+          [-0.14,-0.08],
+          [ 0.14,-0.08],
+        ];
+        for (const [fx, fz] of legPositions) {
+          const leg = new THREE.Mesh(legGeo, legMat);
+          leg.position.set(fx, -0.18, fz);
+          leg.castShadow = true;
+          group.add(leg);
+          legs.push(leg);
+          const foot = new THREE.Mesh(
+            new THREE.SphereGeometry(0.025, 4, 4),
+            legMat
+          );
+          foot.position.set(fx, -0.38, fz);
+          group.add(foot);
+          feet.push(foot);
+        }
+      } else {
+        // two dangling feet for charm (no legs, just little nubs hanging)
+        const dangleMat = new THREE.MeshStandardMaterial({
+          color: bodyCol.clone().offsetHSL(0, 0, -0.25),
+          flatShading: true,
+        });
+        for (const sign of [-1, 1]) {
+          const dangle = new THREE.Mesh(
+            new THREE.CylinderGeometry(0.025, 0.04, 0.16, 5),
+            dangleMat
+          );
+          dangle.position.set(sign * 0.11, -0.36, 0.02);
+          dangle.castShadow = true;
+          group.add(dangle);
+        }
+      }
+      // Stinger — small rounded cone at the rear
+      if (isBumblebee) {
+        const stingerGeo = new THREE.ConeGeometry(0.06, 0.22, 6);
+        stingerGeo.rotateX(Math.PI / 2);
+        stingerGeo.translate(0, 0, -0.5);
+        const stinger = new THREE.Mesh(stingerGeo, new THREE.MeshStandardMaterial({
+          color: 0x201610,
+          flatShading: true,
+          roughness: 0.6,
+        }));
+        stinger.castShadow = true;
+        group.add(stinger);
       }
     }
   } else {
@@ -439,7 +508,7 @@ export function makeCreature(biome, opts = {}) {
   const baseScale = 0.65 + Math.random() * 0.6;
   // burrowers are notably smaller; kids inherit sizeMul on top
   const burrowScale = opts.burrower ? 0.55 : 1;
-  const scale = baseScale * sizeMul * burrowScale * (isFish ? 0.5625 : 1);
+  const scale = baseScale * sizeMul * burrowScale * (isFish ? 0.5625 : 1) * (isBumblebee ? 0.5 : 1);
   group.scale.setScalar(scale);
 
   const hoverHeight = 1.4 + Math.random() * 1.8;
