@@ -565,64 +565,115 @@ export function stepDustKicks(kicks, dt) {
 }
 
 // ─── soft-ground creature marks ───
-const GROUND_MARK_LIFT = 0.035;
 const GROUND_MARK_MIN_Y = 0.04;
-const GROUND_MARK_CAP = LOWFX ? 80 : 240;
+// Shader-painted marks loop over this cap per terrain fragment, so keep the
+// budget lower than the old geometry-overlay pool while still enough for cute
+// fading trails. Old slots are reused in a ring when full.
+const GROUND_MARK_CAP = LOWFX ? 48 : 128;
 
-const _groundMarkVS = `
-attribute float aAlpha;
-varying vec2 vUv;
-varying float vAlpha;
-void main() {
-  vUv = uv;
-  vAlpha = aAlpha;
-  vec4 worldPosition = modelMatrix * instanceMatrix * vec4(position, 1.0);
-  gl_Position = projectionMatrix * viewMatrix * worldPosition;
+const _groundMarkPaint = `
+float groundMarkAlpha = 0.0;
+for (int i = 0; i < GROUND_MARK_CAP; i++) {
+  if (i >= uGroundMarkCount) break;
+  vec4 markA = uGroundMarkA[i];
+  if (markA.w > 0.001) {
+    vec4 markB = uGroundMarkB[i];
+    vec2 delta = vGroundMarkXZ - markA.xy;
+    float ch = cos(markA.z);
+    float sh = sin(markA.z);
+    vec2 local = vec2(
+      ch * delta.x + sh * delta.y,
+      -sh * delta.x + ch * delta.y
+    );
+    vec2 scaled = vec2(
+      local.x / max(0.001, markB.x),
+      local.y / max(0.001, markB.y)
+    );
+    float d = length(vec2(scaled.x * 0.82, scaled.y * 1.18));
+    float oval = 1.0 - smoothstep(0.18, 0.5, d);
+    float center = 1.0 - smoothstep(0.04, 0.36, d);
+    float alpha = oval * (0.72 + center * 0.28) * markA.w;
+    groundMarkAlpha = max(groundMarkAlpha, alpha);
+  }
 }
+diffuseColor.rgb = mix(diffuseColor.rgb, uGroundMarkColor, clamp(groundMarkAlpha, 0.0, 0.85));
 `;
 
-const _groundMarkFS = `
-precision highp float;
-uniform vec3 uColor;
-varying vec2 vUv;
-varying float vAlpha;
-void main() {
-  vec2 p = vUv - 0.5;
-  float d = length(vec2(p.x * 0.82, p.y * 1.18));
-  float oval = 1.0 - smoothstep(0.18, 0.5, d);
-  float center = 1.0 - smoothstep(0.04, 0.36, d);
-  float alpha = oval * (0.72 + center * 0.28) * vAlpha;
-  if (alpha <= 0.005) discard;
-  gl_FragColor = vec4(uColor, alpha);
+function _makeGroundMarkUniforms(color, capacity) {
+  return {
+    uGroundMarkColor: { value: new THREE.Color(color) },
+    uGroundMarkCount: { value: capacity },
+    uGroundMarkA: {
+      value: Array.from({ length: capacity }, () => new THREE.Vector4(0, 0, 0, 0)),
+    },
+    uGroundMarkB: {
+      value: Array.from({ length: capacity }, () => new THREE.Vector4(1, 1, 0, 0)),
+    },
+  };
 }
-`;
 
-const _markM = new THREE.Matrix4();
-const _markQ = new THREE.Quaternion();
-const _markP = new THREE.Vector3();
-const _markS = new THREE.Vector3();
-const _markHiddenScale = new THREE.Vector3(0, 0, 0);
-const _markUp = new THREE.Vector3(0, 1, 0);
+function installGroundMarkShader(system) {
+  const mat = state.terrainMesh?.material;
+  if (!mat || mat.userData.groundMarkSystem === system) return;
 
-function _hideGroundMark(system, i) {
+  const d = system.userData;
+  const uniforms = d.uniforms;
+  const prev = mat.onBeforeCompile;
+  mat.onBeforeCompile = (shader) => {
+    if (prev) prev(shader);
+    shader.uniforms.uGroundMarkColor = uniforms.uGroundMarkColor;
+    shader.uniforms.uGroundMarkCount = uniforms.uGroundMarkCount;
+    shader.uniforms.uGroundMarkA = uniforms.uGroundMarkA;
+    shader.uniforms.uGroundMarkB = uniforms.uGroundMarkB;
+    shader.vertexShader = shader.vertexShader
+      .replace(
+        "#include <common>",
+        `#include <common>
+         varying vec2 vGroundMarkXZ;`
+      )
+      .replace(
+        "#include <begin_vertex>",
+        `#include <begin_vertex>
+         vGroundMarkXZ = transformed.xz;`
+      );
+    shader.fragmentShader = shader.fragmentShader
+      .replace(
+        "#include <common>",
+        `#include <common>
+         #define GROUND_MARK_CAP ${d.capacity}
+         uniform vec3 uGroundMarkColor;
+         uniform int uGroundMarkCount;
+         uniform vec4 uGroundMarkA[GROUND_MARK_CAP];
+         uniform vec4 uGroundMarkB[GROUND_MARK_CAP];
+         varying vec2 vGroundMarkXZ;`
+      )
+      .replace(
+        "vec4 diffuseColor = vec4( diffuse, opacity );",
+        `vec4 diffuseColor = vec4( diffuse, opacity );
+         ${_groundMarkPaint}`
+      );
+  };
+  mat.userData.groundMarkSystem = system;
+  mat.userData.groundMarkUniforms = uniforms;
+  mat.needsUpdate = true;
+}
+
+function _clearGroundMark(system, i) {
   const d = system.userData;
   d.active[i] = 0;
-  d.alphas[i] = 0;
-  _markP.set(0, -999, 0);
-  _markQ.identity();
-  _markM.compose(_markP, _markQ, _markHiddenScale);
-  system.setMatrixAt(i, _markM);
+  d.uniforms.uGroundMarkA.value[i].set(0, 0, 0, 0);
+  d.uniforms.uGroundMarkB.value[i].set(1, 1, 0, 0);
 }
 
 function _writeGroundMark(system, i, alphaScale) {
   const d = system.userData;
-  const y = d.ys[i] + GROUND_MARK_LIFT;
-  _markP.set(d.xs[i], y, d.zs[i]);
-  _markQ.setFromAxisAngle(_markUp, d.headings[i]);
-  _markS.set(d.widths[i], 1, d.lengths[i]);
-  _markM.compose(_markP, _markQ, _markS);
-  system.setMatrixAt(i, _markM);
-  d.alphas[i] = d.opacities[i] * alphaScale;
+  d.uniforms.uGroundMarkA.value[i].set(
+    d.xs[i],
+    d.zs[i],
+    d.headings[i],
+    d.opacities[i] * alphaScale
+  );
+  d.uniforms.uGroundMarkB.value[i].set(d.widths[i], d.lengths[i], 0, 0);
 }
 
 export function makeGroundMarks(biome) {
@@ -630,34 +681,14 @@ export function makeGroundMarks(biome) {
   if (!cfg) return null;
 
   const capacity = Math.max(1, Math.round(cfg.capacity ?? GROUND_MARK_CAP));
-  const geo = new THREE.PlaneGeometry(1, 1, 1, 1).rotateX(-Math.PI / 2);
-  const alphas = new Float32Array(capacity);
-  geo.setAttribute("aAlpha", new THREE.InstancedBufferAttribute(alphas, 1));
-
-  const mat = new THREE.ShaderMaterial({
-    uniforms: {
-      uColor: { value: new THREE.Color(cfg.color) },
-    },
-    vertexShader: _groundMarkVS,
-    fragmentShader: _groundMarkFS,
-    transparent: true,
-    depthWrite: false,
-    depthTest: true,
-    polygonOffset: true,
-    polygonOffsetFactor: -1,
-    polygonOffsetUnits: -1,
-  });
-
-  const mesh = new THREE.InstancedMesh(geo, mat, capacity);
-  mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
-  mesh.frustumCulled = false;
-  mesh.renderOrder = 3;
-  mesh.userData = {
+  const system = new THREE.Object3D();
+  system.name = "terrain-painted-ground-marks";
+  system.visible = false;
+  system.userData = {
     capacity,
     cursor: 0,
     active: new Uint8Array(capacity),
     xs: new Float32Array(capacity),
-    ys: new Float32Array(capacity),
     zs: new Float32Array(capacity),
     headings: new Float32Array(capacity),
     widths: new Float32Array(capacity),
@@ -665,19 +696,17 @@ export function makeGroundMarks(biome) {
     ages: new Float32Array(capacity),
     lifes: new Float32Array(capacity),
     opacities: new Float32Array(capacity),
-    alphas,
-    alphaAttr: geo.getAttribute("aAlpha"),
+    uniforms: _makeGroundMarkUniforms(cfg.color, capacity),
     cfg,
   };
 
-  for (let i = 0; i < capacity; i++) _hideGroundMark(mesh, i);
-  mesh.instanceMatrix.needsUpdate = true;
-  mesh.userData.alphaAttr.needsUpdate = true;
-  return mesh;
+  installGroundMarkShader(system);
+  return system;
 }
 
 export function emitGroundMark(system, opts = {}) {
   if (!system || !system.userData) return;
+  installGroundMarkShader(system);
   const d = system.userData;
   const x = opts.x;
   const z = opts.z;
@@ -690,7 +719,6 @@ export function emitGroundMark(system, opts = {}) {
   d.cursor = (d.cursor + 1) % d.capacity;
   d.active[i] = 1;
   d.xs[i] = x;
-  d.ys[i] = y;
   d.zs[i] = z;
   d.headings[i] = opts.heading ?? 0;
   d.widths[i] = Math.max(0.01, (opts.width ?? 0.18) * softness);
@@ -699,33 +727,23 @@ export function emitGroundMark(system, opts = {}) {
   d.lifes[i] = opts.life ?? d.cfg.life ?? 6;
   d.opacities[i] = opts.opacity ?? d.cfg.opacity ?? 0.2;
   _writeGroundMark(system, i, 1);
-  system.instanceMatrix.needsUpdate = true;
-  d.alphaAttr.needsUpdate = true;
 }
 
-export function stepGroundMarks(system, dt, heightFn) {
+export function stepGroundMarks(system, dt) {
   if (!system || !system.userData || dt <= 0) return;
+  installGroundMarkShader(system);
   const d = system.userData;
-  let matrixDirty = false;
-  let alphaDirty = false;
   for (let i = 0; i < d.capacity; i++) {
     if (!d.active[i]) continue;
     d.ages[i] += dt;
     if (d.ages[i] >= d.lifes[i]) {
-      _hideGroundMark(system, i);
-      matrixDirty = true;
-      alphaDirty = true;
+      _clearGroundMark(system, i);
       continue;
     }
-    if (heightFn) d.ys[i] = heightFn(d.xs[i], d.zs[i]);
     const u = d.ages[i] / Math.max(0.001, d.lifes[i]);
     const fade = 1 - u * u * (3 - 2 * u);
     _writeGroundMark(system, i, fade);
-    matrixDirty = true;
-    alphaDirty = true;
   }
-  if (matrixDirty) system.instanceMatrix.needsUpdate = true;
-  if (alphaDirty) d.alphaAttr.needsUpdate = true;
 }
 
 // ─── fly swarms (dark specks hovering over a fixed prop) ───

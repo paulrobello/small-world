@@ -37,16 +37,32 @@ def extract_biome_block(source: str, biome_id: str) -> str:
     raise AssertionError(f"Biome {biome_id!r} block end not found")
 
 
-class GroundMarksStaticTest(unittest.TestCase):
-    def test_ground_mark_system_exports_and_shader_alpha(self) -> None:
-        source = ENVIRONMENT_JS.read_text()
+def ground_mark_section(source: str) -> str:
+    start = source.index("// ─── soft-ground creature marks ───")
+    end = source.index("// ─── fly swarms", start)
+    return source[start:end]
 
-        self.assertIn("export function makeGroundMarks", source)
-        self.assertIn("export function emitGroundMark", source)
-        self.assertIn("export function stepGroundMarks", source)
-        self.assertIn("attribute float aAlpha", source)
-        self.assertIn("depthWrite: false", source)
-        self.assertIn("polygonOffset: true", source)
+
+class GroundMarksStaticTest(unittest.TestCase):
+    def test_ground_mark_system_paints_through_terrain_shader(self) -> None:
+        source = ENVIRONMENT_JS.read_text()
+        section = ground_mark_section(source)
+
+        self.assertIn("export function makeGroundMarks", section)
+        self.assertIn("export function emitGroundMark", section)
+        self.assertIn("export function stepGroundMarks", section)
+        self.assertIn("installGroundMarkShader", section)
+        self.assertIn("onBeforeCompile", section)
+        self.assertIn("uGroundMarkA", section)
+        self.assertIn("uGroundMarkB", section)
+        self.assertIn("uGroundMarkCount", section)
+        self.assertIn("vGroundMarkXZ", section)
+        self.assertIn("diffuseColor.rgb = mix", section)
+        self.assertNotIn("GROUND_MARK_LIFT", section)
+        self.assertNotIn("new THREE.InstancedMesh", section)
+        self.assertNotIn("new THREE.PlaneGeometry", section)
+        self.assertNotIn("attribute float aAlpha", section)
+        self.assertNotIn("polygonOffset: true", section)
 
     def test_state_world_and_main_wire_ground_marks(self) -> None:
         state_source = STATE_JS.read_text()
