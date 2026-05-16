@@ -400,12 +400,6 @@ export function makeCreature(biome, opts = {}) {
         furOpts.patternType = 2;
         furOpts.patternScale = 4 + Math.random() * 4;
         furOpts.stripeBandWidth = 0.35 + Math.random() * 0.2;
-      } else if (patRoll < 0.60) {
-        // Patches
-        furOpts.patternType = 3;
-        furOpts.patternScale = 3 + Math.random() * 3;
-        furOpts.stripeBandWidth = 0.3 + Math.random() * 0.15;
-        furOpts.stripeOffset = Math.random() * 10.0;
       }
 
       if (furOpts.patternType) {
