@@ -227,6 +227,48 @@ function makeInstancedLeafBatch(geometry, material, matrices) {
   return mesh;
 }
 
+function applyFernLeafletWind(material, strength = 1.0) {
+  const prev = material.onBeforeCompile;
+  material.onBeforeCompile = (shader) => {
+    if (prev) prev(shader);
+    shader.uniforms.uTime = state.windUniforms.uTime;
+    shader.uniforms.uWindStrength = { value: strength };
+    shader.uniforms.uFoliageWind = state.windUniforms.uFoliageWind;
+    shader.vertexShader = shader.vertexShader
+      .replace(
+        "#include <common>",
+        "#include <common>\nuniform float uTime;\nuniform float uWindStrength;\nuniform float uFoliageWind;"
+      )
+      .replace(
+        "#include <begin_vertex>",
+        `#include <begin_vertex>
+        {
+          #ifdef USE_INSTANCING
+            vec4 wp = modelMatrix * instanceMatrix * vec4(transformed, 1.0);
+            vec2 axW = vec2(instanceMatrix[0].x, instanceMatrix[0].z);
+            vec2 azW = vec2(instanceMatrix[2].x, instanceMatrix[2].z);
+            float invXZScaleSq = 1.0 / max(dot(axW, axW), 1e-6);
+            float windY = max(instanceMatrix[3].y + transformed.y, 0.0);
+          #else
+            vec4 wp = modelMatrix * vec4(transformed, 1.0);
+            vec2 axW = vec2(1.0, 0.0);
+            vec2 azW = vec2(0.0, 1.0);
+            float invXZScaleSq = 1.0;
+            float windY = max(transformed.y, 0.0);
+          #endif
+          float windAmp = windY * windY * uWindStrength * uFoliageWind;
+          float w1 = sin(uTime * 1.4 + wp.x * 0.30 + wp.z * 0.40);
+          float w2 = sin(uTime * 0.9 + wp.x * 0.15 - wp.z * 0.25);
+          vec2 windWorld = vec2(w1 * windAmp * 0.06, w2 * windAmp * 0.05);
+          transformed.x += dot(axW, windWorld) * invXZScaleSq;
+          transformed.z += dot(azW, windWorld) * invXZScaleSq;
+        }`
+      );
+  };
+  material.needsUpdate = true;
+  return material;
+}
+
 function addGroveMushroomFamily(group, biome, { radius = 0.44, count = 3, capY = 0.35 } = {}) {
   if (!biome.groveDetails?.mushroomFamilies) return;
   const stemGeo = pooled("grove.babyMushroom.stem.geo", () =>
@@ -832,7 +874,7 @@ export const FLORA_BUILDERS = {
       }),
       1.25
     );
-    const leafletMat = applyWindSway(
+    const leafletMat = applyFernLeafletWind(
       new THREE.MeshStandardMaterial({
         color: fernColor,
         flatShading: true,
