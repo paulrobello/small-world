@@ -28,6 +28,7 @@ import {
   makeSwarm,
   makeWillOWisp,
   resetCreaturePool,
+  buildObstacleGrid,
 } from "./fauna.js";
 import { makeFlock } from "./birds.js";
 import { makeShadowDisks } from "./shadows.js";
@@ -217,7 +218,9 @@ export function generateWorld(seed) {
   state.groundMarks = null;
   state.flowerSpots = [];
   state.obstacles = [];
+  state._dynPool = null;
   state.perchSpots = [];
+  state.creatureColorBuckets = null;
   state.particles = null;
   state.waterMesh = null;
   state.grass = null;
@@ -415,12 +418,12 @@ export function generateWorld(seed) {
   const FLORA_BURY = 0.08; // extra sink so the seam is hidden in soft fog
   // Flora kinds tall/solid enough that walkers should route around them
   // instead of clipping through. Low-profile or soft kinds (rocks, ferns,
-  // berrybushes, coral, reeds) are skipped — creatures can step over them
-  // visually and adding collision there reads as fussy.
+  // coral, reeds) are skipped — creatures can step over them visually and
+  // adding collision there reads as fussy.
   const OBSTACLE_KINDS = new Set([
     "tree", "leafballtree", "pine", "deadtree", "mushroom", "bigmushroom",
     "fairyring", "cactus", "pillar", "archstone", "balloontree", "crystal",
-    "lantern", "obsidianshard", "skull", "lavafissure",
+    "lantern", "obsidianshard", "skull", "lavafissure", "berrybush",
   ]);
   // Per-kind canopy top height (local Y of the highest visible mass at
   // scale=1). Fliers below ground + top * scale must route around the
@@ -429,7 +432,7 @@ export function generateWorld(seed) {
     tree: 2.3, leafballtree: 2.25, pine: 2.2, deadtree: 1.8, mushroom: 1.1,
     bigmushroom: 2.6, fairyring: 0.9, cactus: 1.2, pillar: 2.8, archstone: 2.6, balloontree: 3.2,
     crystal: 1.6, lantern: 1.7, obsidianshard: 2.2, skull: 1.5,
-    lavafissure: 0.16,
+    lavafissure: 0.16, berrybush: 0.58,
   };
   const OBSTACLE_TOP_DEFAULT = 2.0;
   // Extra pad on top of the slope-plant footprint so creature bodies don't
@@ -1099,6 +1102,21 @@ export function generateWorld(seed) {
   // restore native Math.random so per-frame animation isn't deterministic
   Math.random = originalRandom;
   writeSeedToUrl(seed);
+
+  // Build the spatial grid for static obstacle queries so avoidObstacles()
+  // can use O(nearby) lookups instead of scanning the full list.
+  buildObstacleGrid(state.obstacles);
+
+  // Build color buckets for O(1) herding lookups — group creatures by
+  // their bodyColor hex string so herdInfluence only scans same-colored
+  // peers instead of the full creature list.
+  const buckets = {};
+  for (const c of state.creatures) {
+    const key = c.colorBucket;
+    if (!buckets[key]) buckets[key] = [];
+    buckets[key].push(c);
+  }
+  state.creatureColorBuckets = buckets;
 
   // kick off the reveal animation — updateDayNight reads this timestamp
   state.revealStart = performance.now();

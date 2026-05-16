@@ -1,0 +1,397 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1, user-scalable=no" />
+  <meta name="theme-color" content="#000000" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <title>a small world — terrarium</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link
+    href="https://fonts.googleapis.com/css2?family=Cormorant+Infant:ital,wght@1,300;1,500&family=Major+Mono+Display&family=DM+Mono:wght@300;400;500&display=swap"
+    rel="stylesheet"
+  />
+
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://cdn.jsdelivr.net/npm/three@0.184.0/build/three.module.js",
+        "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.184.0/examples/jsm/",
+        "simplex-noise": "https://cdn.jsdelivr.net/npm/simplex-noise@4.0.3/dist/esm/simplex-noise.js"
+      }
+    }
+  </script>
+  <script type="module" crossorigin src="/assets/index-BSiaRG7B.js"></script>
+  <link rel="stylesheet" crossorigin href="/assets/index-U3u7GjKt.css">
+</head>
+<body>
+  <canvas id="scene"></canvas>
+
+  <div class="grain"></div>
+  <div class="vignette"></div>
+
+  <header class="hud hud-top">
+    <div class="title-block">
+      <div class="eyebrow">
+        field notes &nbsp;·&nbsp; vol. iii &nbsp;·&nbsp;
+        <a class="eyebrow-link" href="https://github.com/paulrobello/small-world" target="_blank" rel="noopener">source ↗</a>
+      </div>
+      <h1 class="title"><em>a small</em> world</h1>
+    </div>
+    <div class="biome-card">
+      <div class="label">current biome</div>
+      <div class="biome-name" id="biome-name">—</div>
+      <div class="biome-sub" id="biome-sub">awaiting genesis</div>
+    </div>
+  </header>
+
+  <footer class="hud hud-bottom">
+    <div class="stats">
+      <div class="stat">
+        <span class="label">seed</span>
+        <span class="value" id="seed">0x0000</span>
+      </div>
+      <div class="stat">
+        <span class="label">creatures</span>
+        <span class="value" id="creature-count">00</span>
+      </div>
+      <div class="stat">
+        <span class="label">flora</span>
+        <span class="value" id="flora-count">00</span>
+      </div>
+      <div class="stat">
+        <span class="label">birds</span>
+        <span class="value" id="bird-count">00</span>
+      </div>
+      <div class="stat">
+        <span class="label">elevation</span>
+        <span class="value" id="elevation">000m</span>
+      </div>
+    </div>
+
+    <div class="controls">
+      <div class="hint">drag · zoom · observe</div>
+      <div class="controls-row">
+        <button class="help-toggle" id="help-toggle" aria-label="help" title="help">
+          <span class="help-glyph">?</span>
+        </button>
+        <button class="settings-toggle" id="settings-toggle" aria-label="settings" title="settings">
+          <span class="settings-glyph">⚙</span>
+        </button>
+        <button class="regen" id="regen">
+          <span class="regen-glyph">↻</span>
+          <span class="regen-label">regenerate world</span>
+        </button>
+      </div>
+    </div>
+  </footer>
+
+  <div class="corner corner-tl">+</div>
+  <div class="corner corner-tr">+</div>
+  <div class="corner corner-bl">+</div>
+  <div class="corner corner-br">+</div>
+
+  <div class="fps-counter" id="fps-counter" hidden>FPS <span id="fps-value">--</span></div>
+
+  <aside class="help-panel" id="help-panel" aria-hidden="true">
+    <div class="settings-head">
+      <span class="settings-title">help &amp; controls</span>
+      <button class="settings-close" id="help-close" aria-label="close">×</button>
+    </div>
+
+    <section class="settings-section">
+      <div class="settings-section-label">modes</div>
+      <dl class="help-list">
+        <dt>regenerate</dt>
+        <dd>bottom-right button or <kbd>r</kbd> rolls a new world seed.</dd>
+        <dt>follow creature</dt>
+        <dd>tap any creature to track it indefinitely. Settings → follow pauses the sim while choosing. <kbd>esc</kbd> releases follow.</dd>
+        <dt>inspect specimen</dt>
+        <dd><kbd>shift</kbd> + click any creature or flora to open its inspect view in a new tab.</dd>
+        <dt>first-person stroll</dt>
+        <dd><kbd>f</kbd> enters/exits. <kbd>w</kbd><kbd>a</kbd><kbd>s</kbd><kbd>d</kbd> walks · <kbd>shift</kbd> moves faster · mouse looks · <kbd>esc</kbd> exits.</dd>
+        <dt>photo mode</dt>
+        <dd><kbd>p</kbd> hides the ui and freezes animation. <kbd>s</kbd> saves a png while in photo mode. <kbd>p</kbd> or <kbd>esc</kbd> exits.</dd>
+        <dt>manual pause</dt>
+        <dd><kbd>space</kbd> pauses or resumes the simulation outside photo/stroll/selection modes.</dd>
+      </dl>
+    </section>
+
+    <section class="settings-section">
+      <div class="settings-section-label">controls</div>
+      <dl class="help-list">
+        <dt>drag</dt><dd>rotate the camera.</dd>
+        <dt>scroll · pinch</dt><dd>zoom in / out.</dd>
+        <dt>hover a sleeper</dt><dd>gently wakes drowsing creatures.</dd>
+        <dt><kbd>r</kbd></dt><dd>regenerate world.</dd>
+        <dt><kbd>p</kbd></dt><dd>toggle photo mode.</dd>
+        <dt><kbd>s</kbd></dt><dd>save the current frame as a png (photo mode only).</dd>
+        <dt><kbd>f</kbd></dt><dd>enter or exit first-person stroll.</dd>
+        <dt><kbd>w</kbd><kbd>a</kbd><kbd>s</kbd><kbd>d</kbd></dt><dd>move in first-person stroll.</dd>
+        <dt><kbd>shift</kbd> + click</dt><dd>open the clicked creature/flora in inspect view.</dd>
+        <dt><kbd>shift</kbd></dt><dd>move faster in first-person stroll.</dd>
+        <dt><kbd>space</kbd></dt><dd>toggle manual pause.</dd>
+        <dt><kbd>esc</kbd></dt><dd>cancel focus · exit any mode · close panels.</dd>
+      </dl>
+    </section>
+  </aside>
+
+  <aside class="settings-panel" id="settings-panel" aria-hidden="true">
+    <div class="settings-head">
+      <span class="settings-title">settings</span>
+      <button class="settings-close" id="settings-close" aria-label="close">×</button>
+    </div>
+
+    <section class="settings-section">
+      <button class="setting-button" id="setting-reset-defaults" type="button">
+        <span class="setting-button-label">reset all to defaults</span>
+        <span class="setting-button-hint">clears saved settings and reloads</span>
+      </button>
+    </section>
+
+    <section class="settings-section">
+      <div class="settings-section-label">atmosphere</div>
+
+      <label class="setting">
+        <span class="setting-label">fog</span>
+        <input type="range" id="setting-fog" min="0" max="200" step="1" value="20" />
+        <span class="setting-value" id="setting-fog-value">20%</span>
+      </label>
+
+      <label class="setting">
+        <span class="setting-label">ambient light</span>
+        <input type="range" id="setting-ambient" min="0" max="100" step="1" value="0" />
+        <span class="setting-value" id="setting-ambient-value">0%</span>
+      </label>
+
+      <label class="setting">
+        <span class="setting-label">time of day</span>
+        <input type="range" id="setting-time" min="0" max="1000" step="1" value="750" />
+        <span class="setting-value" id="setting-time-value">day</span>
+      </label>
+
+      <label class="setting setting-checkbox">
+        <input type="checkbox" id="setting-auto-cycle" />
+        <span class="setting-label">auto day/night cycle</span>
+      </label>
+    </section>
+
+    <section class="settings-section">
+      <div class="settings-section-label">camera</div>
+
+      <label class="setting setting-checkbox">
+        <input type="checkbox" id="setting-auto-rotate" checked />
+        <span class="setting-label">auto-rotate</span>
+      </label>
+
+      <button class="setting-button" id="setting-follow">
+        <span class="setting-button-label">follow a creature</span>
+        <span class="setting-button-hint">click to select</span>
+      </button>
+
+      <button class="setting-button" id="setting-stroll">
+        <span class="setting-button-label">first-person stroll</span>
+        <span class="setting-button-hint">f · wasd · mouse-look · esc to exit</span>
+      </button>
+
+      <button class="setting-button" id="setting-reset-camera">
+        <span class="setting-button-label">reset camera</span>
+      </button>
+
+      <label class="setting">
+        <span class="setting-label">world size</span>
+        <input type="range" id="setting-scale" min="50" max="200" step="1" value="100" />
+        <span class="setting-value" id="setting-scale-value">100%</span>
+      </label>
+    </section>
+
+    <section class="settings-section">
+      <div class="settings-section-label">share</div>
+
+      <button class="setting-button" id="setting-copy-link">
+        <span class="setting-button-label">copy link to this world</span>
+        <span class="setting-button-hint" id="setting-copy-hint">click to copy seed url</span>
+      </button>
+    </section>
+
+    <section class="settings-section">
+      <details class="fx-details" id="setting-wind-details">
+        <summary class="settings-section-label fx-summary">wind</summary>
+
+        <label class="setting setting-checkbox">
+          <input type="checkbox" id="setting-wind-enabled" checked />
+          <span class="setting-label">wind enabled</span>
+        </label>
+
+        <label class="setting setting-checkbox">
+          <input type="checkbox" id="setting-foliage-wind" checked />
+          <span class="setting-label">sway trees &amp; mushrooms</span>
+        </label>
+
+        <label class="setting">
+          <span class="setting-label">strength</span>
+          <input type="range" id="setting-wind-strength" min="0" max="200" step="1" value="100" />
+          <span class="setting-value" id="setting-wind-strength-value">100%</span>
+        </label>
+
+        <label class="setting">
+          <span class="setting-label">noise size</span>
+          <input type="range" id="setting-wind-noise" min="20" max="300" step="1" value="100" />
+          <span class="setting-value" id="setting-wind-noise-value">100%</span>
+        </label>
+      </details>
+    </section>
+
+    <section class="settings-section">
+      <details class="fx-details" id="setting-grass-details">
+        <summary class="settings-section-label fx-summary">grass</summary>
+
+        <label class="setting setting-checkbox">
+          <input type="checkbox" id="setting-grass-enabled" checked />
+          <span class="setting-label">grass enabled</span>
+        </label>
+
+        <label class="setting setting-checkbox">
+          <input type="checkbox" id="setting-grass-edge-discs" checked />
+          <span class="setting-label">grass edge discs</span>
+        </label>
+
+        <label class="setting">
+          <span class="setting-label">density</span>
+          <input type="range" id="setting-grass-density" min="0" max="200" step="1" value="100" />
+          <span class="setting-value" id="setting-grass-density-value">100%</span>
+        </label>
+
+        <label class="setting">
+          <span class="setting-label">height</span>
+          <input type="range" id="setting-grass-height" min="30" max="200" step="1" value="100" />
+          <span class="setting-value" id="setting-grass-height-value">100%</span>
+        </label>
+      </details>
+    </section>
+
+    <section class="settings-section">
+      <details class="fx-details" id="setting-fx-details">
+        <summary class="settings-section-label fx-summary">fx</summary>
+
+        <label class="setting setting-checkbox">
+          <input type="checkbox" id="setting-bloom" checked />
+          <span class="setting-label">bloom</span>
+        </label>
+
+        <label class="setting">
+          <span class="setting-label">bloom radius</span>
+          <input type="range" id="setting-bloom-radius" min="0" max="110" step="1" value="100" />
+          <span class="setting-value" id="setting-bloom-radius-value">100%</span>
+        </label>
+
+        <label class="setting setting-checkbox">
+          <input type="checkbox" id="setting-tiltshift" />
+          <span class="setting-label">tilt-shift miniature</span>
+        </label>
+
+        <label class="setting setting-checkbox">
+          <input type="checkbox" id="setting-softparticles" checked />
+          <span class="setting-label">soft particles</span>
+        </label>
+
+        <label class="setting setting-checkbox">
+          <input type="checkbox" id="setting-outline" checked />
+          <span class="setting-label">depth outlines</span>
+        </label>
+
+        <label class="setting setting-checkbox">
+          <input type="checkbox" id="setting-ao" checked />
+          <span class="setting-label">contact AO</span>
+        </label>
+
+        <label class="setting setting-checkbox">
+          <input type="checkbox" id="setting-depthfog" checked />
+          <span class="setting-label">depth fog</span>
+        </label>
+
+        <label class="setting setting-checkbox">
+          <input type="checkbox" id="setting-terrain-smooth" checked />
+          <span class="setting-label">smooth terrain shading</span>
+        </label>
+      </details>
+
+      <label class="setting setting-checkbox">
+        <input type="checkbox" id="setting-show-fps" />
+        <span class="setting-label">show fps counter</span>
+      </label>
+
+      <div class="biome-filter-hint" id="setting-lowfx-hint" hidden>
+        disabled on this device (lowfx mode)
+      </div>
+    </section>
+
+    <section class="settings-section">
+      <div class="settings-section-label">auto-regenerate</div>
+
+      <label class="setting setting-checkbox">
+        <input type="checkbox" id="setting-auto-regen" />
+        <span class="setting-label">auto-regenerate worlds</span>
+      </label>
+
+      <label class="setting">
+        <span class="setting-label">interval</span>
+        <input type="range" id="setting-auto-regen-mins" min="1" max="20" step="1" value="2" />
+        <span class="setting-value" id="setting-auto-regen-mins-value">2 min</span>
+      </label>
+    </section>
+
+    <section class="settings-section">
+      <div class="settings-section-label">photo</div>
+
+      <button class="setting-button" id="setting-photo">
+        <span class="setting-button-label" id="setting-photo-label">photo mode</span>
+        <span class="setting-button-hint">hide hud · freeze sim</span>
+      </button>
+    </section>
+
+    <section class="settings-section">
+      <div class="settings-section-label">bookmarks</div>
+
+      <button class="setting-button" id="setting-bookmark">
+        <span class="setting-button-label" id="setting-bookmark-label">★ save this seed</span>
+        <span class="setting-button-hint" id="setting-bookmark-hint">store in your browser</span>
+      </button>
+
+      <div class="bookmark-list" id="bookmark-list" aria-live="polite"></div>
+      <div class="bookmark-empty" id="bookmark-empty">no saved seeds yet.</div>
+    </section>
+
+    <section class="settings-section">
+      <div class="settings-section-label">biome filter</div>
+      <div class="biome-filter-actions">
+        <button type="button" class="biome-filter-action" id="biome-filter-all">all</button>
+        <button type="button" class="biome-filter-action" id="biome-filter-none">none</button>
+      </div>
+      <div class="biome-filter" id="biome-filter"></div>
+      <div class="biome-filter-hint">tap to toggle. regenerate only picks from enabled biomes.</div>
+    </section>
+  </aside>
+
+  <div class="follow-banner" id="follow-banner" aria-hidden="true">
+    sim paused · click a creature to follow it · press <kbd>esc</kbd> to cancel
+  </div>
+
+  <div class="pause-banner" id="pause-banner" aria-hidden="true">
+    paused · press <kbd>space</kbd> to resume
+  </div>
+
+  <div class="photo-seed" id="photo-seed" aria-hidden="true">
+    <span id="photo-seed-value">0x0000</span>
+    <span class="photo-hint">press <kbd>s</kbd> to save · <kbd>p</kbd> to exit</span>
+    <div class="photo-actions">
+      <button class="photo-action" id="photo-save" type="button">save</button>
+      <button class="photo-action" id="photo-exit" type="button">exit</button>
+    </div>
+  </div>
+
+</body>
+</html>

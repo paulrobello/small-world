@@ -1106,10 +1106,10 @@ export function makeWildflowerField(biome, heightFn, excludedCircles = []) {
         const fx = x + Math.sin(co) * cr;
         const fz = z + Math.cos(co) * cr;
         const flowerScale = (0.9 + Math.random() * 1.0) * 1.25; // 25% larger
-        const heightMul = 1 + Math.random() * 0.5 / 0.44; // up to +0.5 extra stem height
+        const heightMul = 0.80 + Math.random() * 0.25 / 0.44; // 20% shorter min, up to +0.25 extra stem height
         const stemH = 0.44 * heightMul; // effective stem height
-        const yRot = Math.atan2(fx, fz) + (Math.random() - 0.5) * 0.5;
-        const lean = 0.5 + Math.random() * 0.5;
+        const yRot = Math.random() * Math.PI * 2;
+        const lean = Math.random() * 0.22;
 
         // stem — yaw to lean direction, then pitch in local space.
         _v.set(fx, y + 0.08, fz);

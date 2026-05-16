@@ -61,10 +61,16 @@ export const state = {
   // persistent state — purely a per-frame scratch buffer to keep alloc churn
   // out of the inner loop.
   dynamicObstacles: [],
+  // Pre-allocated pool for dynamicObstacles entries (avoids per-frame GC).
+  // Grows on demand, reset on world regen by main.js.
+  _dynPool: null,
   // Mushroom-cap landing pads for fliers. Populated alongside obstacles
   // during flora placement. Entries: { x, z, y } where y is the world-Y of
   // the cap top. Cleared at the start of generateWorld.
   perchSpots: [],
+  // Color-bucketed creature index for O(1) herding. Built in world.js
+  // after creature spawning. Keyed by bodyColor hex string.
+  creatureColorBuckets: null,
   // Set by makeGrassField in src/grass.js. Holds { mesh, uniforms } so
   // stepGrass can update uCameraXZ each frame and disposeGroup-style
   // teardown can null it out on regen. Mesh itself is parented to

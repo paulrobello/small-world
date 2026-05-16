@@ -5,6 +5,61 @@ import { state } from "../state.js";
 // ground above 0 keeps them clear of waves and out of the shallow draft.
 export const WATER_AVOID_Y = 0.0;
 
+// ── Spatial grid for static obstacle queries ──────────────────────────────
+// Built once per world-gen via buildObstacleGrid(). avoidObstacles() queries
+// the grid instead of scanning the full obstacle list, reducing the inner
+// loop from O(all obstacles) to O(nearby obstacles).
+const GRID_CELL = 2.0;
+let _grid = null;       // Map<string, number[]>  — cell key → obstacle indices
+let _gridObs = null;    // reference to the obstacles array the grid was built from
+
+function cellKey(cx, cz) { return cx + ',' + cz; }
+
+export function buildObstacleGrid(obstacles) {
+  _gridObs = obstacles;
+  _grid = new Map();
+  for (let i = 0; i < obstacles.length; i++) {
+    const o = obstacles[i];
+    const r = o.r || 0.5;
+    const minCX = Math.floor((o.x - r) / GRID_CELL);
+    const maxCX = Math.floor((o.x + r) / GRID_CELL);
+    const minCZ = Math.floor((o.z - r) / GRID_CELL);
+    const maxCZ = Math.floor((o.z + r) / GRID_CELL);
+    for (let cx = minCX; cx <= maxCX; cx++) {
+      for (let cz = minCZ; cz <= maxCZ; cz++) {
+        const k = cellKey(cx, cz);
+        let bucket = _grid.get(k);
+        if (!bucket) { bucket = []; _grid.set(k, bucket); }
+        bucket.push(i);
+      }
+    }
+  }
+}
+
+// Return obstacle indices whose bounding cell overlaps the query disc.
+function nearbyObstacleIndices(x, z, radius) {
+  if (!_grid || !_gridObs) return null; // fallback — no grid built
+  const minCX = Math.floor((x - radius) / GRID_CELL);
+  const maxCX = Math.floor((x + radius) / GRID_CELL);
+  const minCZ = Math.floor((z - radius) / GRID_CELL);
+  const maxCZ = Math.floor((z + radius) / GRID_CELL);
+  const out = [];
+  const seen = new Set();
+  for (let cx = minCX; cx <= maxCX; cx++) {
+    for (let cz = minCZ; cz <= maxCZ; cz++) {
+      const bucket = _grid.get(cellKey(cx, cz));
+      if (!bucket) continue;
+      for (let j = 0; j < bucket.length; j++) {
+        const idx = bucket[j];
+        if (seen.has(idx)) continue;
+        seen.add(idx);
+        out.push(idx);
+      }
+    }
+  }
+  return out;
+}
+
 // Color similarity test for the herding check. Cheap RGB distance — fine for
 // the small biome palettes used here.
 export function colorsClose(a, b) {
@@ -43,7 +98,10 @@ export function avoidObstacles(
   const obs = state.obstacles;
   if (obs && obs.length > 0) {
     const skipping = skipX !== undefined && skipZ !== undefined;
-    for (let i = 0; i < obs.length; i++) {
+    // Use spatial grid to narrow the candidate set.
+    const candidates = nearbyObstacleIndices(nx, nz, cr + 2) || obs.map((_, i) => i);
+    for (let ci = 0; ci < candidates.length; ci++) {
+      const i = candidates[ci];
       const o = obs[i];
       // Skip the specific obstacle we're trying to land on (the perch's
       // mushroom). Without this, a flier descending toward its own perch
@@ -69,7 +127,10 @@ export function avoidObstacles(
       const sx = px + tx * step;
       const sz = pz + tz * step;
       let wedged = false;
-      for (let j = 0; j < obs.length; j++) {
+      // Use spatial grid for wedge check too.
+      const wedgeCandidates = nearbyObstacleIndices(sx, sz, cr + 2) || obs.map((_, j) => j);
+      for (let wj = 0; wj < wedgeCandidates.length; wj++) {
+        const j = wedgeCandidates[wj];
         if (j === i) continue;
         const o2 = obs[j];
         if (skipping && Math.abs(o2.x - skipX) < 0.4 && Math.abs(o2.z - skipZ) < 0.4) continue;
@@ -132,23 +193,48 @@ export function avoidObstacles(
 export function pushOutOfObstacles(pos, vel, bodyR) {
   const obs = state.obstacles;
   if (!obs || obs.length === 0) return;
-  for (let i = 0; i < obs.length; i++) {
-    const o = obs[i];
-    if (o.top !== undefined && pos.y > o.top + 0.15) continue;
-    const dx = pos.x - o.x;
-    const dz = pos.z - o.z;
-    const minD = o.r + bodyR;
-    const d2 = dx * dx + dz * dz;
-    if (d2 >= minD * minD) continue;
-    const d = Math.sqrt(d2) || 0.001;
-    const nx = dx / d;
-    const nz = dz / d;
-    pos.x = o.x + nx * minD;
-    pos.z = o.z + nz * minD;
-    const vn = vel.x * nx + vel.z * nz;
-    if (vn < 0) {
-      vel.x -= vn * nx * 1.6;
-      vel.z -= vn * nz * 1.6;
+  // Use spatial grid for O(nearby) lookups.
+  const candidates = nearbyObstacleIndices(pos.x, pos.z, bodyR + 2);
+  if (candidates) {
+    for (let ci = 0; ci < candidates.length; ci++) {
+      const o = obs[candidates[ci]];
+      if (o.top !== undefined && pos.y > o.top + 0.15) continue;
+      const dx = pos.x - o.x;
+      const dz = pos.z - o.z;
+      const minD = o.r + bodyR;
+      const d2 = dx * dx + dz * dz;
+      if (d2 >= minD * minD) continue;
+      const d = Math.sqrt(d2) || 0.001;
+      const nx = dx / d;
+      const nz = dz / d;
+      pos.x = o.x + nx * minD;
+      pos.z = o.z + nz * minD;
+      const vn = vel.x * nx + vel.z * nz;
+      if (vn < 0) {
+        vel.x -= vn * nx * 1.6;
+        vel.z -= vn * nz * 1.6;
+      }
+    }
+  } else {
+    // Fallback — no grid built
+    for (let i = 0; i < obs.length; i++) {
+      const o = obs[i];
+      if (o.top !== undefined && pos.y > o.top + 0.15) continue;
+      const dx = pos.x - o.x;
+      const dz = pos.z - o.z;
+      const minD = o.r + bodyR;
+      const d2 = dx * dx + dz * dz;
+      if (d2 >= minD * minD) continue;
+      const d = Math.sqrt(d2) || 0.001;
+      const nx = dx / d;
+      const nz = dz / d;
+      pos.x = o.x + nx * minD;
+      pos.z = o.z + nz * minD;
+      const vn = vel.x * nx + vel.z * nz;
+      if (vn < 0) {
+        vel.x -= vn * nx * 1.6;
+        vel.z -= vn * nz * 1.6;
+      }
     }
   }
 }

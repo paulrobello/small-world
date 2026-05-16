@@ -67,10 +67,19 @@ function fishMaxGroundY(scale) {
   return WATER_AVOID_Y - 0.24 - 0.66 * scale;
 }
 
+// Frame-level cache for currentPerchPoint(). All calls within the same
+// animate() frame for the same perch object return the same pre-computed
+// point, avoiding redundant sin/cos work when multiple code paths query
+// the same perch.
+let _perchCacheT = -Infinity;
+let _perchCachePerch = null;
+let _perchCacheResult = null;
+
 function currentPerchPoint(perch) {
   if (!perch?.perchWind) return perch;
-  const wind = perch.perchWind;
   const t = state.windUniforms.uTime.value;
+  if (perch === _perchCachePerch && t === _perchCacheT) return _perchCacheResult;
+  const wind = perch.perchWind;
   const foliageWind = state.windUniforms.uFoliageWind.value;
   const windY = Math.max(wind.localY ?? 0, 0);
   const windAmp = windY * windY * (wind.strength ?? 1) * foliageWind;
@@ -85,11 +94,15 @@ function currentPerchPoint(perch) {
   const scale = wind.scale ?? 1;
   const c = Math.cos(rot);
   const s = Math.sin(rot);
-  return {
+  const result = {
     x: perch.x + (c * localX + s * localZ) * scale,
     y: perch.y,
     z: perch.z + (-s * localX + c * localZ) * scale,
   };
+  _perchCacheT = t;
+  _perchCachePerch = perch;
+  _perchCacheResult = result;
+  return result;
 }
 
 // Per-regen creature resource pool — shared eye/pupil materials and the
@@ -703,6 +716,9 @@ export function makeCreature(biome, opts = {}) {
     hopProb: personality.hopProb,
     herdStrength: personality.herdStrength,
     nightThresh: personality.nightThresh,
+    // Color bucket for O(1) herding lookups — hex string matching bodyColor.
+    // Populated by the world-gen code in world.js after all creatures are spawned.
+    colorBucket: bodyCol.getHexString(),
     // Look-at-camera — set by the UI hover handler to N seconds; stepCreature
     // decrements and overrides the heading-based rotation while > 0.
     lookTimer: 0,
@@ -724,6 +740,15 @@ export function makeCreature(biome, opts = {}) {
     // animation block is never entered for them.
     lastFootSin: [0, 0, 0, 0],
     lastDustAt: 0,
+    // Think counter — incremented each think event so certain expensive
+    // checks (nearestBuzzer) can gate on modulo instead of running every
+    // single think.
+    thinkCount: 0,
+    // Terrain slope cache — avoids 4 heightFn calls per walker per frame
+    // when the creature hasn't moved enough to change the slope.
+    _slopeCache: null,
+    _slopeCacheX: NaN,
+    _slopeCacheZ: NaN,
   };
 }
 
@@ -842,12 +867,15 @@ function herdInfluence(c, dt) {
   const me = c.group.position;
   let best = null;
   let bestD = Infinity;
-  const list = state.creatures;
+  // Use color bucket if available — only scan same-colored creatures
+  // instead of the full list.
+  const bucket = state.creatureColorBuckets?.[c.colorBucket];
+  const list = bucket || state.creatures;
   for (let i = 0; i < list.length; i++) {
     const o = list[i];
     if (o === c) continue;
     if (o.isSleeper || o.isBurrower) continue;
-    if (!o.bodyColor || !colorsClose(o.bodyColor, c.bodyColor)) continue;
+    if (!bucket && !colorsClose(o.bodyColor, c.bodyColor)) continue;
     const op = o.group.position;
     const dx = op.x - me.x;
     const dz = op.z - me.z;
@@ -1275,11 +1303,15 @@ export function stepCreature(c, dt, t, heightFn) {
     // so the flier flies straight at the cap instead of curving around it.
     // Trigger a curiosity hop if a butterfly or bee is buzzing nearby. Walkers
     // and landed fliers only — airborne fliers don't need to hop.
+    // Only check every 3rd think cycle — curiosity hops don't need instant
+    // response and the scan is O(butterflies + bees).
+    c.thinkCount++;
     if (
       (!c.flies || grounded) &&
       c.hopCooldown <= 0 &&
       c.hopOffset === 0 &&
-      c.sleepiness < 0.4
+      c.sleepiness < 0.4 &&
+      c.thinkCount % 3 === 0
     ) {
       const near = nearestBuzzer(c.group.position);
       if (near < 2.4 && Math.random() < c.hopProb) {
@@ -1565,20 +1597,48 @@ export function stepCreature(c, dt, t, heightFn) {
   // resolve in the body frame after yaw, so the creature lies flat on the
   // hillside instead of staying world-axis-aligned and clipping into the
   // slope. Fliers, fish, and burrowed creatures stay level.
+  //
+  // Cache the 4 heightFn samples and re-use them when the creature hasn't
+  // moved far enough to change the slope noticeably (< 0.1 units). This
+  // avoids 4 noise evaluations per walker per frame.
   if (!c.flies && !(c.isBurrower && c.burrowState === "burrowed")) {
     const ds = 0.25 * c.scale;
-    const ch = Math.cos(c.heading);
-    const sh = Math.sin(c.heading);
-    const yF = heightFn(pos.x + ch * ds, pos.z + sh * ds);
-    const yB = heightFn(pos.x - ch * ds, pos.z - sh * ds);
-    const yR = heightFn(pos.x + sh * ds, pos.z - ch * ds);
-    const yL = heightFn(pos.x - sh * ds, pos.z + ch * ds);
-    const slopeFwd = (yF - yB) / (2 * ds);
-    const slopeRight = (yR - yL) / (2 * ds);
-    // Clamp before atan so noise spikes near cliff edges don't whip the body.
-    const cl = (v) => Math.max(-2, Math.min(2, v));
-    const pitchTarget = -Math.atan(cl(slopeFwd));
-    const rollTarget = Math.atan(cl(slopeRight));
+    const dx = pos.x - c._slopeCacheX;
+    const dz = pos.z - c._slopeCacheZ;
+    const moved2 = dx * dx + dz * dz;
+    let pitchTarget, rollTarget;
+    if (c._slopeCache && moved2 < 0.01) {
+      // Reuse cached slopes but recompute heading-dependent atan — heading
+      // may change even when position doesn't.
+      const sc = c._slopeCache;
+      const ch = Math.cos(c.heading);
+      const sh = Math.sin(c.heading);
+      const slopeFwd = ch * sc.sx + sh * sc.sz;
+      const slopeRight = sh * sc.sx - ch * sc.sz;
+      const cl = (v) => Math.max(-2, Math.min(2, v));
+      pitchTarget = -Math.atan(cl(slopeFwd));
+      rollTarget = Math.atan(cl(slopeRight));
+    } else {
+      const ch = Math.cos(c.heading);
+      const sh = Math.sin(c.heading);
+      const yF = heightFn(pos.x + ch * ds, pos.z + sh * ds);
+      const yB = heightFn(pos.x - ch * ds, pos.z - sh * ds);
+      const yR = heightFn(pos.x + sh * ds, pos.z - ch * ds);
+      const yL = heightFn(pos.x - sh * ds, pos.z + ch * ds);
+      // Cache world-space gradients (independent of heading so they stay
+      // valid as long as position doesn't change much).
+      c._slopeCache = {
+        sx: (yR - yL) / (2 * ds),
+        sz: (yF - yB) / (2 * ds),
+      };
+      c._slopeCacheX = pos.x;
+      c._slopeCacheZ = pos.z;
+      const slopeFwd = (yF - yB) / (2 * ds);
+      const slopeRight = (yR - yL) / (2 * ds);
+      const cl = (v) => Math.max(-2, Math.min(2, v));
+      pitchTarget = -Math.atan(cl(slopeFwd));
+      rollTarget = Math.atan(cl(slopeRight));
+    }
     const k = Math.min(1, dt * 5);
     c.group.rotation.x += (pitchTarget - c.group.rotation.x) * k;
     c.group.rotation.z += (rollTarget - c.group.rotation.z) * k;

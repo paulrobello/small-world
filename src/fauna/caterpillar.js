@@ -13,54 +13,131 @@ import { WATER_AVOID_Y, avoidObstacles } from "./shared.js";
 const TRAIL_RETENTION_PADDING = 1.0;
 const TRAIL_MIN_POINT_DISTANCE = 1e-6;
 
-function trailSegmentLength(a, b) {
-  const dx = a.x - b.x;
-  const dy = (a.y ?? 0) - (b.y ?? 0);
-  const dz = a.z - b.z;
-  return Math.sqrt(dx * dx + dy * dy + dz * dz);
+// ── Ring buffer trail ──────────────────────────────────────────────────────
+// Pre-allocated ring buffer to avoid per-frame array unshift/trim overhead.
+// Points are stored in a fixed-size Float32Array; arc lengths are cumulative
+// from head (index 0). Head is at index 0, tail at index len-1.
+const RING_INITIAL_CAP = 512;
+
+function makeRingTrail(initialPoints) {
+  const cap = Math.max(RING_INITIAL_CAP, initialPoints.length * 2);
+  const buf = new Float32Array(cap * 3); // x, y, z per point
+  const arc = new Float32Array(cap);     // cumulative arc length from head
+  for (let i = 0; i < initialPoints.length; i++) {
+    const p = initialPoints[i];
+    const off = i * 3;
+    buf[off] = p.x; buf[off + 1] = p.y ?? 0; buf[off + 2] = p.z;
+  }
+  // Compute initial arc lengths (head is index 0, arc[0] = 0)
+  arc[0] = 0;
+  for (let i = 1; i < initialPoints.length; i++) {
+    const prev = (i - 1) * 3;
+    const cur = i * 3;
+    const dx = buf[cur] - buf[prev];
+    const dy = buf[cur + 1] - buf[prev + 1];
+    const dz = buf[cur + 2] - buf[prev + 2];
+    arc[i] = arc[i - 1] + Math.sqrt(dx * dx + dy * dy + dz * dz);
+  }
+  return {
+    buf,
+    arc,
+    cap,
+    len: initialPoints.length,  // number of valid entries (head at 0)
+  };
 }
 
-function trimTrailByDistance(trail, maxDistance) {
-  if (trail.length < 2) return;
-  let acc = 0;
-  for (let i = 1; i < trail.length; i++) {
-    acc += trailSegmentLength(trail[i - 1], trail[i]);
-    // Keep the first point beyond maxDistance so findTrailPointAt can still
-    // interpolate the rear-most segment instead of falling off the trail.
-    if (acc > maxDistance) {
-      trail.length = i + 1;
+// Get point at logical index i (0 = head, len-1 = tail).
+function ringGet(tr, i) {
+  const off = i * 3;
+  return { x: tr.buf[off], y: tr.buf[off + 1], z: tr.buf[off + 2] };
+}
+
+// Push a new head point. Returns true if pushed, false if duplicate (updated in-place).
+function ringPushHead(tr, x, y, z) {
+  // Check duplicate
+  if (tr.len > 0) {
+    const dx = x - tr.buf[0];
+    const dz = z - tr.buf[2];
+    if (dx * dx + dz * dz < TRAIL_MIN_POINT_DISTANCE * TRAIL_MIN_POINT_DISTANCE) {
+      tr.buf[1] = y; // update Y in-place
+      return false;
+    }
+  }
+  // Grow if needed
+  if (tr.len >= tr.cap) {
+    const newCap = tr.cap * 2;
+    const newBuf = new Float32Array(newCap * 3);
+    const newArc = new Float32Array(newCap);
+    // Shift existing data right by one slot (new head at index 0)
+    newBuf.set(tr.buf, 3);
+    newArc.set(tr.arc, 1);
+    tr.buf = newBuf;
+    tr.arc = newArc;
+    tr.cap = newCap;
+  } else if (tr.len > 0) {
+    tr.buf.copyWithin(3, 0, tr.len * 3);
+    tr.arc.copyWithin(1, 0, tr.len);
+  }
+  // Write new head at index 0
+  tr.buf[0] = x; tr.buf[1] = y; tr.buf[2] = z;
+  tr.arc[0] = 0;
+  // Rebuild arc[1] = distance from new head to old head (now at index 1)
+  if (tr.len > 0) {
+    const dx = x - tr.buf[3];
+    const dy = y - tr.buf[4];
+    const dz = z - tr.buf[5];
+    const newSeg = Math.sqrt(dx * dx + dy * dy + dz * dz);
+    // Shift all subsequent arc values by the new segment length
+    for (let i = 1; i <= tr.len; i++) {
+      tr.arc[i] += newSeg;
+    }
+  }
+  tr.len++;
+  return true;
+}
+
+// Trim tail beyond maxDistance from head.
+function ringTrimByDistance(tr, maxDistance) {
+  if (tr.len < 2) return;
+  // arc[i] is cumulative from head; keep everything within maxDistance + 1
+  // extra point for interpolation.
+  for (let i = tr.len - 2; i >= 0; i--) {
+    if (tr.arc[i] > maxDistance) {
+      tr.len = i + 2;
       return;
     }
   }
 }
 
-function findTrailPointAt(trail, distance) {
-  if (trail.length === 0) return null;
-  if (trail.length === 1) return trail[0];
-  let acc = 0;
-  let prev = trail[0];
-  for (let i = 1; i < trail.length; i++) {
-    const cur = trail[i];
-    const dx = cur.x - prev.x;
-    const dy = (cur.y ?? 0) - (prev.y ?? 0);
-    const dz = cur.z - prev.z;
-    // 3D arc-length so segments stay tight on sloped terrain
-    const d = Math.sqrt(dx * dx + dy * dy + dz * dz);
-    if (acc + d >= distance) {
-      const u = d > 1e-4 ? (distance - acc) / d : 0;
-      return {
-        x: prev.x + dx * u,
-        z: prev.z + dz * u,
-      };
-    }
-    acc += d;
-    prev = cur;
+// Find the point at a given arc-length distance from the head.
+// Uses binary search on the arc array.
+function ringFindAt(tr, distance) {
+  if (tr.len === 0) return null;
+  if (distance <= 0) return { x: tr.buf[0], y: tr.buf[1], z: tr.buf[2] };
+  if (tr.arc[tr.len - 1] <= distance) {
+    return ringGet(tr, tr.len - 1);
   }
-  return prev;
+  // Binary search for the segment
+  let lo = 0, hi = tr.len - 1;
+  while (lo < hi - 1) {
+    const mid = (lo + hi) >> 1;
+    if (tr.arc[mid] <= distance) lo = mid;
+    else hi = mid;
+  }
+  const segLen = tr.arc[hi] - tr.arc[lo];
+  const u = segLen > 1e-4 ? (distance - tr.arc[lo]) / segLen : 0;
+  const pOff = lo * 3;
+  const cOff = hi * 3;
+  return {
+    x: tr.buf[pOff] + (tr.buf[cOff] - tr.buf[pOff]) * u,
+    z: tr.buf[pOff + 2] + (tr.buf[cOff + 2] - tr.buf[pOff + 2]) * u,
+  };
 }
 
 // opts.kind: undefined | "snail". Snails are slow, have fewer segments,
 // and a fat shell parented to the last body segment.
+export { makeRingTrail };
+
 export function makeCaterpillar(biome, opts = {}) {
   const isSnail = opts.kind === "snail";
   const group = new THREE.Group();
@@ -230,15 +307,16 @@ export function makeCaterpillar(biome, opts = {}) {
   const segSpacing = 1.15 * segRadius * scale;
 
   // pre-seed the trail behind the head so segments aren't stacked at frame 0
-  const trail = [];
+  const seedPoints = [];
   const seedStep = 0.04;
   for (let i = 0; i < 250; i++) {
-    trail.push({
+    seedPoints.push({
       x: startX - Math.cos(startHeading) * i * seedStep,
       y: 0,
       z: startZ - Math.sin(startHeading) * i * seedStep,
     });
   }
+  const trail = makeRingTrail(seedPoints);
 
   head.position.set(startX, 0, startZ);
 
@@ -474,27 +552,22 @@ export function stepCaterpillar(c, dt, t, heightFn) {
   // Retain by arc length, not frame count: slow crawlers at high FPS produce
   // dense samples, and a fixed point cap can cover less distance than the tail
   // needs, collapsing multiple rear segments onto the oldest point.
-  const trailPoint = { x: nx, y: headY, z: nz };
-  if (c.trail.length > 0 && trailSegmentLength(c.trail[0], trailPoint) < TRAIL_MIN_POINT_DISTANCE) {
-    c.trail[0] = trailPoint;
-  } else {
-    c.trail.unshift(trailPoint);
-  }
-  trimTrailByDistance(c.trail, c.trailMaxDistance);
+  ringPushHead(c.trail, nx, headY, nz);
+  ringTrimByDistance(c.trail, c.trailMaxDistance);
 
   // body segments sample the trail at fixed arc-length offsets
   for (let i = 1; i < c.segments.length; i++) {
     const seg = c.segments[i];
     const d = i * c.segSpacing;
-    const pt = findTrailPointAt(c.trail, d);
+    const pt = ringFindAt(c.trail, d);
     if (!pt) continue;
     const groundY = heightFn(pt.x, pt.z);
     // subtle wave along the body — small enough that they stay touching
     const bob = Math.sin(c.age * 3.5 - i * 0.7) * 0.03 * c.scale;
     seg.position.set(pt.x, groundY + baseOffset + bob, pt.z);
 
-    const frontPt = findTrailPointAt(c.trail, Math.max(0, d - c.segSpacing * 0.5));
-    const backPt = findTrailPointAt(c.trail, d + c.segSpacing * 0.5);
+    const frontPt = ringFindAt(c.trail, Math.max(0, d - c.segSpacing * 0.5));
+    const backPt = ringFindAt(c.trail, d + c.segSpacing * 0.5);
     if (frontPt && backPt) {
       const bodyHeading = Math.atan2(frontPt.z - backPt.z, frontPt.x - backPt.x);
       seg.rotation.y = -bodyHeading + Math.PI / 2;

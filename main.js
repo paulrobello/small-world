@@ -203,19 +203,44 @@ function animate() {
   // its own body via selfOwner in avoidObstacles). Fliers in the air are
   // excluded — their collision with walkers below them is uninteresting
   // and the height filter alone isn't enough since walkers pass `y=undefined`.
+  //
+  // Pool objects to avoid GC pressure from per-frame object literal
+  // allocation. Grows if needed but never shrinks.
   const dyn = state.dynamicObstacles;
+  let _dynPool = state._dynPool;
+  if (!_dynPool) {
+    _dynPool = [];
+    state._dynPool = _dynPool;
+  }
+  let di = 0;
+  function nextDyn() {
+    if (di < _dynPool.length) return _dynPool[di++];
+    const obj = { x: 0, z: 0, r: 0, top: 0, owner: null };
+    _dynPool.push(obj);
+    di++;
+    return obj;
+  }
   dyn.length = 0;
   for (const c of state.creatures) {
     if (c.flies) continue;
     const p = c.group.position;
-    const r = 0.32 * c.scale;
-    dyn.push({ x: p.x, z: p.z, r, top: p.y + 0.5 * c.scale, owner: c });
+    const obj = nextDyn();
+    obj.x = p.x; obj.z = p.z;
+    obj.r = 0.32 * c.scale;
+    obj.top = p.y + 0.5 * c.scale;
+    obj.owner = c;
+    dyn.push(obj);
   }
   for (const c of state.caterpillars) {
     const r = 0.22 * c.scale;
     for (let i = 0; i < c.segments.length; i++) {
       const sp = c.segments[i].position;
-      dyn.push({ x: sp.x, z: sp.z, r, top: sp.y + 0.25 * c.scale, owner: c });
+      const obj = nextDyn();
+      obj.x = sp.x; obj.z = sp.z;
+      obj.r = r;
+      obj.top = sp.y + 0.25 * c.scale;
+      obj.owner = c;
+      dyn.push(obj);
     }
   }
 

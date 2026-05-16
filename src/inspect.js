@@ -2,7 +2,7 @@ import * as THREE from "three";
 import { state } from "./state.js";
 import { BIOMES } from "./biomes.js";
 import { WILDFLOWER_PALETTES } from "./biomes.js";
-import { makeCreature, makeCaterpillar, stepCreature, stepCaterpillar } from "./fauna.js";
+import { makeCreature, makeCaterpillar, stepCreature, stepCaterpillar, makeRingTrail } from "./fauna.js";
 import { FLORA_BUILDERS, resetFloraPool } from "./flora.js";
 import { mulberry32 } from "./seed.js";
 import { jitterGeo, applyWindSway } from "./util.js";
@@ -849,15 +849,16 @@ function spawnSpecimen(scene) {
     head.position.z = 0;
     head.rotation.y = -c.heading + Math.PI / 2;
     // Re-seed the trail to a clean line behind the head (away from camera).
-    c.trail.length = 0;
+    const seedPoints = [];
     const seedStep = 0.04;
     for (let i = 0; i < 250; i++) {
-      c.trail.push({
+      seedPoints.push({
         x: -Math.cos(c.heading) * i * seedStep,
         y: 0,
         z: -Math.sin(c.heading) * i * seedStep,
       });
     }
+    c.trail = makeRingTrail(seedPoints);
     scene.add(c.group);
   } else {
     state.creatures.push(c);
