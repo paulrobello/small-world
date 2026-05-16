@@ -859,6 +859,14 @@ export const FLORA_BUILDERS = {
     heart.castShadow = true;
     g.add(heart);
 
+    const ribMatrices = [];
+    const leafletMatrices = [];
+    const frondMatrix = new THREE.Matrix4();
+    const localMatrix = new THREE.Matrix4();
+    const position = new THREE.Vector3();
+    const scale = new THREE.Vector3();
+    const quaternion = new THREE.Quaternion();
+    const euler = new THREE.Euler(0, 0, 0, "YXZ");
     const fronds = 5 + Math.floor(Math.random() * 3);
     const start = Math.random() * Math.PI * 2;
     for (let i = 0; i < fronds; i++) {
@@ -867,18 +875,17 @@ export const FLORA_BUILDERS = {
       const radial = start + radialT * Math.PI * 2 + (Math.random() - 0.5) * 0.22;
       const lean = -0.62 + t * 1.24 + (Math.random() - 0.5) * 0.16;
       const length = 0.48 + Math.random() * 0.20;
-      const frond = new THREE.Group();
-      frond.position.set(Math.cos(radial) * 0.045, 0.035, Math.sin(radial) * 0.045);
-      frond.rotation.order = "YXZ";
-      frond.rotation.y = radial;
-      frond.rotation.x = 0.18 + Math.random() * 0.20;
-      frond.rotation.z = lean;
-      g.add(frond);
+      position.set(Math.cos(radial) * 0.045, 0.035, Math.sin(radial) * 0.045);
+      euler.set(0.18 + Math.random() * 0.20, radial, lean, "YXZ");
+      quaternion.setFromEuler(euler);
+      scale.set(1, 1, 1);
+      frondMatrix.compose(position, quaternion, scale);
 
-      const rib = new THREE.Mesh(ribGeo, ribMat);
-      rib.scale.set(0.85, length, 0.85);
-      rib.castShadow = true;
-      frond.add(rib);
+      position.set(0, 0, 0);
+      quaternion.identity();
+      scale.set(0.85, length, 0.85);
+      localMatrix.compose(position, quaternion, scale);
+      ribMatrices.push(new THREE.Matrix4().multiplyMatrices(frondMatrix, localMatrix));
 
       const pairs = 4 + Math.floor(Math.random() * 3);
       for (let j = 0; j < pairs; j++) {
@@ -888,17 +895,25 @@ export const FLORA_BUILDERS = {
         const y = 0.08 + u * length * 0.86;
         const sideOffset = 0.045 + sideTaper * 0.030;
         for (const side of [-1, 1]) {
-          const leaflet = new THREE.Mesh(leafletGeo, leafletMat);
-          leaflet.position.set(side * sideOffset, y, 0);
-          leaflet.scale.set(leafletScale, 0.82 + Math.random() * 0.22, 0.72 + sideTaper * 0.25);
-          leaflet.rotation.y = side * (0.18 + u * 0.12);
-          leaflet.rotation.z = side * (0.38 + sideTaper * 0.22);
-          leaflet.rotation.x = (Math.random() - 0.5) * 0.16;
-          leaflet.castShadow = true;
-          frond.add(leaflet);
+          position.set(side * sideOffset, y, 0);
+          scale.set(leafletScale, 0.82 + Math.random() * 0.22, 0.72 + sideTaper * 0.25);
+          euler.set(
+            (Math.random() - 0.5) * 0.16,
+            side * (0.18 + u * 0.12),
+            side * (0.38 + sideTaper * 0.22),
+            "XYZ"
+          );
+          quaternion.setFromEuler(euler);
+          localMatrix.compose(position, quaternion, scale);
+          leafletMatrices.push(new THREE.Matrix4().multiplyMatrices(frondMatrix, localMatrix));
         }
       }
     }
+
+    const ribs = makeInstancedLeafBatch(ribGeo, ribMat, ribMatrices);
+    if (ribs) g.add(ribs);
+    const leaflets = makeInstancedLeafBatch(leafletGeo, leafletMat, leafletMatrices);
+    if (leaflets) g.add(leaflets);
     return g;
   },
 
