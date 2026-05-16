@@ -227,28 +227,29 @@ function makeInstancedLeafBatch(geometry, material, matrices) {
   return mesh;
 }
 
-function appendFernGeometry(source, matrix, color, positions, normals, colors) {
+function appendFernGeometry(source, matrix, color, positions, normals, colors, indices) {
   const posAttr = source.getAttribute("position");
   const normAttr = source.getAttribute("normal");
   const index = source.getIndex();
+  const vertexBase = positions.length / 3;
   const normalMatrix = new THREE.Matrix3().getNormalMatrix(matrix);
   const p = new THREE.Vector3();
   const n = new THREE.Vector3();
-  const appendVertex = (idx) => {
-    p.fromBufferAttribute(posAttr, idx).applyMatrix4(matrix);
+  for (let i = 0; i < posAttr.count; i++) {
+    p.fromBufferAttribute(posAttr, i).applyMatrix4(matrix);
     positions.push(p.x, p.y, p.z);
     if (normAttr) {
-      n.fromBufferAttribute(normAttr, idx).applyMatrix3(normalMatrix).normalize();
+      n.fromBufferAttribute(normAttr, i).applyMatrix3(normalMatrix).normalize();
     } else {
       n.set(0, 1, 0);
     }
     normals.push(n.x, n.y, n.z);
     colors.push(color.r, color.g, color.b);
-  };
+  }
   if (index) {
-    for (let i = 0; i < index.count; i++) appendVertex(index.getX(i));
+    for (let i = 0; i < index.count; i++) indices.push(vertexBase + index.getX(i));
   } else {
-    for (let i = 0; i < posAttr.count; i++) appendVertex(i);
+    for (let i = 0; i < posAttr.count; i++) indices.push(vertexBase + i);
   }
 }
 
@@ -878,6 +879,7 @@ export const FLORA_BUILDERS = {
     const positions = [];
     const normals = [];
     const colors = [];
+    const indices = [];
     const frondMatrix = new THREE.Matrix4();
     const localMatrix = new THREE.Matrix4();
     const worldMatrix = new THREE.Matrix4();
@@ -890,7 +892,7 @@ export const FLORA_BUILDERS = {
     quaternion.identity();
     scale.set(1, 1, 1);
     localMatrix.compose(position, quaternion, scale);
-    appendFernGeometry(heartGeo, localMatrix, heartColor, positions, normals, colors);
+    appendFernGeometry(heartGeo, localMatrix, heartColor, positions, normals, colors, indices);
 
     const fronds = 5 + Math.floor(Math.random() * 3);
     const start = Math.random() * Math.PI * 2;
@@ -911,7 +913,7 @@ export const FLORA_BUILDERS = {
       scale.set(0.85, length, 0.85);
       localMatrix.compose(position, quaternion, scale);
       worldMatrix.multiplyMatrices(frondMatrix, localMatrix);
-      appendFernGeometry(ribGeo, worldMatrix, ribColor, positions, normals, colors);
+      appendFernGeometry(ribGeo, worldMatrix, ribColor, positions, normals, colors, indices);
 
       const pairs = 4 + Math.floor(Math.random() * 3);
       for (let j = 0; j < pairs; j++) {
@@ -932,13 +934,14 @@ export const FLORA_BUILDERS = {
           quaternion.setFromEuler(euler);
           localMatrix.compose(position, quaternion, scale);
           worldMatrix.multiplyMatrices(frondMatrix, localMatrix);
-          appendFernGeometry(leafletGeo, worldMatrix, fernColor, positions, normals, colors);
+          appendFernGeometry(leafletGeo, worldMatrix, fernColor, positions, normals, colors, indices);
         }
       }
     }
 
     const frondGeo = new THREE.BufferGeometry();
     frondGeo.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
+    frondGeo.setIndex(indices);
     frondGeo.setAttribute("normal", new THREE.Float32BufferAttribute(normals, 3));
     frondGeo.setAttribute("color", new THREE.Float32BufferAttribute(colors, 3));
     frondGeo.computeBoundingSphere();
