@@ -15,6 +15,7 @@ let selectingCreature = false;
 let _stroll = null;
 // Photo mode first-person state — populated when photo mode is active.
 let _photoFP = null;
+let _photoReview = null;
 // Bound exit function for the Escape handler; set inside initUi().
 let _exitStroll = () => {};
 
@@ -1176,7 +1177,7 @@ export function initUi({ camera, canvas, controls, renderer, scene }) {
   }
 
   // ── 3D Photo review ──────────────────────────────────────────────────
-  let _photoReview = null;
+  _photoReview = null;
   function showPhotoReview(dataUrl, biomeTag, seedTag) {
     if (_photoReview) return;
     const tex = new THREE.TextureLoader().load(dataUrl);
@@ -1216,8 +1217,7 @@ export function initUi({ camera, canvas, controls, renderer, scene }) {
     camera.getWorldDirection(dir);
     group.position.copy(camera.position).addScaledVector(dir, 8);
     group.quaternion.copy(camera.quaternion);
-    // Don't add to scene — rendered separately after postfx to avoid
-    // depth-based post-fx (outlines, AO) showing through the photo.
+    // Don't add to scene during main render — see main.js post-fx overlay
 
     // Dim overlay
     const dim = document.createElement("div");
