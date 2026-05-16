@@ -1204,7 +1204,7 @@ export function initUi({ camera, canvas, controls, renderer }) {
       const lookDir = new THREE.Vector3();
       camera.getWorldDirection(lookDir);
       const yaw = Math.atan2(-lookDir.x, -lookDir.z);
-      const pitch = Math.asin(Math.max(-1, Math.min(1, -lookDir.y)));
+      const pitch = Math.asin(Math.max(-1, Math.min(1, lookDir.y)));
 
       _photoFP = {
         camera,
