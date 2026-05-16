@@ -19,15 +19,14 @@ A handful of seeds across different biomes — click any image to load that exac
 
 ## Features
 
-- Twelve biomes, each with its own palette, weather, flora, and creature variants.
-- Big-eyed creatures that wander, sleep, burrow, and occasionally travel in families. Walkers and caterpillars in **fuzzy biomes** (mossy ruins, cloud island, frozen vale, mushroom grove) wear a shell-fur shader for a soft hairy silhouette.
-- Caterpillars, butterflies, bees, and flocks of birds that pick targets within the world.
-- Day/night cycle with per-biome dusk and night palettes.
-- Per-frame visual polish: selective bloom on emissive elements (glow flowers, lanterns, sun), optional tilt-shift miniature blur, soft circular shadows under every creature, sky reflections on water biomes, parallax mountain backdrop, GPU-particle shader with per-particle life/size, dust kicks under footsteps.
-- Photo mode (freeze the sim, save a PNG) and first-person stroll mode.
-- **Inspect mode** (`?inspect=1`) — a neutral studio backdrop for examining a single creature or caterpillar. Cycle biome/variant with keyboard, pause and frame-step animation, copy the URL to share an exact recreation.
-- Follow-a-creature camera, bookmarks, biome filter, shareable seed links.
-- Mobile-friendly — touch gestures, low-FX mode (`?lowfx=1`) on lower-end devices that drops fur, post-FX, and particle counts.
+- **Twelve biomes** — each with a unique palette, weather, flora mix, and creature variants.
+- **Procedural fauna** — big-eyed creatures that wander, sleep, burrow, and travel in families; caterpillars, butterflies, bees, will-o'-wisps, and flocks of birds. Fuzzy biomes (mossy ruins, cloud island, frozen vale, mushroom grove) give walkers and caterpillars a shell-fur shader for a soft hairy silhouette.
+- **Day/night cycle** — 120-second cycle with per-biome dusk and night palettes. Creatures respond to darkness: walkers curl up and sleep, fliers descend and grow drowsy, each personality (shy, bold, sleepy, bouncy) has a different sleep threshold.
+- **Visual polish** — selective bloom on emissive elements (glow flowers, lanterns, sun), optional tilt-shift miniature blur, soft circular shadows under every creature, sky reflections on water biomes, parallax mountain backdrop, GPU-particle shader with per-particle life/size, dust kicks under footsteps.
+- **Photo mode** — freeze the sim and save a PNG; first-person stroll mode lets you walk among the creatures.
+- **Inspect mode** (`?inspect=1`) — a neutral studio backdrop for examining a single creature or flora variant. Cycle biome/variant with keyboard, pause and frame-step animation, copy the URL to share an exact recreation.
+- **Interactive UI** — follow-a-creature camera, bookmarks, biome filter, shareable seed links, wind and grass density controls, FX toggles, auto-regenerate timer.
+- **Mobile-friendly** — touch gestures, low-FX mode (`?lowfx=1`) on lower-end devices that drops fur, post-FX, and particle counts.
 
 ## Running it locally
 
@@ -59,7 +58,9 @@ Then open http://localhost:1999. Edits to any source file (`main.js`, `src/*.js`
 
 - `main.js` — boots the renderer, camera, and animation loop
 - `src/` — world generation, entities, UI, terrain, biomes, etc. (one file per concern)
+- `src/fauna/` — per-entity modules (creatures, caterpillars, butterflies, bees, will-o'-wisps)
 - `index.html` / `style.css` — static HUD shell
 - `server.py` / `Makefile` — local dev server
+- `dist/` — deployment build (GitHub Pages)
 - [`CLAUDE.md`](CLAUDE.md) — architecture notes, conventions, and the project's design constraints
 - [`ideas.md`](ideas.md) — running enhancement list
