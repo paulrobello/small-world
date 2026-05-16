@@ -601,6 +601,7 @@ export function generateWorld(seed) {
     };
   }
 
+  let groveGiantPlaced = false;
   while (placed < floraTarget && attempts < floraTarget * 6) {
     attempts++;
     const kind = biome.flora[Math.floor(Math.random() * biome.flora.length)];
@@ -653,6 +654,12 @@ export function generateWorld(seed) {
     f.position.set(p.x, y, p.z);
     f.rotation.y = Math.random() * Math.PI * 2;
     f.scale.setScalar(s);
+    // Mushroom grove gets one giant bigmushroom (2× scale)
+    if (kind === "bigmushroom" && biome.id === "grove" && !groveGiantPlaced) {
+      s *= 4;
+      f.scale.setScalar(s);
+      groveGiantPlaced = true;
+    }
     if (kind === "lavafissure") conformSurfaceChildrenToTerrain(f);
     if (kind === "crystal") {
       const glow = new THREE.PointLight(new THREE.Color(biome.accent), 1.4, 6.5, 1.8);

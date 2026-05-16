@@ -330,6 +330,12 @@ export const BIOMES = [
     creatureCount: [10, 15],
     groundMarks: { color: "#263016", opacity: 0.17, life: 5.8, softness: 1.2 },
     furProbability: 0.55,
+    groveDetails: {
+      mushroomFamilies: true,
+      fairyRing: true,
+      groundCover: true,
+      sporeGlow: true,
+    },
     dusk: { sky: "#9a7ab0", fog: "#7a5e90", sun: "#ffb0e0", ground: "#2a253a" },
     night: { sky: "#08081e", fog: "#04041a", sun: "#c890d8", ground: "#08060e" },
   },

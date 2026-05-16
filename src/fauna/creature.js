@@ -3,6 +3,47 @@ import { state } from "../state.js";
 import { jitterGeo } from "../util.js";
 import { nearestCenter } from "../terrain.js";
 import { makeDirtPuff, makeDustKick, emitGroundMark } from "../environment.js";
+
+// ── burrower dirt mound ──
+// A small flattened sphere placed where the creature went underground.
+// Created on demand, reused across burrow cycles, removed when creature
+// is disposed.
+const MOUND_GEO = new THREE.SphereGeometry(0.22, 7, 5);
+function showMound(c, heightFn) {
+  if (!c.moundMesh) {
+    const mat = new THREE.MeshStandardMaterial({
+      color: c.dirtColor.clone().offsetHSL(0.03, 0.1, 0.12),
+      flatShading: true,
+      roughness: 0.95,
+    });
+    c.moundMesh = new THREE.Mesh(MOUND_GEO, mat);
+    c.moundMesh.scale.set(2.2, 0.55, 2.2);
+    c.moundMesh.castShadow = true;
+    c.moundMesh.receiveShadow = true;
+  }
+  const pos = c.group.position;
+  const y = heightFn(pos.x, pos.z);
+  // Sample terrain normal via finite differences
+  const eps = 0.1;
+  const yl = heightFn(pos.x - eps, pos.z);
+  const yr = heightFn(pos.x + eps, pos.z);
+  const yf = heightFn(pos.x, pos.z - eps);
+  const yb = heightFn(pos.x, pos.z + eps);
+  const normal = new THREE.Vector3(yl - yr, 2 * eps, yf - yb).normalize();
+  // Align mound's up (Y) with terrain normal
+  const up = new THREE.Vector3(0, 1, 0);
+  const quat = new THREE.Quaternion().setFromUnitVectors(up, normal);
+  c.moundMesh.quaternion.copy(quat);
+  c.moundMesh.position.set(pos.x, y + 0.06, pos.z);
+  c.moundMesh.visible = true;
+  state.world.add(c.moundMesh);
+}
+function hideMound(c) {
+  if (c.moundMesh) {
+    c.moundMesh.visible = false;
+    state.world.remove(c.moundMesh);
+  }
+}
 import { applyShellFur } from "../fur.js";
 import { BLOOM_LAYER } from "../postfx.js";
 import { WATER_AVOID_Y, avoidObstacles, colorsClose } from "./shared.js";
@@ -195,25 +236,86 @@ export function makeCreature(biome, opts = {}) {
   }
 
   let furShells = null;
+  let furOpts = null;
   // Per-creature fur roll. furProbability ∈ [0,1]; biomes without an
   // override fall back to 0 (no fur). Fish never get fur; fliers use the same
   // short body fur as walkers.
   // The roll happens inside generateWorld's seeded Math.random window, so the
   // same seed reproduces the same fuzzy/smooth split.
   if (wantsFur) {
-    furShells = applyShellFur(body, biome, {
+    furOpts = {
       baseColor: bodyCol.clone(),
       tipColor: bodyCol.clone(),
-      ...(isBumblebee ? {
-        stripeColor: (opts.stripeColors || ["#111111", "#ffd13b"])[1],
-        stripeBandCount: 3.0,
-        stripeBandWidth: 0.35,
-        stripeOffset: 0.12,
-      } : {}),
-    });
+    };
+
+    // When inspecting a specific creature, replay its exact pattern
+    const po = opts.patternOverride;
+    if (po) {
+      if (po.patternType) furOpts.patternType = po.patternType;
+      if (po.patternColor) furOpts.patternColor = new THREE.Color(po.patternColor);
+      if (po.stripeBandCount != null) furOpts.stripeBandCount = po.stripeBandCount;
+      if (po.stripeBandWidth != null) furOpts.stripeBandWidth = po.stripeBandWidth;
+      if (po.stripeOffset != null) furOpts.stripeOffset = po.stripeOffset;
+      if (po.patternScale != null) furOpts.patternScale = po.patternScale;
+    } else if (isBumblebee) {
+      furOpts.patternColor = (opts.stripeColors || ["#111111", "#ffd13b"])[1];
+      furOpts.patternType = 1; // stripes
+      furOpts.stripeBandCount = 3.0;
+      furOpts.stripeBandWidth = 0.35;
+      furOpts.stripeOffset = 0.12;
+    } else {
+      // ~40% get a pattern, ~60% stay solid
+      const patRoll = Math.random();
+      if (patRoll < 0.20) {
+        // Stripes
+        furOpts.patternType = 1;
+        furOpts.stripeBandCount = 2 + Math.floor(Math.random() * 3);
+        furOpts.stripeBandWidth = 0.3 + Math.random() * 0.15;
+        furOpts.stripeOffset = Math.random() * 0.5;
+      } else if (patRoll < 0.40) {
+        // Spots
+        furOpts.patternType = 2;
+        furOpts.patternScale = 4 + Math.random() * 4;
+        furOpts.stripeBandWidth = 0.35 + Math.random() * 0.2;
+      } else if (patRoll < 0.60) {
+        // Patches
+        furOpts.patternType = 3;
+        furOpts.patternScale = 3 + Math.random() * 3;
+        furOpts.stripeBandWidth = 0.3 + Math.random() * 0.15;
+        furOpts.stripeOffset = Math.random() * 10.0;
+      }
+
+      if (furOpts.patternType) {
+        // Pick a contrasting pattern color from the palette
+        const patCol = new THREE.Color(
+          palette[Math.floor(Math.random() * palette.length)]
+        );
+        // Make sure it's noticeably different from the base
+        if (patCol.getHexString() === bodyCol.getHexString() && palette.length > 1) {
+          for (const c of palette) {
+            const candidate = new THREE.Color(c);
+            if (candidate.getHexString() !== bodyCol.getHexString()) {
+              patCol.copy(candidate);
+              break;
+            }
+          }
+        }
+        furOpts.patternColor = patCol;
+      }
+    }
+
+    furShells = applyShellFur(body, biome, furOpts);
   }
   group.userData.inspect.fur = furShells ? "1" : "0";
   group.userData.inspect.color = bodyCol.getHexString();
+  if (furOpts?.patternType) {
+    group.userData.inspect.patternType = String(furOpts.patternType);
+    group.userData.inspect.patternColor = new THREE.Color(furOpts.patternColor).getHexString();
+    if (furOpts.stripeBandCount != null) group.userData.inspect.stripeBandCount = furOpts.stripeBandCount;
+    if (furOpts.stripeBandWidth != null) group.userData.inspect.stripeBandWidth = furOpts.stripeBandWidth;
+    if (furOpts.stripeOffset != null) group.userData.inspect.stripeOffset = furOpts.stripeOffset;
+    if (furOpts.patternScale != null) group.userData.inspect.patternScale = furOpts.patternScale;
+  }
 
   // belly highlight
   const belly = new THREE.Mesh(
@@ -592,7 +694,8 @@ export function makeCreature(biome, opts = {}) {
     burrowState: isBurrower ? "surface" : null, // "surface" | "descending" | "burrowed" | "emerging"
     burrowTimer: isBurrower ? 2 + Math.random() * 4 : 0,
     burrowDepth: 0,           // 0 = on ground, 1 = fully submerged
-    dirtColor: new THREE.Color(biome.cliff),
+    dirtColor: new THREE.Color(biome.ground[0]).lerp(new THREE.Color("#8b6914"), 0.45),
+    moundMesh: null,
     // Personality + behavior knobs read by stepCreature
     personality: personalityName,
     pauseChance: personality.pauseChance,
@@ -992,12 +1095,20 @@ export function stepCreature(c, dt, t, heightFn) {
     if (c.burrowState === "surface" && c.burrowTimer <= 0) {
       c.burrowState = "descending";
       c.burrowTimer = 0.6;
+      // Dirt spray when going down
+      const pos = c.group.position;
+      const gy = heightFn(pos.x, pos.z);
+      const puff = makeDirtPuff(pos.x, gy, pos.z, c.dirtColor);
+      state.world.add(puff);
+      state.dirtPuffs.push(puff);
     } else if (c.burrowState === "descending") {
       c.burrowDepth = Math.min(1, c.burrowDepth + dt * 1.6);
       if (c.burrowDepth >= 1) {
         c.burrowState = "burrowed";
         c.group.visible = false;
         c.burrowTimer = 3 + Math.random() * 4;
+        // Show dirt mound at burrow point
+        showMound(c, heightFn);
       }
     } else if (c.burrowState === "burrowed" && c.burrowTimer <= 0) {
       // teleport to a fresh nearby ground point and emerge there
@@ -1015,6 +1126,8 @@ export function stepCreature(c, dt, t, heightFn) {
       pos.z = nz;
       c.group.visible = true;
       c.burrowState = "emerging";
+      // Hide the old mound
+      hideMound(c);
       // emit a small dirt puff at the surface point
       const puff = makeDirtPuff(nx, heightFn(nx, nz), nz, c.dirtColor);
       state.world.add(puff);

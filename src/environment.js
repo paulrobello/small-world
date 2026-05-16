@@ -451,10 +451,10 @@ export function makeDirtPuff(x, y, z, baseColor) {
   posAttr.setUsage(THREE.DynamicDrawUsage);
   geo.setAttribute("position", posAttr);
   const mat = new THREE.PointsMaterial({
-    color: new THREE.Color(baseColor).offsetHSL(0, -0.05, 0.05),
-    size: 0.14,
+    color: new THREE.Color(baseColor).offsetHSL(0.04, 0.15, 0.12),
+    size: 0.18,
     transparent: true,
-    opacity: 0.9,
+    opacity: 0.85,
     depthWrite: false,
     sizeAttenuation: true,
   });

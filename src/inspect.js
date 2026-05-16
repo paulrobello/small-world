@@ -428,6 +428,20 @@ let _furOverride = _parseBoolParam(_params.get("fur"));
 let _inspectFurEnabled = _furOverride ?? false;
 let _specimenHasFur = false;
 let _colorOverride = _parseColorParam(_params.get("color"));
+let _patternOverride = null;
+{
+  const pt = _params.get("patternType");
+  if (pt != null) {
+    _patternOverride = {
+      patternType: parseFloat(pt),
+      patternColor: _params.get("patternColor"),
+      stripeBandCount: _params.get("stripeBandCount") != null ? parseFloat(_params.get("stripeBandCount")) : undefined,
+      stripeBandWidth: _params.get("stripeBandWidth") != null ? parseFloat(_params.get("stripeBandWidth")) : undefined,
+      stripeOffset: _params.get("stripeOffset") != null ? parseFloat(_params.get("stripeOffset")) : undefined,
+      patternScale: _params.get("patternScale") != null ? parseFloat(_params.get("patternScale")) : undefined,
+    };
+  }
+}
 let _paused = _params.get("paused") !== "0";
 // Pending single-frame step. 0 = no step. Positive = forward, negative = back.
 let _stepDt = 0;
@@ -456,6 +470,14 @@ function _syncUrl() {
   if (_inspectWindEnabled) sp.set("wind", "1");
   sp.set("fur", _inspectFurEnabled ? "1" : "0");
   if (_colorOverride) sp.set("color", _colorOverride.getHexString());
+  if (_patternOverride) {
+    sp.set("patternType", _patternOverride.patternType);
+    if (_patternOverride.patternColor) sp.set("patternColor", _patternOverride.patternColor);
+    if (_patternOverride.stripeBandCount != null) sp.set("stripeBandCount", _patternOverride.stripeBandCount);
+    if (_patternOverride.stripeBandWidth != null) sp.set("stripeBandWidth", _patternOverride.stripeBandWidth);
+    if (_patternOverride.stripeOffset != null) sp.set("stripeOffset", _patternOverride.stripeOffset);
+    if (_patternOverride.patternScale != null) sp.set("patternScale", _patternOverride.patternScale);
+  }
   sp.set("paused", _paused ? "1" : "0");
   const next = window.location.pathname + "?" + sp.toString();
   if (next !== window.location.pathname + window.location.search) {
@@ -655,6 +677,7 @@ function spawnSpecimen(scene) {
     c = variant.build(biome, {
       ...(_furOverride == null ? {} : { furry: _furOverride }),
       color: _colorOverride ?? undefined,
+      patternOverride: _patternOverride ?? undefined,
     });
   } finally {
     Math.random = original;

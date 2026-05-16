@@ -42,6 +42,8 @@ uniform vec3 uStripeColor;
 uniform float uStripeBandCount;
 uniform float uStripeBandWidth;
 uniform float uStripeOffset;
+uniform float uPatternType;  // 0=none, 1=stripes, 2=spots, 3=patches
+uniform float uPatternScale;
 varying vec3 vPos;
 varying float vLayerT;
 varying vec3 vNormal;
@@ -54,10 +56,27 @@ float hash13(vec3 p) {
   return fract((p.x + p.y) * p.z);
 }
 
+// Value noise for smooth patches.
+float noise3(vec3 p) {
+  vec3 i = floor(p);
+  vec3 f = fract(p);
+  f = f * f * (3.0 - 2.0 * f);
+  float a = hash13(i);
+  float b = hash13(i + vec3(1,0,0));
+  float c = hash13(i + vec3(0,1,0));
+  float d = hash13(i + vec3(1,1,0));
+  float e = hash13(i + vec3(0,0,1));
+  float f2 = hash13(i + vec3(1,0,1));
+  float g = hash13(i + vec3(0,1,1));
+  float h = hash13(i + vec3(1,1,1));
+  return mix(
+    mix(mix(a, b, f.x), mix(c, d, f.x), f.y),
+    mix(mix(e, f2, f.x), mix(g, h, f.x), f.y),
+    f.z
+  );
+}
+
 void main() {
-  // Sample a 3D grid in object space — cell size ~1/80 of a unit. The
-  // floor() runs in the fragment so every fragment lands in a single
-  // cell, giving point-distributed hairs instead of interpolated bands.
   vec3 cell = floor(vPos * 80.0);
   float h = hash13(cell);
   float threshold = 0.0 + vLayerT * 0.70;
@@ -65,22 +84,45 @@ void main() {
   vec3 N = normalize(vNormal);
   float lam = max(0.0, dot(N, normalize(uLightDir)));
 
-  // Analytical stripe pattern — continuous bands along the Z axis
-  // computed per-fragment, so resolution is independent of vertex count.
-  // When uStripeBandCount <= 0, no stripes and uBaseColor is used as-is.
   vec3 baseCol = uBaseColor;
-  if (uStripeBandCount > 0.5) {
-    float z = vPos.z + uStripeOffset;
-    float period = 1.0 / uStripeBandCount;
-    float phase = mod(z, period);
-    float halfBand = uStripeBandWidth * period * 0.5;
-    if (phase < halfBand || phase > period - halfBand) {
-      baseCol = uStripeColor;
+  float patType = floor(uPatternType + 0.5);
+
+  if (patType > 0.5) {
+    float scale = uPatternScale > 0.5 ? uPatternScale : 6.0;
+
+    if (patType < 1.5) {
+      // Stripes — continuous bands along the Z axis
+      float z = vPos.z + uStripeOffset;
+      float period = 1.0 / uStripeBandCount;
+      float phase = mod(z, period);
+      float halfBand = uStripeBandWidth * period * 0.5;
+      if (phase < halfBand || phase > period - halfBand) {
+        baseCol = uStripeColor;
+      }
+    } else if (patType < 2.5) {
+      // Spots — scattered discs using a grid of random centres
+      vec3 sp = vPos * scale;
+      vec3 cell3 = floor(sp);
+      float rnd = hash13(cell3 + 0.5);
+      vec3 centre = cell3 + vec3(
+        fract(rnd * 127.1),
+        fract(rnd * 269.5),
+        fract(rnd * 419.2)
+      );
+      float d = length(sp - centre);
+      if (d < uStripeBandWidth * 0.55) {
+        baseCol = uStripeColor;
+      }
+    } else {
+      // Patches — smooth noise threshold for organic blobs
+      float n = noise3(vPos * scale * 0.5 + uStripeOffset);
+      if (n > (1.0 - uStripeBandWidth)) {
+        baseCol = uStripeColor;
+      }
     }
   }
 
   vec3 c = mix(baseCol, uTipColor, vLayerT);
-  // flat lambert response — keep colour close to body PBR; avoid blowing out
   c *= 0.7 + 0.3 * lam;
   gl_FragColor = vec4(c, 1.0 - vLayerT * 0.35);
 }
@@ -113,6 +155,8 @@ function makeFurTemplate(baseColor, tipColor, furLength) {
       uStripeBandCount: { value: 0.0 },
       uStripeBandWidth: { value: 0.0 },
       uStripeOffset: { value: 0.0 },
+      uPatternType: { value: 0.0 },
+      uPatternScale: { value: 6.0 },
     },
   });
 }
@@ -143,12 +187,24 @@ export function applyShellFur(body, biome, opts = {}) {
     // Shared uniforms: re-bind so the clone reads the same object refs.
     mat.uniforms.uLayers = sharedFurUniforms.uLayers;
     mat.uniforms.uLightDir = sharedFurUniforms.uLightDir;
-    // Stripe uniforms — all shells share the same pattern
-    if (opts.stripeColor) {
+    // Pattern uniforms — all shells share the same pattern
+    if (opts.patternColor) {
+      mat.uniforms.uStripeColor = { value: new THREE.Color(opts.patternColor) };
+    } else if (opts.stripeColor) {
       mat.uniforms.uStripeColor = { value: new THREE.Color(opts.stripeColor) };
-      mat.uniforms.uStripeBandCount = { value: opts.stripeBandCount ?? 3.0 };
-      mat.uniforms.uStripeBandWidth = { value: opts.stripeBandWidth ?? 0.4 };
-      mat.uniforms.uStripeOffset = { value: opts.stripeOffset ?? 0.0 };
+    }
+    if (opts.patternType) {
+      mat.uniforms.uPatternType = { value: opts.patternType };
+      mat.uniforms.uPatternScale = { value: opts.patternScale ?? 6.0 };
+    }
+    if (opts.stripeBandCount != null) {
+      mat.uniforms.uStripeBandCount = { value: opts.stripeBandCount };
+    }
+    if (opts.stripeBandWidth != null) {
+      mat.uniforms.uStripeBandWidth = { value: opts.stripeBandWidth };
+    }
+    if (opts.stripeOffset != null) {
+      mat.uniforms.uStripeOffset = { value: opts.stripeOffset };
     }
     const shell = new THREE.Mesh(body.geometry, mat);
     shell.userData.isFurShell = true;

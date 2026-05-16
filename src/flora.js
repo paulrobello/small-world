@@ -942,7 +942,7 @@ export const FLORA_BUILDERS = {
   skull() {
     const g = new THREE.Group();
     const mat = pooled("skull.mat", () =>
-      new THREE.MeshStandardMaterial({ color: "#f1ead8", flatShading: true, roughness: 0.8 })
+      new THREE.MeshStandardMaterial({ color: "#f1ead8", roughness: 0.8 })
     );
     const skullGeo = pooled("skull.geo", () => new THREE.SphereGeometry(0.18, 10, 8));
     const skull = new THREE.Mesh(skullGeo, mat);
@@ -1168,15 +1168,26 @@ export const FLORA_BUILDERS = {
     const up = new THREE.Vector3(0, 1, 0);
     const tmpQuat = new THREE.Quaternion();
     const tmpMat = new THREE.Matrix4();
+    const placedSpots = []; // {x, z, r} to enforce minimum separation
     for (let i = 0; i < spots; i++) {
-      const a = Math.random() * Math.PI * 2;
-      const r = 0.25 + Math.random() * 0.4;
-      const x = Math.cos(a) * r;
-      const z = Math.sin(a) * r;
+      // Try to find a non-overlapping position
+      let x, z, r, attempts = 0;
+      do {
+        const a = Math.random() * Math.PI * 2;
+        r = 0.25 + Math.random() * 0.4;
+        x = Math.cos(a) * r;
+        z = Math.sin(a) * r;
+        attempts++;
+      } while (attempts < 12 && placedSpots.some(s => {
+        const dx = x - s.x, dz = z - s.z;
+        return dx * dx + dz * dz < (s.r + 0.18) * (s.r + 0.18);
+      }));
+      const spotRadius = 0.08 + Math.random() * 0.05;
+      placedSpots.push({ x, z, r: spotRadius });
       const yLocal = Math.sqrt(Math.max(0, capA2 - r * r)) * capSY;
       const n = new THREE.Vector3(x / capA2, yLocal / capB2, z / capA2).normalize();
       const sink = 0.02;
-      const spotGeo = new THREE.SphereGeometry(0.08 + Math.random() * 0.05, 6, 5);
+      const spotGeo = new THREE.SphereGeometry(spotRadius, 6, 5);
       spotGeo.scale(1, 0.35, 1);
       tmpQuat.setFromUnitVectors(up, n);
       tmpMat.makeRotationFromQuaternion(tmpQuat);

@@ -1203,6 +1203,13 @@ export function initUi({ camera, canvas, controls, renderer }) {
         sp.set("variant", variant);
         if (n.userData.inspect.fur != null) sp.set("fur", n.userData.inspect.fur);
         if (n.userData.inspect.color != null) sp.set("color", n.userData.inspect.color);
+        const pi = n.userData.inspect;
+        if (pi.patternType) sp.set("patternType", pi.patternType);
+        if (pi.patternColor) sp.set("patternColor", pi.patternColor);
+        if (pi.stripeBandCount != null) sp.set("stripeBandCount", pi.stripeBandCount);
+        if (pi.stripeBandWidth != null) sp.set("stripeBandWidth", pi.stripeBandWidth);
+        if (pi.stripeOffset != null) sp.set("stripeOffset", pi.stripeOffset);
+        if (pi.patternScale != null) sp.set("patternScale", pi.patternScale);
         const url = window.location.pathname + "?" + sp.toString();
         window.open(url, "_blank", "noopener,noreferrer");
         return;
