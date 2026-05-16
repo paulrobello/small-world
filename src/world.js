@@ -404,7 +404,7 @@ export function generateWorld(seed) {
   // trunks need a wider sample so the downhill side stays buried on slopes.
   // Anything not listed falls back to FLORA_FOOTPRINT_DEFAULT.
   const FLORA_FOOTPRINT = {
-    tree: 0.28, leafballtree: 0.32, pine: 0.28, deadtree: 0.22, mushroom: 0.18,
+    tree: 0.28, leafballtree: 0.90, pine: 0.28, deadtree: 0.22, mushroom: 0.18,
     bigmushroom: 0.45, fairyring: 1.15, lantern: 0.18, pillar: 0.30, archstone: 0.55,
     balloontree: 0.22, crystal: 0.30, obsidianshard: 0.28, skull: 0.22,
     berrybush: 0.30, coral: 0.25, braincoral: 0.26, cupcoral: 0.22,
@@ -717,6 +717,10 @@ export function generateWorld(seed) {
       fissureLightCount++;
     }
     state.world.add(f);
+    // Berry bushes are nectar targets for bees alongside flowers.
+    if (kind === "berrybush") {
+      state.flowerSpots.push({ x: p.x, y: y + 0.3 * s, z: p.z });
+    }
     floraPlacementBlocks.push({
       kind,
       x: p.x,
@@ -1060,7 +1064,7 @@ export function generateWorld(seed) {
   }
 
   // bird flocks
-  const numFlocks = 1 + Math.floor(Math.random() * 3); // 1–3
+  const numFlocks = 1;
   let totalBirds = 0;
   for (let f = 0; f < numFlocks; f++) {
     const flock = makeFlock(biome);

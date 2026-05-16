@@ -497,13 +497,10 @@ export function initPostFX(renderer, scene, camera) {
     let activePairs, perPass;
     if (sliderUnit <= 1.0) {
       activePairs = BLOOM_BASE_PAIRS;
-      perPass = sliderUnit;
+      perPass = sliderUnit * 2.0;
     } else {
-      perPass = 1.0;
-      activePairs = Math.min(
-        BLOOM_MAX_PAIRS,
-        Math.round(BLOOM_BASE_PAIRS + (sliderUnit - 1) * 2.5)
-      );
+      perPass = sliderUnit * 2.0;
+      activePairs = BLOOM_BASE_PAIRS;
     }
     bloomRadiusUniform.value = perPass;
     for (let i = 0; i < bloomBlurPasses.length; i++) {
@@ -522,9 +519,8 @@ export function initPostFX(renderer, scene, camera) {
   // pass is `enabled = false` when bloom is off so the composer skips it.
   const bloomCompositePass = new ShaderPass(_bloomCompositeShader);
   // Composite weight. Multi-pass blur spreads energy thinner across more
-  // pixels — at BLOOM_PASS_PAIRS=3 the peak halo pixel sits roughly 3× dimmer
-  // than a single H+V pass, so the strength compensates. Dial up if the
-  // halo reads as washed out; down if it bleeds across the frame.
+  // pixels — at BLOOM_BASE_PAIRS=3 the peak halo pixel sits roughly 3× dimmer
+  // than a single H+V pass, so the strength compensates.
   const BLOOM_COMPOSITE_STRENGTH = 4.5;
   bloomCompositePass.uniforms.uStrength.value =
     state.userSettings.bloom ? BLOOM_COMPOSITE_STRENGTH : 0.0;
@@ -563,11 +559,7 @@ export function initPostFX(renderer, scene, camera) {
     return (
       tiltShiftPass.enabled ||
       depthFXPass.enabled ||
-      state.userSettings.softParticles ||
-      // Bloom shares the pre-pass depth attachment for depth-occluded
-      // emissives (a glow eye behind a tree gets culled), so it needs the
-      // pre-pass to fill depth before the bloom render runs.
-      state.userSettings.bloom
+      state.userSettings.softParticles
     );
   }
 
@@ -606,16 +598,17 @@ export function initPostFX(renderer, scene, camera) {
       bloomRenderPass.camera = cam;
       if (state.userSettings.bloom) {
         // Bloom render: restrict the camera to BLOOM_LAYER so only emissive
-        // meshes are rasterized, and freeze the depth attachment (shared
-        // with the depth pre-pass) so emissives behind opaque geometry get
-        // culled by depthTest. scene.background would render as a full-frame
-        // fill otherwise, so null it for this pass.
+        // meshes are rasterized. The bloom RT shares the depth attachment
+        // with the depth pre-pass — if a pre-pass ran this frame, preserve
+        // that depth so emissives behind opaque geometry get culled by
+        // depthTest; otherwise bloom clears and fills its own depth.
+        // scene.background would render as a full-frame fill, so null it.
         const prevBackground = s.background;
         const prevLayerMask = cam.layers.mask;
         const prevAutoClearDepth = renderer.autoClearDepth;
         s.background = null;
         cam.layers.set(BLOOM_LAYER);
-        renderer.autoClearDepth = false;
+        renderer.autoClearDepth = !needsDepth();
         bloomComposer.render();
         renderer.autoClearDepth = prevAutoClearDepth;
         cam.layers.mask = prevLayerMask;

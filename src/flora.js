@@ -281,7 +281,7 @@ function addGroveMushroomFamily(group, biome, { radius = 0.44, count = 3, capY =
       roughness: 0.45,
     }));
   });
-  const spores = 3 + Math.floor(Math.random() * 4);
+  const spores = 1 + Math.floor(Math.random() * 2); // 1–2 (was 3–6)
   for (let i = 0; i < spores; i++) {
     const a = Math.random() * Math.PI * 2;
     const r = radius * (0.18 + Math.random() * 0.62);
@@ -335,12 +335,12 @@ export const FLORA_BUILDERS = {
     const trunkMat = pooled("leafballtree.trunk.mat", () =>
       new THREE.MeshStandardMaterial({
         color: new THREE.Color(TRUNK).lerp(new THREE.Color("#c38b45"), 0.52),
-        flatShading: true,
+        flatShading: false,
         roughness: 0.95,
       })
     );
     const trunkGeo = pooled("leafballtree.trunk.geo", () => {
-      const geo = new THREE.CylinderGeometry(0.12, 0.24, 1.45, 8, 6).translate(0, 0.725, 0);
+      const geo = new THREE.CylinderGeometry(0.12, 0.24, 1.45, 12, 12).translate(0, 0.725, 0);
       const pos = geo.attributes.position;
       for (let i = 0; i < pos.count; i++) {
         const y = pos.getY(i);

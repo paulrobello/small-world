@@ -172,7 +172,7 @@ export function makeCreature(biome, opts = {}) {
   const isFish = biome.creatureKind === "fish" || isAngler;
   // sleepers and burrowers must be walkers — sleeping fliers in mid-air look broken
   const forceWalk = !!(opts.sleeper || opts.burrower);
-  const flies = isFish ? true : isBumblebee ? true : forceWalk ? false : Math.random() < 0.3;
+  const flies = isFish ? true : isBumblebee ? true : forceWalk ? false : Math.random() < 0.15;
 
   const group = new THREE.Group();
   // YXZ order so heading yaw applies first, then pitch/roll resolve in the
