@@ -245,23 +245,30 @@ function applyFernLeafletWind(material, strength = 1.0) {
         {
           #ifdef USE_INSTANCING
             vec4 wp = modelMatrix * instanceMatrix * vec4(transformed, 1.0);
-            vec2 axW = vec2(instanceMatrix[0].x, instanceMatrix[0].z);
-            vec2 azW = vec2(instanceMatrix[2].x, instanceMatrix[2].z);
-            float invXZScaleSq = 1.0 / max(dot(axW, axW), 1e-6);
+            vec3 axW = vec3(instanceMatrix[0].x, instanceMatrix[0].y, instanceMatrix[0].z);
+            vec3 ayW = vec3(instanceMatrix[1].x, instanceMatrix[1].y, instanceMatrix[1].z);
+            vec3 azW = vec3(instanceMatrix[2].x, instanceMatrix[2].y, instanceMatrix[2].z);
+            float invXScaleSq = 1.0 / max(dot(axW, axW), 1e-6);
+            float invYScaleSq = 1.0 / max(dot(ayW, ayW), 1e-6);
+            float invZScaleSq = 1.0 / max(dot(azW, azW), 1e-6);
             float windY = max(instanceMatrix[3].y + transformed.y, 0.0);
           #else
             vec4 wp = modelMatrix * vec4(transformed, 1.0);
-            vec2 axW = vec2(1.0, 0.0);
-            vec2 azW = vec2(0.0, 1.0);
-            float invXZScaleSq = 1.0;
+            vec3 axW = vec3(1.0, 0.0, 0.0);
+            vec3 ayW = vec3(0.0, 1.0, 0.0);
+            vec3 azW = vec3(0.0, 0.0, 1.0);
+            float invXScaleSq = 1.0;
+            float invYScaleSq = 1.0;
+            float invZScaleSq = 1.0;
             float windY = max(transformed.y, 0.0);
           #endif
           float windAmp = windY * windY * uWindStrength * uFoliageWind;
           float w1 = sin(uTime * 1.4 + wp.x * 0.30 + wp.z * 0.40);
           float w2 = sin(uTime * 0.9 + wp.x * 0.15 - wp.z * 0.25);
-          vec2 windWorld = vec2(w1 * windAmp * 0.06, w2 * windAmp * 0.05);
-          transformed.x += dot(axW, windWorld) * invXZScaleSq;
-          transformed.z += dot(azW, windWorld) * invXZScaleSq;
+          vec3 windWorld = vec3(w1 * windAmp * 0.06, 0.0, w2 * windAmp * 0.05);
+          transformed.x += dot(axW, windWorld) * invXScaleSq;
+          transformed.y += dot(ayW, windWorld) * invYScaleSq;
+          transformed.z += dot(azW, windWorld) * invZScaleSq;
         }`
       );
   };
