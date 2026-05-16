@@ -807,15 +807,14 @@ function emitWalkerFootprint(c, footIndex, heightFn) {
   if (!off) return;
   const p = _localFootToWorld(c, off.x, off.z);
   const y = heightFn(p.x, p.z);
-  if (y <= 0.04) return;
+  if (state.waterMesh && y < WATER_AVOID_Y) return;
   const side = off.x < 0 ? -1 : 1;
   emitGroundMark(marks, {
     x: p.x,
-    y,
     z: p.z,
     heading: c.heading + side * 0.16,
-    width: Math.max(0.08, 0.14 * c.scale),
-    length: Math.max(0.14, 0.26 * c.scale),
+    width: Math.max(0.045, 0.08 * c.scale),
+    length: Math.max(0.075, 0.15 * c.scale),
     opacity: cfg.opacity,
     life: cfg.life,
   });
@@ -826,7 +825,7 @@ function emitFlierLandingMarks(c, heightFn) {
   const cfg = state.currentBiome?.groundMarks;
   if (!marks || !cfg || !c.flies || c.isFish || c.perchTarget) return;
   const y = heightFn(c.group.position.x, c.group.position.z);
-  if (y <= 0.04) return;
+  if (state.waterMesh && y < WATER_AVOID_Y) return;
   const offsets = [
     [-0.16, 0.10],
     [0.16, 0.10],
@@ -837,11 +836,10 @@ function emitFlierLandingMarks(c, heightFn) {
     const p = _localFootToWorld(c, lx, lz);
     emitGroundMark(marks, {
       x: p.x,
-      y: heightFn(p.x, p.z),
       z: p.z,
       heading: c.heading + (lx < 0 ? -0.12 : 0.12),
-      width: Math.max(0.07, 0.12 * c.scale),
-      length: Math.max(0.13, 0.24 * c.scale),
+      width: Math.max(0.045, 0.075 * c.scale),
+      length: Math.max(0.075, 0.14 * c.scale),
       opacity: cfg.opacity * 0.9,
       life: cfg.life,
     });

@@ -125,6 +125,7 @@ export const state = {
     grassEnabled: true,
     grassDensity: 2.0,
     grassHeight: 1.2,
+    groundMarkLifeScale: 2.0,
     grassEdgeDiscs: true,
     grassPanelOpen: false,
     terrainSmoothShading: true,

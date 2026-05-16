@@ -389,21 +389,23 @@ function emitCrawlerGroundMark(c, x, z, heading, heightFn) {
   if (c.groundMarkDistance < interval) return;
 
   const y = heightFn(x, z);
-  if (y <= 0.04) return;
+  if (state.waterMesh && y < WATER_AVOID_Y) return;
   c.groundMarkDistance = 0;
-  c.lastGroundMarkX = x;
-  c.lastGroundMarkZ = z;
 
   emitGroundMark(marks, {
     x,
-    y,
     z,
+    fromX: c.lastGroundMarkX,
+    fromZ: c.lastGroundMarkZ,
     heading,
     width: (isSnail ? 0.34 : 0.22) * c.scale,
     length: (isSnail ? 0.46 : 0.36) * c.scale,
     opacity: cfg.opacity * (isSnail ? 0.82 : 0.66),
     life: cfg.life * (isSnail ? 1.15 : 0.9),
   });
+
+  c.lastGroundMarkX = x;
+  c.lastGroundMarkZ = z;
 }
 
 export function stepCaterpillar(c, dt, t, heightFn) {

@@ -255,7 +255,7 @@ function animate() {
   stepWater(state.waterMesh, dt, t);
   stepDirtPuffs(state.dirtPuffs, dt);
   stepDustKicks(state.dustKicks, dt);
-  stepGroundMarks(state.groundMarks, dt, state.heightFn);
+  stepGroundMarks(state.groundMarks, dt);
   stepFlySwarms(state.flySwarms, t);
   for (const w of state.willowisps) stepWillOWisp(w, dt, t, state.heightFn);
   stepShadowDisks(state.shadowDisks, state.heightFn);

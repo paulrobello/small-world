@@ -44,7 +44,7 @@ class FaunaObstacleAndTrailStaticTest(unittest.TestCase):
         source = CATERPILLAR_JS.read_text()
 
         self.assertIn("trailMaxDistance", source)
-        self.assertIn("trimTrailByDistance(c.trail, c.trailMaxDistance)", source)
+        self.assertIn("ringTrimByDistance(c.trail, c.trailMaxDistance)", source)
         self.assertNotIn("if (c.trail.length > 300) c.trail.length = 300", source)
 
     def test_crawlers_turn_in_place_on_static_obstacles(self) -> None:
@@ -59,8 +59,8 @@ class FaunaObstacleAndTrailStaticTest(unittest.TestCase):
         source = CATERPILLAR_JS.read_text()
 
         self.assertIn('seg.rotation.order = "YXZ"', source)
-        self.assertIn('const frontPt = findTrailPointAt(c.trail, Math.max(0, d - c.segSpacing * 0.5))', source)
-        self.assertIn('const backPt = findTrailPointAt(c.trail, d + c.segSpacing * 0.5)', source)
+        self.assertIn('const frontPt = ringFindAt(c.trail, Math.max(0, d - c.segSpacing * 0.5))', source)
+        self.assertIn('const backPt = ringFindAt(c.trail, d + c.segSpacing * 0.5)', source)
         self.assertIn('const bodyHeading = Math.atan2(frontPt.z - backPt.z, frontPt.x - backPt.x)', source)
         self.assertIn('seg.rotation.y = -bodyHeading + Math.PI / 2', source)
 

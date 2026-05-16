@@ -40,13 +40,26 @@ def extract_biome_block(source: str, biome_id: str) -> str:
 class GroundMarksStaticTest(unittest.TestCase):
     def test_ground_mark_system_exports_and_shader_alpha(self) -> None:
         source = ENVIRONMENT_JS.read_text()
+        # Scope assertions to the ground marks section only — InstancedMesh
+        # and PlaneGeometry are used elsewhere in environment.js.
+        start = source.index("// ─── soft-ground creature marks")
+        end = source.index("// ─── fly swarms", start)
+        section = source[start:end]
 
-        self.assertIn("export function makeGroundMarks", source)
-        self.assertIn("export function emitGroundMark", source)
-        self.assertIn("export function stepGroundMarks", source)
-        self.assertIn("attribute float aAlpha", source)
-        self.assertIn("depthWrite: false", source)
-        self.assertIn("polygonOffset: true", source)
+        self.assertIn("export function makeGroundMarks", section)
+        self.assertIn("export function emitGroundMark", section)
+        self.assertIn("export function stepGroundMarks", section)
+        self.assertIn("installGroundMarkShader", section)
+        self.assertIn("onBeforeCompile", section)
+        self.assertIn("new THREE.CanvasTexture", section)
+        self.assertIn("uGroundMarkTex", section)
+        self.assertIn("texture2D(uGroundMarkTex", section)
+        self.assertIn("diffuseColor.rgb = mix", section)
+        self.assertNotIn("GROUND_MARK_LIFT", section)
+        self.assertNotIn("new THREE.InstancedMesh", section)
+        self.assertNotIn("new THREE.PlaneGeometry", section)
+        self.assertNotIn("attribute float aAlpha", section)
+        self.assertNotIn("polygonOffset: true", section)
 
     def test_state_world_and_main_wire_ground_marks(self) -> None:
         state_source = STATE_JS.read_text()
@@ -58,7 +71,7 @@ class GroundMarksStaticTest(unittest.TestCase):
         self.assertIn("state.groundMarks = null", world_source)
         self.assertIn("state.groundMarks = makeGroundMarks(biome)", world_source)
         self.assertIn("stepGroundMarks", main_source)
-        self.assertIn("stepGroundMarks(state.groundMarks, dt, state.heightFn)", main_source)
+        self.assertIn("stepGroundMarks(state.groundMarks, dt)", main_source)
 
     def test_soft_ground_biomes_are_configured(self) -> None:
         source = BIOMES_JS.read_text()

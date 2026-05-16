@@ -46,6 +46,7 @@ const PERSISTED_KEYS = [
   "grassEnabled",
   "grassDensity",
   "grassHeight",
+  "groundMarkLifeScale",
   "grassEdgeDiscs",
   "grassPanelOpen",
   "terrainSmoothShading",
@@ -740,6 +741,21 @@ export function initUi({ camera, canvas, controls, renderer }) {
     applyGrassSettings();
     saveSettings();
   });
+
+  // Ground mark lifetime control
+  const groundMarkLifeEl = document.getElementById("setting-ground-mark-life");
+  const groundMarkLifeValueEl = document.getElementById("setting-ground-mark-life-value");
+  if (groundMarkLifeEl) {
+    const groundMarkLifeScale = state.userSettings.groundMarkLifeScale ?? 1.0;
+    groundMarkLifeEl.value = String(Math.round(groundMarkLifeScale * 100));
+    groundMarkLifeValueEl.textContent = groundMarkLifeEl.value + "%";
+    groundMarkLifeEl.addEventListener("input", () => {
+      const v = Number(groundMarkLifeEl.value);
+      state.userSettings.groundMarkLifeScale = v / 100;
+      groundMarkLifeValueEl.textContent = v + "%";
+      saveSettings();
+    });
+  }
 
   state._reapplyGrassSettings = applyGrassSettings;
   applyGrassSettings();
