@@ -227,53 +227,29 @@ function makeInstancedLeafBatch(geometry, material, matrices) {
   return mesh;
 }
 
-function applyFernLeafletWind(material, strength = 1.0) {
-  const prev = material.onBeforeCompile;
-  material.onBeforeCompile = (shader) => {
-    if (prev) prev(shader);
-    shader.uniforms.uTime = state.windUniforms.uTime;
-    shader.uniforms.uWindStrength = { value: strength };
-    shader.uniforms.uFoliageWind = state.windUniforms.uFoliageWind;
-    shader.vertexShader = shader.vertexShader
-      .replace(
-        "#include <common>",
-        "#include <common>\nuniform float uTime;\nuniform float uWindStrength;\nuniform float uFoliageWind;"
-      )
-      .replace(
-        "#include <begin_vertex>",
-        `#include <begin_vertex>
-        {
-          #ifdef USE_INSTANCING
-            vec4 wp = modelMatrix * instanceMatrix * vec4(transformed, 1.0);
-            vec3 axW = vec3(instanceMatrix[0].x, instanceMatrix[0].y, instanceMatrix[0].z);
-            vec3 ayW = vec3(instanceMatrix[1].x, instanceMatrix[1].y, instanceMatrix[1].z);
-            vec3 azW = vec3(instanceMatrix[2].x, instanceMatrix[2].y, instanceMatrix[2].z);
-            float invXScaleSq = 1.0 / max(dot(axW, axW), 1e-6);
-            float invYScaleSq = 1.0 / max(dot(ayW, ayW), 1e-6);
-            float invZScaleSq = 1.0 / max(dot(azW, azW), 1e-6);
-            float windY = max(instanceMatrix[3].y + transformed.y, 0.0);
-          #else
-            vec4 wp = modelMatrix * vec4(transformed, 1.0);
-            vec3 axW = vec3(1.0, 0.0, 0.0);
-            vec3 ayW = vec3(0.0, 1.0, 0.0);
-            vec3 azW = vec3(0.0, 0.0, 1.0);
-            float invXScaleSq = 1.0;
-            float invYScaleSq = 1.0;
-            float invZScaleSq = 1.0;
-            float windY = max(transformed.y, 0.0);
-          #endif
-          float windAmp = windY * windY * uWindStrength * uFoliageWind;
-          float w1 = sin(uTime * 1.4 + wp.x * 0.30 + wp.z * 0.40);
-          float w2 = sin(uTime * 0.9 + wp.x * 0.15 - wp.z * 0.25);
-          vec3 windWorld = vec3(w1 * windAmp * 0.06, 0.0, w2 * windAmp * 0.05);
-          transformed.x += dot(axW, windWorld) * invXScaleSq;
-          transformed.y += dot(ayW, windWorld) * invYScaleSq;
-          transformed.z += dot(azW, windWorld) * invZScaleSq;
-        }`
-      );
+function appendFernGeometry(source, matrix, color, positions, normals, colors) {
+  const posAttr = source.getAttribute("position");
+  const normAttr = source.getAttribute("normal");
+  const index = source.getIndex();
+  const normalMatrix = new THREE.Matrix3().getNormalMatrix(matrix);
+  const p = new THREE.Vector3();
+  const n = new THREE.Vector3();
+  const appendVertex = (idx) => {
+    p.fromBufferAttribute(posAttr, idx).applyMatrix4(matrix);
+    positions.push(p.x, p.y, p.z);
+    if (normAttr) {
+      n.fromBufferAttribute(normAttr, idx).applyMatrix3(normalMatrix).normalize();
+    } else {
+      n.set(0, 1, 0);
+    }
+    normals.push(n.x, n.y, n.z);
+    colors.push(color.r, color.g, color.b);
   };
-  material.needsUpdate = true;
-  return material;
+  if (index) {
+    for (let i = 0; i < index.count; i++) appendVertex(index.getX(i));
+  } else {
+    for (let i = 0; i < posAttr.count; i++) appendVertex(i);
+  }
 }
 
 function addGroveMushroomFamily(group, biome, { radius = 0.44, count = 3, capY = 0.35 } = {}) {
@@ -873,49 +849,49 @@ export const FLORA_BUILDERS = {
       (Math.random() - 0.5) * 0.08,
       (Math.random() - 0.5) * 0.07
     );
-    const ribMat = applyWindSway(
+    const ribColor = fernColor.clone().offsetHSL(0.01, -0.02, -0.08);
+    const heartColor = fernColor.clone().offsetHSL(0.01, -0.04, -0.04);
+    const frondMat = applyWindSway(
       new THREE.MeshStandardMaterial({
-        color: fernColor.clone().offsetHSL(0.01, -0.02, -0.08),
-        flatShading: true,
-        roughness: 0.78,
-      }),
-      1.25
-    );
-    const leafletMat = applyFernLeafletWind(
-      new THREE.MeshStandardMaterial({
-        color: fernColor,
-        flatShading: true,
+        vertexColors: true,
+        flatShading: false,
         roughness: 0.82,
       }),
-      1.55
+      1.45
     );
     const ribGeo = pooled("fern.rib.geo", () => {
-      const geo = new THREE.CylinderGeometry(0.012, 0.018, 1, 5);
+      const geo = new THREE.CylinderGeometry(0.012, 0.018, 1, 7);
       geo.translate(0, 0.5, 0);
       return geo;
     });
     const leafletGeo = pooled("fern.leaflet.geo", () => {
-      const geo = new THREE.SphereGeometry(0.09, 8, 5);
+      const geo = new THREE.SphereGeometry(0.09, 12, 8);
       geo.scale(1.55, 0.18, 0.42);
       return geo;
     });
-    const heartGeo = pooled("fern.heart.geo", () =>
-      jitterGeo(new THREE.IcosahedronGeometry(0.105, 0), 0.018).scale(1.25, 0.55, 1.0)
-    );
+    const heartGeo = pooled("fern.heart.geo", () => {
+      const geo = new THREE.SphereGeometry(0.105, 10, 6);
+      geo.scale(1.25, 0.55, 1.0);
+      return geo;
+    });
 
-    const heart = new THREE.Mesh(heartGeo, leafletMat);
-    heart.position.y = 0.035;
-    heart.castShadow = true;
-    g.add(heart);
-
-    const ribMatrices = [];
-    const leafletMatrices = [];
+    const positions = [];
+    const normals = [];
+    const colors = [];
     const frondMatrix = new THREE.Matrix4();
     const localMatrix = new THREE.Matrix4();
+    const worldMatrix = new THREE.Matrix4();
     const position = new THREE.Vector3();
     const scale = new THREE.Vector3();
     const quaternion = new THREE.Quaternion();
     const euler = new THREE.Euler(0, 0, 0, "YXZ");
+
+    position.set(0, 0.035, 0);
+    quaternion.identity();
+    scale.set(1, 1, 1);
+    localMatrix.compose(position, quaternion, scale);
+    appendFernGeometry(heartGeo, localMatrix, heartColor, positions, normals, colors);
+
     const fronds = 5 + Math.floor(Math.random() * 3);
     const start = Math.random() * Math.PI * 2;
     for (let i = 0; i < fronds; i++) {
@@ -934,7 +910,8 @@ export const FLORA_BUILDERS = {
       quaternion.identity();
       scale.set(0.85, length, 0.85);
       localMatrix.compose(position, quaternion, scale);
-      ribMatrices.push(new THREE.Matrix4().multiplyMatrices(frondMatrix, localMatrix));
+      worldMatrix.multiplyMatrices(frondMatrix, localMatrix);
+      appendFernGeometry(ribGeo, worldMatrix, ribColor, positions, normals, colors);
 
       const pairs = 4 + Math.floor(Math.random() * 3);
       for (let j = 0; j < pairs; j++) {
@@ -954,15 +931,20 @@ export const FLORA_BUILDERS = {
           );
           quaternion.setFromEuler(euler);
           localMatrix.compose(position, quaternion, scale);
-          leafletMatrices.push(new THREE.Matrix4().multiplyMatrices(frondMatrix, localMatrix));
+          worldMatrix.multiplyMatrices(frondMatrix, localMatrix);
+          appendFernGeometry(leafletGeo, worldMatrix, fernColor, positions, normals, colors);
         }
       }
     }
 
-    const ribs = makeInstancedLeafBatch(ribGeo, ribMat, ribMatrices);
-    if (ribs) g.add(ribs);
-    const leaflets = makeInstancedLeafBatch(leafletGeo, leafletMat, leafletMatrices);
-    if (leaflets) g.add(leaflets);
+    const frondGeo = new THREE.BufferGeometry();
+    frondGeo.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
+    frondGeo.setAttribute("normal", new THREE.Float32BufferAttribute(normals, 3));
+    frondGeo.setAttribute("color", new THREE.Float32BufferAttribute(colors, 3));
+    frondGeo.computeBoundingSphere();
+    const mesh = new THREE.Mesh(frondGeo, frondMat);
+    mesh.castShadow = true;
+    g.add(mesh);
     return g;
   },
 

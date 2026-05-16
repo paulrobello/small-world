@@ -4,22 +4,18 @@ import { readFileSync } from 'node:fs';
 const floraSource = readFileSync(new URL('../src/flora.js', import.meta.url), 'utf8');
 
 assert(
-  floraSource.includes('function applyFernLeafletWind'),
-  'Fern leaflets need a fern-specific wind shader so their instance height contributes to sway.'
+  floraSource.includes('function appendFernGeometry'),
+  'Fern fronds should bake ribs and leaflets into one geometry so shared attachment points receive the same wind deformation.'
 );
 assert(
-  floraSource.includes('instanceMatrix[3].y'),
-  'Fern leaflet wind should include the instance matrix y offset so leaves move with their frond stems.'
+  floraSource.includes('new THREE.Mesh(frondGeo, frondMat)'),
+  'Fern should render as one wind-swayed mesh instead of separate rib/leaflet meshes that can detach.'
 );
 assert(
-  /const leafletMat = applyFernLeafletWind\(/.test(floraSource),
-  'Fern leaflet material should use applyFernLeafletWind rather than generic local-y applyWindSway.'
+  /const frondMat = applyWindSway\(/.test(floraSource),
+  'The combined fern mesh should still use the shared applyWindSway path.'
 );
 assert(
-  floraSource.includes('vec3 ayW = vec3(instanceMatrix[1].x, instanceMatrix[1].y, instanceMatrix[1].z);'),
-  'Fern leaflet wind should include the full instance Y basis; side-rotated leaves need Y-axis motion to follow stems.'
-);
-assert(
-  floraSource.includes('transformed.y += dot(ayW, windWorld) * invYScaleSq;'),
-  'Fern leaflet wind should apply world wind through local Y as well as X/Z so both leaf sides stay attached.'
+  !floraSource.includes('applyFernLeafletWind'),
+  'Fern should not need a separate leaflet wind shader; detached leaflets are avoided by shared geometry.'
 );
