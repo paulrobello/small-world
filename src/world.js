@@ -1011,11 +1011,14 @@ export function generateWorld(seed) {
   }
 
   // caterpillars — multi-segment crawlers, occasionally swapped for snails
+  // Crawlers also avoid spawning inside fairy rings (large obstacle discs
+  // that the "turn" avoidance response can't escape from).
+  const CRAWLER_BLOCK_KINDS = new Set(["lavafissure", "fairyring"]);
   function placeCrawler(make) {
     for (let tries = 0; tries < 12; tries++) {
       const crawler = make();
       const head = crawler.segments?.[0];
-      if (head && !blocksPlacement(head.position.x, head.position.z, 0.28 * crawler.scale)) {
+      if (head && !blocksPlacement(head.position.x, head.position.z, 0.28 * crawler.scale, CRAWLER_BLOCK_KINDS)) {
         state.world.add(crawler.group);
         state.caterpillars.push(crawler);
         return true;
