@@ -949,6 +949,105 @@ body.photo-mode .help-panel {
   letter-spacing: 0.1em;
 }
 
+/* ─── Locator panel ─────────────────────────────────────────────────── */
+.locator-panel {
+  position: fixed;
+  bottom: 90px;
+  left: 14px;
+  width: 220px;
+  max-height: calc(100vh - 120px);
+  background: rgba(8, 6, 14, 0.88);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid var(--ink-dim);
+  border-radius: 6px;
+  padding: 16px 18px;
+  overflow-y: auto;
+  opacity: 0;
+  transform: translateY(12px);
+  pointer-events: none;
+  transition: opacity 0.32s ease, transform 0.32s ease;
+  text-shadow: var(--shadow);
+  z-index: 40;
+}
+.locator-panel.open {
+  opacity: 1;
+  transform: translateY(0);
+  pointer-events: auto;
+}
+body.photo-mode .locator-panel {
+  opacity: 0 !important;
+  pointer-events: none;
+}
+.locator-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.locator-category {
+  font-size: 10px;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  opacity: 0.45;
+  margin-top: 10px;
+  margin-bottom: 4px;
+  padding: 0 4px;
+}
+.locator-category:first-child {
+  margin-top: 0;
+}
+.locator-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  width: 100%;
+  background: none;
+  border: none;
+  color: var(--ink);
+  font-family: inherit;
+  font-size: 12px;
+  letter-spacing: 0.04em;
+  padding: 6px 8px;
+  cursor: pointer;
+  border-radius: 3px;
+  transition: background 0.15s ease;
+  text-shadow: var(--shadow);
+  text-align: left;
+}
+.locator-item:hover {
+  background: rgba(255, 255, 255, 0.06);
+}
+.locator-item:active {
+  background: rgba(255, 255, 255, 0.10);
+}
+.locator-item-count {
+  opacity: 0.45;
+  font-variant-numeric: tabular-nums;
+  flex-shrink: 0;
+  margin-left: 8px;
+}
+.locator-empty {
+  text-align: center;
+  opacity: 0.35;
+  padding: 12px 0;
+  font-size: 11px;
+  letter-spacing: 0.05em;
+}
+.locator-hint {
+  margin-top: 12px;
+  font-size: 10px;
+  opacity: 0.35;
+  text-align: center;
+  letter-spacing: 0.05em;
+}
+.locator-hint kbd {
+  border: 1px solid var(--ink-dim);
+  padding: 1px 5px;
+  font-family: inherit;
+  font-size: inherit;
+  letter-spacing: 0.1em;
+}
+
 /* ─── Photo mode ─────────────────────────────────────────────────────── */
 .photo-seed {
   position: fixed;
@@ -1042,6 +1141,13 @@ body.photo-mode .grain {
     right: 12px;
     width: auto;
     max-width: none;
+    max-height: 60vh;
+  }
+  .locator-panel {
+    bottom: auto;
+    top: 12px;
+    left: 12px;
+    width: 200px;
     max-height: 60vh;
   }
 }

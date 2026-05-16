@@ -105,6 +105,8 @@
       <dl class="help-list">
         <dt>regenerate</dt>
         <dd>bottom-right button or <kbd>r</kbd> rolls a new world seed.</dd>
+        <dt>locator</dt>
+        <dd><kbd>l</kbd> opens the entity locator panel. Click a type to fly the camera to the nearest instance. Creatures enter follow mode. <kbd>tab</kbd> cycles through all instances of the selected type. <kbd>esc</kbd> closes the panel.</dd>
         <dt>follow creature</dt>
         <dd>tap any creature to track it indefinitely. Settings → follow pauses the sim while choosing. <kbd>esc</kbd> releases follow.</dd>
         <dt>inspect specimen</dt>
@@ -124,6 +126,8 @@
         <dt>drag</dt><dd>rotate the camera.</dd>
         <dt>scroll · pinch</dt><dd>zoom in / out.</dd>
         <dt>hover a sleeper</dt><dd>gently wakes drowsing creatures.</dd>
+        <dt><kbd>l</kbd></dt><dd>open entity locator.</dd>
+        <dt><kbd>tab</kbd></dt><dd>cycle instances of last located type.</dd>
         <dt><kbd>r</kbd></dt><dd>regenerate world.</dd>
         <dt><kbd>p</kbd></dt><dd>toggle photo mode.</dd>
         <dt><kbd>s</kbd></dt><dd>save the current frame as a png (photo mode only).</dd>
@@ -380,6 +384,16 @@
       <div class="biome-filter" id="biome-filter"></div>
       <div class="biome-filter-hint">tap to toggle. regenerate only picks from enabled biomes.</div>
     </section>
+  </aside>
+
+  <aside class="locator-panel" id="locator-panel" aria-hidden="true">
+    <div class="settings-head">
+      <span class="settings-title">locator</span>
+      <button class="settings-close" id="locator-close" aria-label="close">×</button>
+    </div>
+    <div class="locator-list" id="locator-list"></div>
+    <div class="locator-empty" id="locator-empty">nothing here yet.</div>
+    <div class="locator-hint">click to locate · <kbd>esc</kbd> to close</div>
   </aside>
 
   <div class="follow-banner" id="follow-banner" aria-hidden="true">

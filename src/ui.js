@@ -239,6 +239,9 @@ let _settingsPanel = null;
 let _followButton = null;
 let _followBanner = null;
 let _canvas = null;
+let _locatorPanel = null;
+let _locatorOpen = false;
+let _locatorCycle = null; // { entities, getPos, isCreature, index }
 
 export function setFollowTarget(creatureOrNull) {
   followTarget = creatureOrNull;
@@ -272,6 +275,7 @@ export function initUi({ camera, canvas, controls, renderer }) {
   _settingsPanel = document.getElementById("settings-panel");
   _followBanner = document.getElementById("follow-banner");
   _followButton = document.getElementById("setting-follow");
+  _locatorPanel = document.getElementById("locator-panel");
   const settingsToggle = document.getElementById("settings-toggle");
   const settingsClose = document.getElementById("settings-close");
   const settingsResetDefaults = document.getElementById("setting-reset-defaults");
@@ -291,7 +295,7 @@ export function initUi({ camera, canvas, controls, renderer }) {
   // closes the other so the back panel isn't hidden behind the front one.
   settingsToggle.addEventListener("click", () => {
     const opening = !_settingsPanel.classList.contains("open");
-    if (opening) setHelpOpen(false);
+    if (opening) { setHelpOpen(false); setLocatorOpen(false); }
     setSettingsOpen(opening);
   });
   settingsClose.addEventListener("click", () => setSettingsOpen(false));
@@ -302,7 +306,7 @@ export function initUi({ camera, canvas, controls, renderer }) {
 
   helpToggle.addEventListener("click", () => {
     const opening = !helpPanel.classList.contains("open");
-    if (opening) setSettingsOpen(false);
+    if (opening) { setSettingsOpen(false); setLocatorOpen(false); }
     setHelpOpen(opening);
   });
   helpClose.addEventListener("click", () => setHelpOpen(false));
@@ -338,6 +342,7 @@ export function initUi({ camera, canvas, controls, renderer }) {
     // Release any other active camera mode so they don't fight.
     setFollowTarget(null);
     setSelectingCreature(false);
+    if (_locatorOpen) setLocatorOpen(false);
     // Get the settings panel out of the way so the player can actually see.
     setSettingsOpen(false);
     const savedAutoRotate = controls.autoRotate;
@@ -1116,6 +1121,9 @@ export function initUi({ camera, canvas, controls, renderer }) {
       // and re-apply user wind/grass settings so they survive across worlds.
       if (state._reapplyWindSettings) state._reapplyWindSettings();
       if (state._reapplyGrassSettings) state._reapplyGrassSettings();
+      // Close the locator on regen — entity references are stale.
+      if (_locatorOpen) setLocatorOpen(false);
+      _locatorCycle = null;
     }
   }, 250);
   photoSeedValueEl.textContent = formatSeed(state.currentSeed);
@@ -1154,6 +1162,7 @@ export function initUi({ camera, canvas, controls, renderer }) {
   }
   function setPhotoMode(on) {
     if (on) {
+      if (_locatorOpen) setLocatorOpen(false);
       _photoSavedAutoRotate = controls.autoRotate;
       controls.autoRotate = false;
       document.body.classList.add("photo-mode");
@@ -1174,6 +1183,190 @@ export function initUi({ camera, canvas, controls, renderer }) {
 
   renderBookmarks();
   syncBookmarkButton();
+
+  // ── Locator panel ──────────────────────────────────────────────────────
+  const LOCATOR_NAMES = {
+    walker: "Walker", flier: "Flier", sleeper: "Sleeper", burrower: "Burrower",
+    fish: "Fish", angler: "Angler", bumblebee: "Bumblebee",
+    caterpillar: "Caterpillar", snail: "Snail", butterfly: "Butterfly",
+    bee: "Bee", bird: "Bird", willowisp: "Will-o'-Wisp",
+    leafballtree: "Leafball Tree", mushroom: "Mushroom", bigmushroom: "Big Mushroom",
+    berrybush: "Berry Bush", fern: "Fern", rock: "Rock", cactus: "Cactus",
+    skull: "Skull", pillar: "Pillar", crystal: "Crystal", tree: "Tree",
+    pine: "Pine", snowpine: "Snow Pine", reed: "Reed", lantern: "Lantern",
+    deadtree: "Dead Tree", grass: "Tall Grass", balloontree: "Balloon Tree",
+    coral: "Coral", braincoral: "Brain Coral", cupcoral: "Cup Coral",
+    seaweed: "Seaweed", lavafissure: "Lava Fissure", obsidianshard: "Obsidian Shard",
+    archstone: "Arch Stone", limestonerock: "Limestone", beachsucculent: "Beach Succulent",
+    fairyring: "Fairy Ring",
+  };
+
+  function locatorEntityPos(e) {
+    // Caterpillars/snails keep their group at origin; the head segment is the
+    // moving anchor — same pattern as the follow camera in main.js.
+    if (e.segments) return e.segments[0].position;
+    return e.group.position;
+  }
+
+  function locatorFindNearest(entities, getPos) {
+    const tx = controls.target.x;
+    const tz = controls.target.z;
+    let best = null;
+    let bestI = 0;
+    let bestD = Infinity;
+    for (let i = 0; i < entities.length; i++) {
+      const p = getPos(entities[i]);
+      const d = (p.x - tx) ** 2 + (p.z - tz) ** 2;
+      if (d < bestD) { bestD = d; best = entities[i]; bestI = i; }
+    }
+    return { entity: best, index: bestI };
+  }
+
+  function locatorSortByProximity(entities, getPos) {
+    const tx = controls.target.x;
+    const tz = controls.target.z;
+    return [...entities].sort((a, b) => {
+      const pa = getPos(a), pb = getPos(b);
+      return ((pa.x - tx) ** 2 + (pa.z - tz) ** 2) - ((pb.x - tx) ** 2 + (pb.z - tz) ** 2);
+    });
+  }
+
+  function locatorNavigateTo(pos, entity, isCreature) {
+    // Set orbit target to the entity, slightly above ground.
+    controls.target.set(pos.x, pos.y + 0.6, pos.z);
+    // Zoom to a nice viewing distance if the camera is currently far away.
+    const dist = camera.position.distanceTo(controls.target);
+    if (dist > 18) {
+      const dir = new THREE.Vector3()
+        .subVectors(camera.position, controls.target)
+        .normalize();
+      camera.position.copy(controls.target).addScaledVector(dir, 15);
+    }
+    // Creatures enter tracking / follow mode.
+    if (isCreature && entity) {
+      setFollowTarget(entity);
+    }
+  }
+
+  function populateLocator() {
+    const list = document.getElementById("locator-list");
+    const emptyEl = document.getElementById("locator-empty");
+    list.innerHTML = "";
+
+    // Collect entity types present in the current world.
+    const creatureGroups = new Map(); // variant → [entity]
+
+    // Walkers, fliers, sleepers, burrowers, fish, angler, bumblebee
+    for (const c of state.creatures) {
+      const variant = c.group.userData?.inspect?.variant ?? "walker";
+      if (!creatureGroups.has(variant)) creatureGroups.set(variant, []);
+      creatureGroups.get(variant).push(c);
+    }
+
+    // Caterpillars and snails
+    for (const c of state.caterpillars) {
+      const variant = c.group.userData?.inspect?.variant ?? "caterpillar";
+      if (!creatureGroups.has(variant)) creatureGroups.set(variant, []);
+      creatureGroups.get(variant).push(c);
+    }
+
+    // Butterflies
+    if (state.butterflies.length) creatureGroups.set("butterfly", [...state.butterflies]);
+    // Bees
+    if (state.bees.length) creatureGroups.set("bee", [...state.bees]);
+    // Will-o-wisps
+    if (state.willowisps.length) creatureGroups.set("willowisp", [...state.willowisps]);
+    // Birds
+    const allBirds = [];
+    for (const f of state.flocks) allBirds.push(...f.birds);
+    if (allBirds.length) creatureGroups.set("bird", allBirds);
+
+    // Flora — scan world children for inspect-tagged groups.
+    // Exclude instanced ground cover (grass, wildflowers, pebbles) that blanket
+    // the island — navigating to them isn't meaningful.
+    const GROUND_COVER = new Set([
+      "grassfield", "wildflower", "pebble", "grassblade",
+      "cloudpuff", "shell", "starfish", "water",
+    ]);
+    const floraGroups = new Map(); // variant → [mesh]
+    for (const child of state.world.children) {
+      const inspect = child.userData?.inspect;
+      if (!inspect || inspect.category !== "flora") continue;
+      const v = inspect.variant;
+      if (GROUND_COVER.has(v)) continue;
+      if (!floraGroups.has(v)) floraGroups.set(v, []);
+      floraGroups.get(v).push(child);
+    }
+
+    const hasContent = creatureGroups.size > 0 || floraGroups.size > 0;
+    emptyEl.classList.toggle("visible", !hasContent);
+
+    // Render creature section
+    if (creatureGroups.size > 0) {
+      const cat = document.createElement("div");
+      cat.className = "locator-category";
+      cat.textContent = "creatures";
+      list.appendChild(cat);
+      for (const [variant, entities] of creatureGroups) {
+        const label = LOCATOR_NAMES[variant] ?? variant;
+        const count = entities.length;
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = "locator-item";
+        btn.innerHTML =
+          `<span class="locator-item-label">${label}</span>` +
+          `<span class="locator-item-count">${count}</span>`;
+        btn.addEventListener("click", () => {
+          setLocatorOpen(false);
+          const sorted = locatorSortByProximity(entities, locatorEntityPos);
+          _locatorCycle = { entities: sorted, getPos: locatorEntityPos, isCreature: true, index: 0 };
+          if (sorted[0]) locatorNavigateTo(locatorEntityPos(sorted[0]), sorted[0], true);
+        });
+        list.appendChild(btn);
+      }
+    }
+
+    // Render flora section
+    if (floraGroups.size > 0) {
+      const cat = document.createElement("div");
+      cat.className = "locator-category";
+      cat.textContent = "flora";
+      list.appendChild(cat);
+      for (const [variant, meshes] of floraGroups) {
+        const label = LOCATOR_NAMES[variant] ?? variant;
+        const count = meshes.length;
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = "locator-item";
+        btn.innerHTML =
+          `<span class="locator-item-label">${label}</span>` +
+          `<span class="locator-item-count">${count}</span>`;
+        btn.addEventListener("click", () => {
+          setLocatorOpen(false);
+          // Sort flora by proximity to current camera target.
+          const sorted = locatorSortByProximity(meshes, (m) => m.position);
+          _locatorCycle = { entities: sorted, getPos: (m) => m.position, isCreature: false, index: 0 };
+          if (sorted[0]) locatorNavigateTo(sorted[0].position, null, false);
+        });
+        list.appendChild(btn);
+      }
+    }
+  }
+
+  function setLocatorOpen(open) {
+    _locatorOpen = open;
+    _locatorPanel.classList.toggle("open", open);
+    _locatorPanel.setAttribute("aria-hidden", open ? "false" : "true");
+    if (open) {
+      // Close other panels.
+      setSettingsOpen(false);
+      setHelpOpen(false);
+      _locatorCycle = null;
+      populateLocator();
+    }
+  }
+
+  document.getElementById("locator-close").addEventListener("click", () => setLocatorOpen(false));
 
   // Also regenerate when seed changes via back/forward navigation.
   window.addEventListener("popstate", () => {
@@ -1325,6 +1518,7 @@ export function initUi({ camera, canvas, controls, renderer }) {
     if (e.key === "Escape") {
       if (_stroll) _exitStroll();
       else if (document.body.classList.contains("photo-mode")) setPhotoMode(false);
+      else if (_locatorOpen) setLocatorOpen(false);
       else if (selectingCreature) setSelectingCreature(false);
       else if (followTarget) setFollowTarget(null);
       else if (helpPanel.classList.contains("open")) setHelpOpen(false);
@@ -1338,6 +1532,26 @@ export function initUi({ camera, canvas, controls, renderer }) {
       e.preventDefault();
       if (_stroll) exitStroll();
       else enterStroll();
+    } else if (e.key === "l" || e.key === "L") {
+      e.preventDefault();
+      if (_stroll || document.body.classList.contains("photo-mode")) return;
+      setLocatorOpen(!_locatorOpen);
+    } else if (e.key === "Tab" && _locatorCycle) {
+      e.preventDefault();
+      const { entities, getPos, isCreature } = _locatorCycle;
+      // Skip entities removed by regen (group no longer in the scene).
+      while (_locatorCycle.entities.length > 0) {
+        const e = _locatorCycle.entities[_locatorCycle.index];
+        const stillValid = e.group ? e.group.parent !== null : e.parent !== null;
+        if (stillValid) break;
+        _locatorCycle.entities.splice(_locatorCycle.index, 1);
+        if (_locatorCycle.index >= _locatorCycle.entities.length) _locatorCycle.index = 0;
+      }
+      if (_locatorCycle.entities.length === 0) { _locatorCycle = null; return; }
+      _locatorCycle.index = (_locatorCycle.index + 1) % _locatorCycle.entities.length;
+      const entity = _locatorCycle.entities[_locatorCycle.index];
+      const pos = _locatorCycle.getPos(entity);
+      locatorNavigateTo(pos, isCreature ? entity : null, isCreature);
     } else if (e.key === "r" || e.key === "R") {
       e.preventDefault();
       document.getElementById("regen").click();
