@@ -1132,6 +1132,16 @@ body:not(.photo-mode) .photo-hud { display: none; }
 }
 body.photo-mode .photo-seed { opacity: 0.85; pointer-events: auto; }
 
+.photo-review-actions {
+  position: fixed;
+  bottom: max(4px, env(safe-area-inset-bottom));
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 20;
+  display: flex;
+  gap: 12px;
+}
+
 .photo-actions {
   display: flex;
   gap: 8px;

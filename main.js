@@ -363,7 +363,7 @@ function animate() {
 }
 
 if (!INSPECT) {
-  initUi({ camera, canvas, controls, renderer });
+  initUi({ camera, canvas, controls, renderer, scene });
 }
 
 // kickoff — honour ?seed=XXXX in the URL if present, or ?inspect=1 for studio

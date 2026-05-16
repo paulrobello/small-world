@@ -275,7 +275,7 @@ function setSelectingCreature(on) {
   _canvas.style.cursor = on ? "crosshair" : "";
 }
 
-export function initUi({ camera, canvas, controls, renderer }) {
+export function initUi({ camera, canvas, controls, renderer, scene }) {
   // Restore persisted settings before reading any defaults — UI inputs and
   // controls below sync themselves from state.userSettings.
   loadSettings();
@@ -1155,26 +1155,107 @@ export function initUi({ camera, canvas, controls, renderer }) {
 
   let _photoSavedAutoRotate = controls.autoRotate;
   function capturePhoto() {
-    // canvas already holds the most recent render (preserveDrawingBuffer:true)
-    // so we can grab pixels straight from it. The hud is in CSS overlay layers
-    // and isn't part of the WebGL canvas, so toDataURL gives us a clean shot
-    // of just the scene — which is what photo mode is for.
     const seedTag = formatSeed(state.currentSeed).replace(/^0x/, "");
     const biomeTag = (state.currentBiome?.id ?? "world").replace(/\s+/g, "-");
     const url = canvas.toDataURL("image/png");
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `small-world-${biomeTag}-${seedTag}.png`;
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    // brief flash so the user sees the capture happened
+
+    // Shutter flash (0.1s white overlay)
     const flash = document.createElement("div");
     flash.style.cssText =
-      "position:fixed;inset:0;background:#fff;z-index:50;pointer-events:none;opacity:0.6;transition:opacity .35s ease;";
+      "position:fixed;inset:0;background:#fff;z-index:50;pointer-events:none;opacity:0.85;transition:opacity .1s ease;";
     document.body.appendChild(flash);
     requestAnimationFrame(() => (flash.style.opacity = "0"));
-    setTimeout(() => flash.remove(), 400);
+    setTimeout(() => flash.remove(), 150);
+
+    // After flash, show the 3D photo review
+    setTimeout(() => showPhotoReview(url, biomeTag, seedTag), 120);
+  }
+
+  // ── 3D Photo review ──────────────────────────────────────────────────
+  let _photoReview = null;
+  function showPhotoReview(dataUrl, biomeTag, seedTag) {
+    if (_photoReview) return;
+    const tex = new THREE.TextureLoader().load(dataUrl);
+    tex.colorSpace = THREE.SRGBColorSpace;
+    const aspect = canvas.width / canvas.height;
+    const h = 6;
+    const w = h * aspect;
+    const geo = new THREE.PlaneGeometry(w, h);
+    const mat = new THREE.MeshBasicMaterial({
+      map: tex,
+      side: THREE.DoubleSide,
+      transparent: true,
+      opacity: 0,
+    });
+    const mesh = new THREE.Mesh(geo, mat);
+
+    // Position photo in front of camera
+    const dir = new THREE.Vector3();
+    camera.getWorldDirection(dir);
+    mesh.position.copy(camera.position).addScaledVector(dir, 8);
+    mesh.quaternion.copy(camera.quaternion);
+    scene.add(mesh);
+
+    // Dim overlay
+    const dim = document.createElement("div");
+    dim.style.cssText =
+      "position:fixed;inset:0;background:rgba(0,0,0,0);z-index:15;pointer-events:none;transition:background .3s ease;";
+    document.body.appendChild(dim);
+    requestAnimationFrame(() => (dim.style.background = "rgba(0,0,0,0.45)"));
+
+    // Save / Discard buttons
+    const actions = document.createElement("div");
+    actions.className = "photo-review-actions";
+    actions.innerHTML = `
+      <button class="photo-action photo-review-save" type=\"button\">save</button>
+      <button class=\"photo-action photo-review-discard\" type=\"button\">discard</button>
+    `;
+    document.body.appendChild(actions);
+
+    _photoReview = { mesh, tex, dim, actions, biomeTag, seedTag, dataUrl };
+
+    // Animate photo in
+    const start = performance.now();
+    const animIn = () => {
+      if (!_photoReview) return;
+      const t = Math.min(1, (performance.now() - start) / 300);
+      mat.opacity = t;
+      // Subtle scale-up
+      const s = 0.85 + 0.15 * t;
+      mesh.scale.set(s, s, s);
+      if (t < 1) requestAnimationFrame(animIn);
+    };
+    requestAnimationFrame(animIn);
+
+    // Wire buttons
+    actions.querySelector(".photo-review-save").addEventListener("click", () => {
+      const a = document.createElement("a");
+      a.href = dataUrl;
+      a.download = `small-world-${biomeTag}-${seedTag}.png`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      closePhotoReview();
+    });
+    actions.querySelector(".photo-review-discard").addEventListener("click", closePhotoReview);
+  }
+
+  function closePhotoReview() {
+    if (!_photoReview) return;
+    const { mesh, tex, dim, actions } = _photoReview;
+    // Animate out
+    mesh.material.opacity = 0;
+    mesh.scale.set(0.9, 0.9, 0.9);
+    setTimeout(() => {
+      scene.remove(mesh);
+      mesh.geometry.dispose();
+      mesh.material.dispose();
+      tex.dispose();
+    }, 50);
+    dim.style.background = "rgba(0,0,0,0)";
+    setTimeout(() => dim.remove(), 300);
+    actions.remove();
+    _photoReview = null;
   }
   const photoModeBtn = document.getElementById("setting-photo");
   const photoModeLabel = document.getElementById("setting-photo-label");
