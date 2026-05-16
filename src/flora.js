@@ -819,25 +819,26 @@ export const FLORA_BUILDERS = {
   fern(biome) {
     const g = new THREE.Group();
     const baseColor = new THREE.Color(biome.ground[0]).offsetHSL(0.02, 0.10, 0.16);
-    const ribMat = pooled("fern.rib.mat", () =>
-      applyWindSway(
-        new THREE.MeshStandardMaterial({
-          color: baseColor.clone().offsetHSL(0.01, -0.02, -0.08),
-          flatShading: true,
-          roughness: 0.78,
-        }),
-        1.25
-      )
+    const fernColor = baseColor.clone().offsetHSL(
+      (Math.random() - 0.5) * 0.035,
+      (Math.random() - 0.5) * 0.08,
+      (Math.random() - 0.5) * 0.07
     );
-    const leafletMat = pooled("fern.leaflet.mat", () =>
-      applyWindSway(
-        new THREE.MeshStandardMaterial({
-          color: baseColor,
-          flatShading: true,
-          roughness: 0.82,
-        }),
-        1.55
-      )
+    const ribMat = applyWindSway(
+      new THREE.MeshStandardMaterial({
+        color: fernColor.clone().offsetHSL(0.01, -0.02, -0.08),
+        flatShading: true,
+        roughness: 0.78,
+      }),
+      1.25
+    );
+    const leafletMat = applyWindSway(
+      new THREE.MeshStandardMaterial({
+        color: fernColor,
+        flatShading: true,
+        roughness: 0.82,
+      }),
+      1.55
     );
     const ribGeo = pooled("fern.rib.geo", () => {
       const geo = new THREE.CylinderGeometry(0.012, 0.018, 1, 5);
@@ -862,7 +863,8 @@ export const FLORA_BUILDERS = {
     const start = Math.random() * Math.PI * 2;
     for (let i = 0; i < fronds; i++) {
       const t = fronds <= 1 ? 0 : i / (fronds - 1);
-      const radial = start + t * Math.PI * 2 + (Math.random() - 0.5) * 0.22;
+      const radialT = i / fronds;
+      const radial = start + radialT * Math.PI * 2 + (Math.random() - 0.5) * 0.22;
       const lean = -0.62 + t * 1.24 + (Math.random() - 0.5) * 0.16;
       const length = 0.48 + Math.random() * 0.20;
       const frond = new THREE.Group();
