@@ -709,7 +709,7 @@ export function makeCreature(biome, opts = {}) {
     wakeProgress,             // 0 = fully asleep, 1 = fully awake
     // burrower state — alternating cycles of above-ground/burrowed life
     isBurrower,
-    burrowState: isBurrower ? "surface" : null, // "surface" | "descending" | "burrowed" | "emerging"
+    burrowState: isBurrower ? "surface" : null, // "surface" | "descending" | "burrowed" | "sinking" | "moundGone" | "moundRising" | "emerging"
     burrowTimer: isBurrower ? 2 + Math.random() * 4 : 0,
     burrowDepth: 0,           // 0 = on ground, 1 = fully submerged
     dirtColor: new THREE.Color(biome.ground[0]).lerp(new THREE.Color("#8b6914"), 0.45),
@@ -717,6 +717,8 @@ export function makeCreature(biome, opts = {}) {
     moundSinkT: -1,          // >= 0 while sinking, set by hideMound
     moundSinkBaseY: 0,
     moundSinkBaseScaleY: 0,
+    moundRiseT: -1,           // >= 0 while rising at emerge location
+    moundHideTimer: -1,       // countdown to hide mound after emerging
     // Personality + behavior knobs read by stepCreature
     personality: personalityName,
     pauseChance: personality.pauseChance,
@@ -1156,7 +1158,20 @@ export function stepCreature(c, dt, t, heightFn) {
         c.burrowTimer = 3 + Math.random() * 4;
       }
     } else if (c.burrowState === "burrowed" && c.burrowTimer <= 0) {
-      // teleport to a fresh nearby ground point and emerge there
+      // Start sinking the mound before emerging
+      c.burrowState = "sinking";
+      hideMound(c);
+      // If no mound exists (e.g. first cycle or inspect), skip straight to emerging
+      if (c.moundSinkT < 0) {
+        c.burrowState = "moundGone";
+      }
+    } else if (c.burrowState === "sinking") {
+      // Wait for mound sink animation to finish (driven by moundSinkT below)
+      if (c.moundSinkT < 0) {
+        c.burrowState = "moundGone";
+      }
+    } else if (c.burrowState === "moundGone") {
+      // teleport to a fresh nearby ground point and start mound rising
       const pos = c.group.position;
       const ang = Math.random() * Math.PI * 2;
       const dist = 2.5 + Math.random() * 4;
@@ -1169,14 +1184,43 @@ export function stepCreature(c, dt, t, heightFn) {
       }
       pos.x = nx;
       pos.z = nz;
-      c.group.visible = true;
-      c.burrowState = "emerging";
-      // Hide the old mound
-      hideMound(c);
-      // emit a small dirt puff at the surface point
-      const puff = makeDirtPuff(nx, heightFn(nx, nz), nz, c.dirtColor);
-      state.world.add(puff);
-      state.dirtPuffs.push(puff);
+      c.burrowState = "moundRising";
+      // Create a flat mound at the emerge point and start rising
+      if (!c.moundMesh) {
+        const mat = new THREE.MeshStandardMaterial({
+          color: c.dirtColor.clone().offsetHSL(0.03, 0.1, 0.12),
+          flatShading: true,
+          roughness: 0.95,
+        });
+        c.moundMesh = new THREE.Mesh(MOUND_GEO, mat);
+        c.moundMesh.castShadow = true;
+        c.moundMesh.receiveShadow = true;
+      }
+      c.moundMesh.scale.set(2.0, 0, 2.0); // start flat
+      const my = heightFn(nx, nz);
+      c.moundMesh.position.set(nx, my - 0.02, nz);
+      // Align to terrain normal
+      const eps = 0.1;
+      const yl = heightFn(nx - eps, nz), yr = heightFn(nx + eps, nz);
+      const yf = heightFn(nx, nz - eps), yb = heightFn(nx, nz + eps);
+      const normal = new THREE.Vector3(yl - yr, 2 * eps, yf - yb).normalize();
+      c.moundMesh.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), normal);
+      c.moundMesh.visible = true;
+      state.world.add(c.moundMesh);
+      c.moundRiseT = 0;
+      c.moundSinkT = -1;
+    } else if (c.burrowState === "moundRising") {
+      // Wait for mound rise animation (driven by moundRiseT below)
+      if (c.moundRiseT < 0) {
+        // Rise complete — show creature, emit dirt puff, start 1s hide timer
+        c.group.visible = true;
+        c.burrowState = "emerging";
+        c.moundHideTimer = 1;
+        const pos = c.group.position;
+        const puff = makeDirtPuff(pos.x, heightFn(pos.x, pos.z), pos.z, c.dirtColor);
+        state.world.add(puff);
+        state.dirtPuffs.push(puff);
+      }
     } else if (c.burrowState === "emerging") {
       c.burrowDepth = Math.max(0, c.burrowDepth - dt * 1.8);
       if (c.burrowDepth <= 0) {
@@ -1184,8 +1228,28 @@ export function stepCreature(c, dt, t, heightFn) {
         c.burrowTimer = 5 + Math.random() * 6;
       }
     }
-    // while burrowed, skip all motion/animation
-    if (c.burrowState === "burrowed") return;
+    // mound hide timer — counts down during emerging/surface, triggers sink
+    if (c.moundHideTimer > 0 && (c.burrowState === "emerging" || c.burrowState === "surface")) {
+      c.moundHideTimer -= dt;
+      if (c.moundHideTimer <= 0) {
+        c.moundHideTimer = -1;
+        hideMound(c);
+      }
+    }
+    // while burrowed, sinking, or mound rising, skip all motion/animation
+    if (c.burrowState === "burrowed" || c.burrowState === "sinking" || c.burrowState === "moundRising") return;
+  }
+
+  // ── mound rise animation ──
+  if (c.moundRiseT >= 0) {
+    c.moundRiseT += dt * 1.5; // ~0.67s rise duration
+    const t = Math.min(c.moundRiseT, 1);
+    if (c.moundMesh) {
+      c.moundMesh.scale.y = 0.35 * t;
+    }
+    if (t >= 1) {
+      c.moundRiseT = -1;
+    }
   }
 
   // ── mound sink animation ──
@@ -1637,7 +1701,7 @@ export function stepCreature(c, dt, t, heightFn) {
   // Cache the 4 heightFn samples and re-use them when the creature hasn't
   // moved far enough to change the slope noticeably (< 0.1 units). This
   // avoids 4 noise evaluations per walker per frame.
-  if (!c.flies && !(c.isBurrower && c.burrowState === "burrowed")) {
+  if (!c.flies && !(c.isBurrower && (c.burrowState === "burrowed" || c.burrowState === "sinking" || c.burrowState === "moundRising"))) {
     const ds = 0.25 * c.scale;
     const dx = pos.x - c._slopeCacheX;
     const dz = pos.z - c._slopeCacheZ;
