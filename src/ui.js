@@ -1149,13 +1149,13 @@ export function initUi({ camera, canvas, controls, renderer, scene }) {
   const photoZoomEl = document.getElementById("photo-zoom");
   _photoFP = null;
   const PHOTO_BASE_FOV = 50;
-  const PHOTO_FOV_MIN = PHOTO_BASE_FOV / 3.0; // ×3.0 zoom
+  const PHOTO_FOV_MIN = PHOTO_BASE_FOV / 5.0; // ×5.0 zoom
   const PHOTO_FOV_MAX = PHOTO_BASE_FOV / 0.5; // ×0.5 zoom
 
   function _updatePhotoZoom() {
     if (!_photoFP) return;
     const zoom = PHOTO_BASE_FOV / camera.fov;
-    photoZoomEl.textContent = `×${Math.min(3.0, Math.max(0.5, zoom)).toFixed(1)}`;
+    photoZoomEl.textContent = `×${Math.min(5.0, Math.max(0.5, zoom)).toFixed(1)}`;
   }
 
   let _photoSavedAutoRotate = controls.autoRotate;
