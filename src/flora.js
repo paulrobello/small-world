@@ -1199,7 +1199,7 @@ export const FLORA_BUILDERS = {
         (Math.random() - 0.5) * 0.08
       );
       const spotMat = applyWindSway(
-        new THREE.MeshStandardMaterial({ color: spotColor, flatShading: true, roughness: 0.9 }),
+        new THREE.MeshStandardMaterial({ color: spotColor, roughness: 0.9 }),
         BIG_WIND
       );
       const spot = new THREE.Mesh(spotGeo, spotMat);

@@ -8,7 +8,7 @@ import { makeDirtPuff, makeDustKick, emitGroundMark } from "../environment.js";
 // A small flattened sphere placed where the creature went underground.
 // Created on demand, reused across burrow cycles, removed when creature
 // is disposed.
-const MOUND_GEO = new THREE.SphereGeometry(0.22, 7, 5);
+const MOUND_GEO = jitterGeo(new THREE.IcosahedronGeometry(0.22, 1), 0.04);
 function showMound(c, heightFn) {
   if (!c.moundMesh) {
     const mat = new THREE.MeshStandardMaterial({
@@ -17,7 +17,7 @@ function showMound(c, heightFn) {
       roughness: 0.95,
     });
     c.moundMesh = new THREE.Mesh(MOUND_GEO, mat);
-    c.moundMesh.scale.set(2.2, 0.55, 2.2);
+    c.moundMesh.scale.set(2.0, 0.35, 2.0);
     c.moundMesh.castShadow = true;
     c.moundMesh.receiveShadow = true;
   }
@@ -34,7 +34,7 @@ function showMound(c, heightFn) {
   const up = new THREE.Vector3(0, 1, 0);
   const quat = new THREE.Quaternion().setFromUnitVectors(up, normal);
   c.moundMesh.quaternion.copy(quat);
-  c.moundMesh.position.set(pos.x, y + 0.06, pos.z);
+  c.moundMesh.position.set(pos.x, y - 0.02, pos.z);
   c.moundMesh.visible = true;
   state.world.add(c.moundMesh);
 }
@@ -1095,20 +1095,19 @@ export function stepCreature(c, dt, t, heightFn) {
     if (c.burrowState === "surface" && c.burrowTimer <= 0) {
       c.burrowState = "descending";
       c.burrowTimer = 0.6;
-      // Dirt spray when going down
+      // Dirt spray + mound appear together when the creature starts digging
       const pos = c.group.position;
       const gy = heightFn(pos.x, pos.z);
       const puff = makeDirtPuff(pos.x, gy, pos.z, c.dirtColor);
       state.world.add(puff);
       state.dirtPuffs.push(puff);
+      showMound(c, heightFn);
     } else if (c.burrowState === "descending") {
       c.burrowDepth = Math.min(1, c.burrowDepth + dt * 1.6);
       if (c.burrowDepth >= 1) {
         c.burrowState = "burrowed";
         c.group.visible = false;
         c.burrowTimer = 3 + Math.random() * 4;
-        // Show dirt mound at burrow point
-        showMound(c, heightFn);
       }
     } else if (c.burrowState === "burrowed" && c.burrowTimer <= 0) {
       // teleport to a fresh nearby ground point and emerge there
