@@ -1183,7 +1183,7 @@ export function initUi({ camera, canvas, controls, renderer, scene }) {
     const tex = new THREE.TextureLoader().load(dataUrl);
     tex.colorSpace = THREE.SRGBColorSpace;
     const aspect = canvas.width / canvas.height;
-    const h = 4.5; // 25% smaller than before (was 6)
+    const h = 2.8;
     const w = h * aspect;
 
     // Photo group: white border plane behind + photo plane in front
