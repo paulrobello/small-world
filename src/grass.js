@@ -3,7 +3,7 @@ import { createNoise2D } from "simplex-noise";
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 import { state, DENSITY_BASE } from "./state.js";
 import { pickGroundPoint } from "./terrain.js";
-import { GRASS_DENSITY, BALD_THRESHOLD } from "./biomes.js";
+import { GRASS_DENSITY, GRASS_HEIGHT, BALD_THRESHOLD } from "./biomes.js";
 import { LOWFX, LOWFX_DENSITY } from "./lowfx.js";
 
 // Max number of creatures that can perturb the grass at once. Each slot is a
@@ -261,6 +261,7 @@ export function makeGrassField(biome, heightFn, excludedCircles = []) {
   const densityNoise = createNoise2D();
   const clumpNoise = createNoise2D();
   const baldThreshold = BALD_THRESHOLD[biome.id] ?? 0.18;
+  const biomeHeightMul = GRASS_HEIGHT[biome.id] ?? 1.0;
 
   const m = new THREE.Matrix4();
   const v = new THREE.Vector3();
@@ -306,7 +307,7 @@ export function makeGrassField(biome, heightFn, excludedCircles = []) {
     const heightMul = 0.75 + 0.7 * cN;
 
     v.set(x, y, z);
-    s.set(baseScale, baseScale * heightMul, baseScale);
+    s.set(baseScale, baseScale * heightMul * biomeHeightMul, baseScale);
     e.set(
       (Math.random() - 0.5) * 0.18,
       Math.random() * Math.PI * 2,

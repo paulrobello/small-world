@@ -1178,23 +1178,45 @@ export function initUi({ camera, canvas, controls, renderer, scene }) {
     const tex = new THREE.TextureLoader().load(dataUrl);
     tex.colorSpace = THREE.SRGBColorSpace;
     const aspect = canvas.width / canvas.height;
-    const h = 6;
+    const h = 4.5; // 25% smaller than before (was 6)
     const w = h * aspect;
+
+    // Photo group: white border plane behind + photo plane in front
+    const group = new THREE.Group();
+    const borderPad = 0.15;
+    const borderGeo = new THREE.PlaneGeometry(w + borderPad * 2, h + borderPad * 2);
+    const borderMat = new THREE.MeshBasicMaterial({
+      color: 0xffffff,
+      side: THREE.DoubleSide,
+      transparent: true,
+      opacity: 0,
+      depthTest: false,
+      depthWrite: false,
+    });
+    const borderMesh = new THREE.Mesh(borderGeo, borderMat);
+    borderMesh.position.z = -0.01;
+    borderMesh.renderOrder = 999;
+    group.add(borderMesh);
+
     const geo = new THREE.PlaneGeometry(w, h);
     const mat = new THREE.MeshBasicMaterial({
       map: tex,
       side: THREE.DoubleSide,
       transparent: true,
       opacity: 0,
+      depthTest: false,
+      depthWrite: false,
     });
     const mesh = new THREE.Mesh(geo, mat);
+    mesh.renderOrder = 1000;
+    group.add(mesh);
 
     // Position photo in front of camera
     const dir = new THREE.Vector3();
     camera.getWorldDirection(dir);
-    mesh.position.copy(camera.position).addScaledVector(dir, 8);
-    mesh.quaternion.copy(camera.quaternion);
-    scene.add(mesh);
+    group.position.copy(camera.position).addScaledVector(dir, 8);
+    group.quaternion.copy(camera.quaternion);
+    scene.add(group);
 
     // Dim overlay
     const dim = document.createElement("div");
@@ -1212,7 +1234,7 @@ export function initUi({ camera, canvas, controls, renderer, scene }) {
     `;
     document.body.appendChild(actions);
 
-    _photoReview = { mesh, tex, dim, actions, biomeTag, seedTag, dataUrl };
+    _photoReview = { group, mesh, borderMesh, tex, mat, borderMat, dim, actions, biomeTag, seedTag, dataUrl };
 
     // Animate photo in
     const start = performance.now();
@@ -1220,9 +1242,9 @@ export function initUi({ camera, canvas, controls, renderer, scene }) {
       if (!_photoReview) return;
       const t = Math.min(1, (performance.now() - start) / 300);
       mat.opacity = t;
-      // Subtle scale-up
+      borderMat.opacity = t;
       const s = 0.85 + 0.15 * t;
-      mesh.scale.set(s, s, s);
+      group.scale.set(s, s, s);
       if (t < 1) requestAnimationFrame(animIn);
     };
     requestAnimationFrame(animIn);
@@ -1242,14 +1264,16 @@ export function initUi({ camera, canvas, controls, renderer, scene }) {
 
   function closePhotoReview() {
     if (!_photoReview) return;
-    const { mesh, tex, dim, actions } = _photoReview;
-    // Animate out
-    mesh.material.opacity = 0;
-    mesh.scale.set(0.9, 0.9, 0.9);
+    const { group, mesh, borderMesh, tex, mat, borderMat, dim, actions } = _photoReview;
+    mat.opacity = 0;
+    borderMat.opacity = 0;
+    group.scale.set(0.9, 0.9, 0.9);
     setTimeout(() => {
-      scene.remove(mesh);
+      scene.remove(group);
       mesh.geometry.dispose();
-      mesh.material.dispose();
+      mat.dispose();
+      borderMesh.geometry.dispose();
+      borderMat.dispose();
       tex.dispose();
     }, 50);
     dim.style.background = "rgba(0,0,0,0)";
@@ -1774,6 +1798,11 @@ export function initUi({ camera, canvas, controls, renderer, scene }) {
     } else if (e.key === "r" || e.key === "R") {
       e.preventDefault();
       document.getElementById("regen").click();
+    } else if (e.key === ",") {
+      e.preventDefault();
+      const opening = !_settingsPanel.classList.contains("open");
+      if (opening) { setHelpOpen(false); setLocatorOpen(false); }
+      setSettingsOpen(opening);
     } else if (e.key === " " || e.code === "Space") {
       // Spacebar toggles a manual sim pause. Stroll / selection freeze
       // the sim on their own so skip in those modes. In photo mode the sim

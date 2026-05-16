@@ -399,8 +399,14 @@ export const GRASS_DENSITY = {
   verdant: 300, desert:  0, frozen: 0,
   marsh:   500, ashen:    0, golden: 750,
   mossy:   650, twilight: 540, coral: 0,
-  cloud:     0, grove:   400, obsidian: 0,
+  cloud:     0, grove:   800, obsidian: 0,
 };
+// Per-biome grass height multiplier (1.0 = default). Applied as a Y-scale
+// factor to each blade instance so biome tuning doesn't require a regen.
+export const GRASS_HEIGHT = {
+  grove: 0.75,
+};
+
 // Per-biome rejection threshold for the grass density noise. Blades whose
 // underlying noise sample at world XZ falls below this threshold are not
 // placed, producing bald patches. Range [0, 1]. Higher = balder. Biomes
