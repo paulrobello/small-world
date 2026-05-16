@@ -10,6 +10,8 @@ import { makeDirtPuff, makeDustKick, emitGroundMark } from "../environment.js";
 // is disposed.
 const MOUND_GEO = jitterGeo(new THREE.IcosahedronGeometry(0.22, 1), 0.04);
 function showMound(c, heightFn) {
+  // Cancel any in-progress sink animation
+  c.moundSinkT = -1;
   if (!c.moundMesh) {
     const mat = new THREE.MeshStandardMaterial({
       color: c.dirtColor.clone().offsetHSL(0.03, 0.1, 0.12),
@@ -17,10 +19,11 @@ function showMound(c, heightFn) {
       roughness: 0.95,
     });
     c.moundMesh = new THREE.Mesh(MOUND_GEO, mat);
-    c.moundMesh.scale.set(2.0, 0.35, 2.0);
     c.moundMesh.castShadow = true;
     c.moundMesh.receiveShadow = true;
   }
+  // Reset scale in case it was shrunk by a previous sink animation
+  c.moundMesh.scale.set(2.0, 0.35, 2.0);
   const pos = c.group.position;
   const y = heightFn(pos.x, pos.z);
   // Sample terrain normal via finite differences
@@ -39,9 +42,11 @@ function showMound(c, heightFn) {
   state.world.add(c.moundMesh);
 }
 function hideMound(c) {
-  if (c.moundMesh) {
-    c.moundMesh.visible = false;
-    state.world.remove(c.moundMesh);
+  if (c.moundMesh && c.moundMesh.visible) {
+    // Start sinking animation instead of instant removal
+    c.moundSinkT = 0;
+    c.moundSinkBaseY = c.moundMesh.position.y;
+    c.moundSinkBaseScaleY = c.moundMesh.scale.y;
   }
 }
 import { applyShellFur } from "../fur.js";
@@ -709,6 +714,9 @@ export function makeCreature(biome, opts = {}) {
     burrowDepth: 0,           // 0 = on ground, 1 = fully submerged
     dirtColor: new THREE.Color(biome.ground[0]).lerp(new THREE.Color("#8b6914"), 0.45),
     moundMesh: null,
+    moundSinkT: -1,          // >= 0 while sinking, set by hideMound
+    moundSinkBaseY: 0,
+    moundSinkBaseScaleY: 0,
     // Personality + behavior knobs read by stepCreature
     personality: personalityName,
     pauseChance: personality.pauseChance,
@@ -1178,6 +1186,24 @@ export function stepCreature(c, dt, t, heightFn) {
     }
     // while burrowed, skip all motion/animation
     if (c.burrowState === "burrowed") return;
+  }
+
+  // ── mound sink animation ──
+  if (c.moundSinkT >= 0) {
+    c.moundSinkT += dt * 1.25; // ~0.8s sink duration
+    const t = Math.min(c.moundSinkT, 1);
+    if (c.moundMesh) {
+      c.moundMesh.position.y = c.moundSinkBaseY - t * 0.25;
+      c.moundMesh.scale.y = c.moundSinkBaseScaleY * (1 - t);
+    }
+    if (t >= 1) {
+      // Animation done — remove the mound
+      c.moundSinkT = -1;
+      if (c.moundMesh) {
+        c.moundMesh.visible = false;
+        state.world.remove(c.moundMesh);
+      }
+    }
   }
 
   // ── flier landing state machine ────────────────────────────────────────
