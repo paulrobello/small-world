@@ -432,8 +432,8 @@ export function stepParticles(points, dt, t) {
 // Each puff is a small Points cloud of ~12 brown specks that fly outward,
 // fall under "gravity," and fade out. Self-contained — the world manager
 // adds them to the scene at spawn; stepDirtPuffs removes them at expiry.
-const PUFF_PARTICLES = 12;
-const PUFF_LIFE = 0.85; // seconds
+const PUFF_PARTICLES = 24;
+const PUFF_LIFE = 1.7; // seconds
 export function makeDirtPuff(x, y, z, baseColor) {
   const positions = new Float32Array(PUFF_PARTICLES * 3);
   const velocities = new Float32Array(PUFF_PARTICLES * 3);
