@@ -323,7 +323,7 @@ export const BIOMES = [
     fogDensity: 0.016,
     accent: "#ff90c0",
     sun: "#ffe0f0",
-    flora: ["bigmushroom", "bigmushroom", "mushroom", "mushroom", "mushroom", "fern", "rock"],
+    flora: ["bigmushroom", "bigmushroom", "mushroom", "mushroom", "mushroom", "fern", "fern", "grass", "rock"],
     floraCount: 95,
     particle: "pollen",
     creatureColors: ["#ff90c0", "#c7a0c8", "#9c84d4", "#ffd1a3"],
