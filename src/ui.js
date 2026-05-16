@@ -1190,8 +1190,8 @@ export function initUi({ camera, canvas, controls, renderer, scene }) {
       side: THREE.DoubleSide,
       transparent: true,
       opacity: 0,
-      depthTest: false,
-      depthWrite: false,
+      depthTest: true,
+      depthWrite: true,
     });
     const borderMesh = new THREE.Mesh(borderGeo, borderMat);
     borderMesh.position.z = -0.01;
@@ -1204,8 +1204,8 @@ export function initUi({ camera, canvas, controls, renderer, scene }) {
       side: THREE.DoubleSide,
       transparent: true,
       opacity: 0,
-      depthTest: false,
-      depthWrite: false,
+      depthTest: true,
+      depthWrite: true,
     });
     const mesh = new THREE.Mesh(geo, mat);
     mesh.renderOrder = 1000;
@@ -1759,7 +1759,8 @@ export function initUi({ camera, canvas, controls, renderer, scene }) {
     if (tag === "INPUT" || tag === "TEXTAREA") return;
     if (INSPECT) return;
     if (e.key === "Escape") {
-      if (_stroll) _exitStroll();
+      if (_photoReview) closePhotoReview();
+      else if (_stroll) _exitStroll();
       else if (document.body.classList.contains("photo-mode")) setPhotoMode(false);
       else if (_locatorOpen) setLocatorOpen(false);
       else if (selectingCreature) setSelectingCreature(false);

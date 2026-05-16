@@ -1141,6 +1141,14 @@ export function stepCreature(c, dt, t, heightFn) {
     // keep planted at ground height
     const ground = heightFn(c.group.position.x, c.group.position.z);
     c.group.position.y = ground + 0.28 * c.scale;
+    // Rotate to match terrain slope so sleepers lie flat on hillsides.
+    {
+      const p = c.group.position;
+      const ds = 0.25 * c.scale;
+      const slopes = sampleSlopes(p.x, p.z, c.heading, ds, heightFn);
+      c.group.rotation.x = slopes.pitchTarget;
+      c.group.rotation.z = slopes.rollTarget;
+    }
     return;
   }
 
@@ -1200,6 +1208,14 @@ export function stepCreature(c, dt, t, heightFn) {
       c.body.scale.x = c.bodyBaseX * (1.18 - breath * 0.3);
       const ground = heightFn(c.group.position.x, c.group.position.z);
       c.group.position.y = ground + 0.28 * c.scale + c.hopOffset;
+      // Rotate to match terrain slope so night-sleepers lie flat on hillsides.
+      {
+        const p = c.group.position;
+        const ds = 0.25 * c.scale;
+        const slopes = sampleSlopes(p.x, p.z, c.heading, ds, heightFn);
+        c.group.rotation.x = slopes.pitchTarget;
+        c.group.rotation.z = slopes.rollTarget;
+      }
       return;
     }
   }
