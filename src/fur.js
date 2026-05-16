@@ -85,10 +85,18 @@ void main() {
   float lam = max(0.0, dot(N, normalize(uLightDir)));
 
   vec3 baseCol = uBaseColor;
+  vec3 c = mix(baseCol, uTipColor, vLayerT);
+
+  // Apply pattern AFTER the base→tip blend so the pattern remains
+  // visible at all fur heights instead of being washed out by uTipColor.
   float patType = floor(uPatternType + 0.5);
 
   if (patType > 0.5) {
     float scale = uPatternScale > 0.5 ? uPatternScale : 6.0;
+    // Blend the pattern color toward tip too (less aggressively) so it
+    // reads as part of the same fur strand rather than flat bands.
+    vec3 patCol = mix(uStripeColor, uTipColor, vLayerT * 0.25);
+    bool hit = false;
 
     if (patType < 1.5) {
       // Stripes — continuous bands along the Z axis
@@ -96,9 +104,7 @@ void main() {
       float period = 1.0 / uStripeBandCount;
       float phase = mod(z, period);
       float halfBand = uStripeBandWidth * period * 0.5;
-      if (phase < halfBand || phase > period - halfBand) {
-        baseCol = uStripeColor;
-      }
+      hit = (phase < halfBand || phase > period - halfBand);
     } else if (patType < 2.5) {
       // Spots — scattered discs using a grid of random centres
       vec3 sp = vPos * scale;
@@ -110,19 +116,16 @@ void main() {
         fract(rnd * 419.2)
       );
       float d = length(sp - centre);
-      if (d < uStripeBandWidth * 0.55) {
-        baseCol = uStripeColor;
-      }
+      hit = (d < uStripeBandWidth * 0.55);
     } else {
       // Patches — smooth noise threshold for organic blobs
       float n = noise3(vPos * scale * 0.5 + uStripeOffset);
-      if (n > (1.0 - uStripeBandWidth)) {
-        baseCol = uStripeColor;
-      }
+      hit = (n > (1.0 - uStripeBandWidth));
     }
+
+    if (hit) c = patCol;
   }
 
-  vec3 c = mix(baseCol, uTipColor, vLayerT);
   c *= 0.7 + 0.3 * lam;
   gl_FragColor = vec4(c, 1.0 - vLayerT * 0.35);
 }

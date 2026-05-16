@@ -432,9 +432,11 @@ let _patternOverride = null;
 {
   const pt = _params.get("patternType");
   if (pt != null) {
+    let pc = _params.get("patternColor");
+    if (pc && !pc.startsWith("#")) pc = "#" + pc;
     _patternOverride = {
       patternType: parseFloat(pt),
-      patternColor: _params.get("patternColor"),
+      patternColor: pc,
       stripeBandCount: _params.get("stripeBandCount") != null ? parseFloat(_params.get("stripeBandCount")) : undefined,
       stripeBandWidth: _params.get("stripeBandWidth") != null ? parseFloat(_params.get("stripeBandWidth")) : undefined,
       stripeOffset: _params.get("stripeOffset") != null ? parseFloat(_params.get("stripeOffset")) : undefined,
@@ -472,7 +474,7 @@ function _syncUrl() {
   if (_colorOverride) sp.set("color", _colorOverride.getHexString());
   if (_patternOverride) {
     sp.set("patternType", _patternOverride.patternType);
-    if (_patternOverride.patternColor) sp.set("patternColor", _patternOverride.patternColor);
+    if (_patternOverride.patternColor) sp.set("patternColor", _patternOverride.patternColor.replace(/^#/, ""));
     if (_patternOverride.stripeBandCount != null) sp.set("stripeBandCount", _patternOverride.stripeBandCount);
     if (_patternOverride.stripeBandWidth != null) sp.set("stripeBandWidth", _patternOverride.stripeBandWidth);
     if (_patternOverride.stripeOffset != null) sp.set("stripeOffset", _patternOverride.stripeOffset);
