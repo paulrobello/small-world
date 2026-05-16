@@ -136,6 +136,10 @@ export function isAnyFP() {
   return _stroll !== null || _photoFP !== null;
 }
 
+export function getPhotoReviewGroup() {
+  return _photoReview?.group ?? null;
+}
+
 function applyStrollVisualComfort(on) {
   // Big surrounding cloud halos look lovely from orbit but wash out the view
   // when the camera is inside them. Hide them only during first-person stroll;
@@ -1190,8 +1194,6 @@ export function initUi({ camera, canvas, controls, renderer, scene }) {
       side: THREE.DoubleSide,
       transparent: true,
       opacity: 0,
-      depthTest: false,
-      depthWrite: true,
     });
     const borderMesh = new THREE.Mesh(borderGeo, borderMat);
     borderMesh.position.z = -0.01;
@@ -1204,8 +1206,6 @@ export function initUi({ camera, canvas, controls, renderer, scene }) {
       side: THREE.DoubleSide,
       transparent: true,
       opacity: 0,
-      depthTest: false,
-      depthWrite: true,
     });
     const mesh = new THREE.Mesh(geo, mat);
     mesh.renderOrder = 1000;
@@ -1216,7 +1216,8 @@ export function initUi({ camera, canvas, controls, renderer, scene }) {
     camera.getWorldDirection(dir);
     group.position.copy(camera.position).addScaledVector(dir, 8);
     group.quaternion.copy(camera.quaternion);
-    scene.add(group);
+    // Don't add to scene — rendered separately after postfx to avoid
+    // depth-based post-fx (outlines, AO) showing through the photo.
 
     // Dim overlay
     const dim = document.createElement("div");
@@ -1246,11 +1247,6 @@ export function initUi({ camera, canvas, controls, renderer, scene }) {
       const s = 0.85 + 0.15 * t;
       group.scale.set(s, s, s);
       if (t < 1) requestAnimationFrame(animIn);
-      else {
-        // Switch to opaque so depth pre-pass includes the photo
-        mat.transparent = false; mat.needsUpdate = true;
-        borderMat.transparent = false; borderMat.needsUpdate = true;
-      }
     };
     requestAnimationFrame(animIn);
 
@@ -1274,7 +1270,7 @@ export function initUi({ camera, canvas, controls, renderer, scene }) {
     borderMat.opacity = 0;
     group.scale.set(0.9, 0.9, 0.9);
     setTimeout(() => {
-      scene.remove(group);
+      // Group is not in the scene (rendered separately after postfx)
       mesh.geometry.dispose();
       mat.dispose();
       borderMesh.geometry.dispose();

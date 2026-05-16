@@ -34,6 +34,7 @@ import {
   stepStroll,
   isAnyFP,
   isPhotoFP,
+  getPhotoReviewGroup,
   isPhotoMode,
   isSelectingCreature,
   isManualPaused,
@@ -359,6 +360,11 @@ function animate() {
     postfx.render(scene, camera);
   } else {
     renderer.render(scene, camera);
+  }
+  // Render photo review ON TOP of post-fx (not affected by outlines/tilt-shift)
+  const reviewGroup = getPhotoReviewGroup();
+  if (reviewGroup) {
+    renderer.render(reviewGroup, camera);
   }
 }
 
