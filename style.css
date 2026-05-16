@@ -497,7 +497,6 @@ body.photo-mode .help-panel {
   max-width: calc(100vw - 28px);
   max-height: calc(100vh - 220px);
   overflow-y: auto;
-  overflow-x: hidden;
   padding: 16px 18px 14px;
   background: rgba(14, 14, 18, 0.82);
   border: 1px solid var(--ink-dim);
@@ -787,6 +786,14 @@ body.photo-mode .help-panel {
 .bookmark-empty.visible { display: block; }
 
 /* ─── Biome filter ───────────────────────────────────────────────────── */
+.biome-filter-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid rgba(245, 240, 230, 0.12);
+  padding-bottom: 6px;
+  margin-bottom: 10px;
+}
 .biome-filter {
   display: flex;
   flex-wrap: wrap;
@@ -796,7 +803,6 @@ body.photo-mode .help-panel {
 .biome-filter-actions {
   display: flex;
   gap: 8px;
-  margin-bottom: 6px;
 }
 .biome-filter-action {
   background: none;
@@ -814,6 +820,11 @@ body.photo-mode .help-panel {
   border-color: var(--ink);
   color: var(--ink);
 }
+.biome-filter-header .settings-section-label {
+  border-bottom: none;
+  padding-bottom: 0;
+  margin-bottom: 0;
+}
 .biome-chip {
   width: 22px;
   height: 22px;
@@ -823,8 +834,7 @@ body.photo-mode .help-panel {
   position: relative;
   padding: 0;
   background: transparent;
-  transition: border-color 0.25s ease, transform 0.25s ease, opacity 0.25s ease;
-  opacity: 0.35;
+  transition: border-color 0.25s ease, transform 0.25s ease;
 }
 .biome-chip::before {
   content: "";
@@ -833,13 +843,20 @@ body.photo-mode .help-panel {
   border-radius: 50%;
   background: var(--chip-color, #888);
   box-shadow: inset 0 0 4px rgba(0, 0, 0, 0.3);
+  opacity: 0.35;
+  transition: opacity 0.25s ease;
 }
 .biome-chip:hover {
   border-color: var(--ink);
   transform: scale(1.08);
 }
+.biome-chip:hover::before {
+  opacity: 0.7;
+}
 .biome-chip.active {
   border-color: var(--ink);
+}
+.biome-chip.active::before {
   opacity: 1;
 }
 .biome-chip-tooltip {
@@ -847,7 +864,7 @@ body.photo-mode .help-panel {
   bottom: calc(100% + 6px);
   left: 50%;
   transform: translateX(-50%);
-  background: rgba(14, 14, 18, 0.95);
+  background: rgb(14, 14, 18);
   border: 1px solid var(--ink-dim);
   color: var(--ink);
   font-size: 9px;
@@ -857,6 +874,7 @@ body.photo-mode .help-panel {
   white-space: nowrap;
   pointer-events: none;
   opacity: 0;
+  z-index: 10;
   transition: opacity 0.2s ease;
 }
 .biome-chip:hover .biome-chip-tooltip { opacity: 1; }

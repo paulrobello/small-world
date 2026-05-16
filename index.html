@@ -144,10 +144,15 @@
     </div>
 
     <section class="settings-section">
-      <button class="setting-button" id="setting-reset-defaults" type="button">
-        <span class="setting-button-label">reset all to defaults</span>
-        <span class="setting-button-hint">clears saved settings and reloads</span>
+      <div class="settings-section-label">bookmarks</div>
+
+      <button class="setting-button" id="setting-bookmark">
+        <span class="setting-button-label" id="setting-bookmark-label">★ save this seed</span>
+        <span class="setting-button-hint" id="setting-bookmark-hint">store in your browser</span>
       </button>
+
+      <div class="bookmark-list" id="bookmark-list" aria-live="polite"></div>
+      <div class="bookmark-empty" id="bookmark-empty">no saved seeds yet.</div>
     </section>
 
     <section class="settings-section">
@@ -358,22 +363,19 @@
     </section>
 
     <section class="settings-section">
-      <div class="settings-section-label">bookmarks</div>
-
-      <button class="setting-button" id="setting-bookmark">
-        <span class="setting-button-label" id="setting-bookmark-label">★ save this seed</span>
-        <span class="setting-button-hint" id="setting-bookmark-hint">store in your browser</span>
+      <button class="setting-button" id="setting-reset-defaults" type="button">
+        <span class="setting-button-label">reset all to defaults</span>
+        <span class="setting-button-hint">clears saved settings and reloads</span>
       </button>
-
-      <div class="bookmark-list" id="bookmark-list" aria-live="polite"></div>
-      <div class="bookmark-empty" id="bookmark-empty">no saved seeds yet.</div>
     </section>
 
     <section class="settings-section">
-      <div class="settings-section-label">biome filter</div>
-      <div class="biome-filter-actions">
-        <button type="button" class="biome-filter-action" id="biome-filter-all">all</button>
-        <button type="button" class="biome-filter-action" id="biome-filter-none">none</button>
+      <div class="biome-filter-header">
+        <div class="settings-section-label">biome filter</div>
+        <div class="biome-filter-actions">
+          <button type="button" class="biome-filter-action" id="biome-filter-all">all</button>
+          <button type="button" class="biome-filter-action" id="biome-filter-none">none</button>
+        </div>
       </div>
       <div class="biome-filter" id="biome-filter"></div>
       <div class="biome-filter-hint">tap to toggle. regenerate only picks from enabled biomes.</div>
