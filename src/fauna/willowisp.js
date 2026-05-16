@@ -75,6 +75,9 @@ export function makeWillOWisp(homeX, homeY, homeZ, wanderRadius) {
     homeY,
     homeZ,
     wanderRadius,
+    innerRadius: 0,
+    avoidX: 0, avoidY: 0, avoidZ: 0,
+    avoidR: 0,
     seed,
     speed,
     targetX: homeX,
@@ -127,9 +130,25 @@ export function stepWillOWisp(w, dt, t, heightFn) {
   // ── movement ──
   if (w.darting) {
     const step = dartSpeed * dt;
-    pos.x += w.dartNx * step;
-    pos.y += w.dartNy * step;
-    pos.z += w.dartNz * step;
+    let nx = pos.x + w.dartNx * step;
+    let ny = pos.y + w.dartNy * step;
+    let nz = pos.z + w.dartNz * step;
+    // Cancel dart if it would enter avoidance sphere
+    if (w.avoidR > 0) {
+      const ox = nx - w.avoidX;
+      const oy = ny - w.avoidY;
+      const oz = nz - w.avoidZ;
+      if (ox * ox + oy * oy + oz * oz < w.avoidR * w.avoidR) {
+        w.darting = false;
+        w.dartTimer = 1 + Math.random() * 3;
+        nx = pos.x;
+        ny = pos.y;
+        nz = pos.z;
+      }
+    }
+    pos.x = nx;
+    pos.y = ny;
+    pos.z = nz;
   } else {
     // Normal wander toward target
     const dx = w.targetX - pos.x;
@@ -138,18 +157,72 @@ export function stepWillOWisp(w, dt, t, heightFn) {
     const dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
 
     if (dist < 0.08) {
-      const angle = Math.random() * Math.PI * 2;
-      const r = Math.random() * wanderRadius;
-      w.targetX = homeX + Math.cos(angle) * r;
-      w.targetZ = homeZ + Math.sin(angle) * r;
-      w.targetY = homeY + 0.15 + Math.random() * wanderRadius * 2;
+      // Pick a new target outside the avoidance sphere
+      let tx, ty, tz;
+      for (let tries = 0; tries < 10; tries++) {
+        const angle = Math.random() * Math.PI * 2;
+        const minR = w.innerRadius + 0.15;
+        const r = minR + Math.random() * (wanderRadius - minR);
+        tx = homeX + Math.cos(angle) * r;
+        tz = homeZ + Math.sin(angle) * r;
+        ty = homeY + 0.15 + Math.random() * wanderRadius * 2;
+        if (w.avoidR > 0) {
+          const ax = tx - w.avoidX;
+          const ay = ty - w.avoidY;
+          const az = tz - w.avoidZ;
+          if (ax * ax + ay * ay + az * az < w.avoidR * w.avoidR) continue;
+        }
+        break;
+      }
+      w.targetX = tx;
+      w.targetZ = tz;
+      w.targetY = ty;
     }
 
     const step = speed * dt;
     const inv = step / (dist || 1);
-    pos.x += dx * inv;
-    pos.y += dy * inv;
-    pos.z += dz * inv;
+    let mx = dx * inv;
+    let my = dy * inv;
+    let mz = dz * inv;
+    // Deflect movement tangent to avoidance sphere when close
+    if (w.avoidR > 0) {
+      const ox = pos.x - w.avoidX;
+      const oy = pos.y - w.avoidY;
+      const oz = pos.z - w.avoidZ;
+      const d = Math.sqrt(ox * ox + oy * oy + oz * oz);
+      if (d < w.avoidR + 0.6) {
+        // Remove the component of movement pointing toward the sphere center
+        const dot = mx * ox + my * oy + mz * oz;
+        if (dot < 0) { // moving toward center
+          const len2 = ox * ox + oy * oy + oz * oz;
+          mx -= (dot / len2) * ox;
+          my -= (dot / len2) * oy;
+          mz -= (dot / len2) * oz;
+          // Re-normalize to keep speed consistent
+          const ml = Math.sqrt(mx * mx + my * my + mz * mz) || 1;
+          mx *= inv * dist / ml;
+          my *= inv * dist / ml;
+          mz *= inv * dist / ml;
+        }
+      }
+    }
+    pos.x += mx;
+    pos.y += my;
+    pos.z += mz;
+  }
+
+  // Hard safety clamp — only fires if deflection wasn't enough
+  if (w.avoidR > 0) {
+    const ox = pos.x - w.avoidX;
+    const oy = pos.y - w.avoidY;
+    const oz = pos.z - w.avoidZ;
+    const d = Math.sqrt(ox * ox + oy * oy + oz * oz);
+    if (d < w.avoidR) {
+      const push = (w.avoidR + 0.1) / (d || 0.001);
+      pos.x = w.avoidX + ox * push;
+      pos.y = w.avoidY + oy * push;
+      pos.z = w.avoidZ + oz * push;
+    }
   }
 
   // Gentle bob

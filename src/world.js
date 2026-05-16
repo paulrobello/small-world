@@ -602,6 +602,7 @@ export function generateWorld(seed) {
   }
 
   let groveGiantPlaced = false;
+  let verdantGiantPlaced = false;
   while (placed < floraTarget && attempts < floraTarget * 6) {
     attempts++;
     const kind = biome.flora[Math.floor(Math.random() * biome.flora.length)];
@@ -654,11 +655,53 @@ export function generateWorld(seed) {
     f.position.set(p.x, y, p.z);
     f.rotation.y = Math.random() * Math.PI * 2;
     f.scale.setScalar(s);
-    // Mushroom grove gets one giant bigmushroom (2× scale)
+    // Mushroom grove gets one giant bigmushroom (4× scale)
     if (kind === "bigmushroom" && biome.id === "grove" && !groveGiantPlaced) {
       s *= 4;
       f.scale.setScalar(s);
       groveGiantPlaced = true;
+    }
+    // Verdant grove gets one giant leafballtree (3× scale) with a will-o-wisp
+    if (kind === "leafballtree" && biome.id === "verdant" && !verdantGiantPlaced) {
+      // Only place in the inner 2/3 of the island so the giant canopy doesn't
+      // overhang the edge.
+      const centers = state.currentLayout.centers;
+      let bestDx = p.x - centers[0].cx, bestDz = p.z - centers[0].cz;
+      for (let ci = 1; ci < centers.length; ci++) {
+        const ddx = p.x - centers[ci].cx, ddz = p.z - centers[ci].cz;
+        if (ddx * ddx + ddz * ddz < bestDx * bestDx + bestDz * bestDz) {
+          bestDx = ddx; bestDz = ddz;
+        }
+      }
+      const distFromCenter = Math.sqrt(bestDx * bestDx + bestDz * bestDz);
+      const maxR = state.ISLAND_RADIUS * (2 / 3);
+      if (distFromCenter > maxR) {
+        // Skip this placement — keep verdantGiantPlaced false so we retry
+        continue;
+      }
+      s *= 3;
+      f.scale.setScalar(s);
+      verdantGiantPlaced = true;
+      // Will-o-wisp that orbits and flies above the giant tree
+      // Avoidance sphere keeps it outside the canopy volume
+      // Canopy center: y + 1.46 * s, canopy max radius: 0.88 * s ≈ 2.64 at 3×
+      const canopyCenterY = y + 1.46 * s;
+      const canopyR = 1.3 * s + 0.5; // full canopy extent + padding
+      const wisp = makeWillOWisp(p.x, canopyCenterY, p.z, canopyR + 2.0);
+      wisp.innerRadius = canopyR;
+      wisp.avoidX = p.x;
+      wisp.avoidY = canopyCenterY;
+      wisp.avoidZ = p.z;
+      wisp.avoidR = canopyR;
+      // Start outside the canopy
+      const startAngle = Math.random() * Math.PI * 2;
+      wisp.group.position.set(
+        p.x + Math.cos(startAngle) * (canopyR + 0.5),
+        canopyCenterY + canopyR,
+        p.z + Math.sin(startAngle) * (canopyR + 0.5)
+      );
+      state.world.add(wisp.group);
+      state.willowisps.push(wisp);
     }
     if (kind === "lavafissure") conformSurfaceChildrenToTerrain(f);
     if (kind === "crystal") {

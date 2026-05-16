@@ -531,7 +531,7 @@ export const FLORA_BUILDERS = {
         scale: rowScale,
         matIndex,
         phase: (row % 2) * (Math.PI / rowCounts[row]),
-        lift: 0.22 - t * 0.10,
+        lift: row === rowCounts.length - 2 ? 0.48 - t * 0.08 : row === rowCounts.length - 1 ? 0.35 - t * 0.08 : 0.22 - t * 0.10,
       });
     }
 
@@ -1274,43 +1274,267 @@ export const FLORA_BUILDERS = {
 
   berrybush(biome) {
     const g = new THREE.Group();
-    const bodyGeo = pooled("berrybush.body.geo", () =>
-      jitterGeo(new THREE.IcosahedronGeometry(0.32, 0), 0.08)
-    );
-    const bodyMat = pooled("berrybush.body.mat", () =>
-      applyWindSway(
-        new THREE.MeshStandardMaterial({
-          color: new THREE.Color(biome.ground[0]).offsetHSL(0, 0.08, 0.05),
-          flatShading: true,
-          roughness: 0.85,
+
+    // --- Leaf plates (layered dome, like the leafball tree but smaller/bushy) ---
+    const leafMats = [
+      pooled("berrybush.leaf.mat.shadow", () =>
+        applyLeafPlateWind(
+          applyLeafPlateGradient(
+            new THREE.MeshStandardMaterial({
+              color: new THREE.Color(biome.ground[0]).lerp(new THREE.Color("#2a5e2e"), 0.25),
+              side: THREE.DoubleSide,
+              flatShading: true,
+              roughness: 0.82,
+            }),
+            { tipLift: 0.22, baseShade: 0.25, veinShade: 0.18, sideShade: 0.24 }
+          ),
+          0.14
+        )
+      ),
+      pooled("berrybush.leaf.mat.mid", () =>
+        applyLeafPlateWind(
+          applyLeafPlateGradient(
+            new THREE.MeshStandardMaterial({
+              color: new THREE.Color(biome.ground[1]).lerp(new THREE.Color("#5aad4a"), 0.28),
+              side: THREE.DoubleSide,
+              flatShading: true,
+              roughness: 0.78,
+            }),
+            { tipLift: 0.28, baseShade: 0.22, veinShade: 0.16, sideShade: 0.26 }
+          ),
+          0.16
+        )
+      ),
+      pooled("berrybush.leaf.mat.light", () =>
+        applyLeafPlateWind(
+          applyLeafPlateGradient(
+            new THREE.MeshStandardMaterial({
+              color: new THREE.Color(biome.ground[1]).lerp(new THREE.Color("#72c462"), 0.18),
+              side: THREE.DoubleSide,
+              flatShading: true,
+              roughness: 0.82,
+            }),
+            { tipLift: 0.20, baseShade: 0.18, veinShade: 0.14, sideShade: 0.22 }
+          ),
+          0.15
+        )
+      ),
+    ];
+
+    // Wider, rounder leaf shape for bush foliage (not the teardrop leaf of the tree)
+    const leafGeo = pooled("berrybush.leaf.geo", () => {
+      const lengthSegs = 5;
+      const widthSegs = 3;
+      const positions = [];
+      const uvs = [];
+      const indices = [];
+      for (let iy = 0; iy <= lengthSegs; iy++) {
+        const v = iy / lengthSegs;
+        // Broader, more elliptical profile than the tree leaf
+        const halfWidth = Math.max(0.005, 0.165 * Math.sin(Math.PI * v) ** 0.55);
+        for (let ix = 0; ix <= widthSegs; ix++) {
+          const u = ix / widthSegs;
+          const side = u * 2 - 1;
+          const centerLift = (1 - Math.abs(side)) * 0.028 * (1 - v * 0.3);
+          const tipCurl = 0.040 * v ** 1.3;
+          const edgeCurl = -Math.abs(side) * 0.028 * Math.sin(Math.PI * v);
+          positions.push(side * halfWidth, -v * 0.28, tipCurl + centerLift + edgeCurl);
+          uvs.push(u, v);
+        }
+      }
+      for (let iy = 0; iy < lengthSegs; iy++) {
+        for (let ix = 0; ix < widthSegs; ix++) {
+          const a = iy * (widthSegs + 1) + ix;
+          const b = a + 1;
+          const c = a + widthSegs + 1;
+          const d = c + 1;
+          indices.push(a, c, b, b, c, d);
+        }
+      }
+      const geo = new THREE.BufferGeometry();
+      geo.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
+      geo.setAttribute("uv", new THREE.Float32BufferAttribute(uvs, 2));
+      geo.setIndex(indices);
+      geo.computeVertexNormals();
+      return geo;
+    });
+    const leafOutlineGeo = pooled("berrybush.leaf.outline.geo", () => {
+      const geo = leafGeo.clone();
+      const pos = geo.attributes.position;
+      for (let i = 0; i < pos.count; i++) {
+        pos.setX(i, pos.getX(i) * 1.08);
+        pos.setZ(i, pos.getZ(i) - 0.004);
+      }
+      pos.needsUpdate = true;
+      geo.computeVertexNormals();
+      return geo;
+    });
+    const leafOutlineMat = pooled("berrybush.leaf.outline.mat", () =>
+      applyLeafPlateWind(
+        new THREE.MeshBasicMaterial({
+          name: "berrybush.leaf.outline.mat",
+          color: "#0e1e12",
+          side: THREE.DoubleSide,
+          polygonOffset: true,
+          polygonOffsetFactor: 1,
+          polygonOffsetUnits: 1,
         }),
-        0.7
+        0.14
       )
     );
-    const body = new THREE.Mesh(bodyGeo, bodyMat);
-    body.position.y = 0.28;
-    body.scale.set(1, 0.85, 1);
-    body.castShadow = true;
-    g.add(body);
-    const berryMat = pooled("berrybush.berry.mat", () =>
+
+    // Bush dome placement: hemisphere centered at (0, 0.30, 0)
+    const bushCenter = new THREE.Vector3(0, 0.30, 0);
+    const bushRadius = new THREE.Vector3(0.34, 0.28, 0.34);
+    const up = new THREE.Vector3(0, 1, 0);
+    const basis = new THREE.Matrix4();
+    const matrix = new THREE.Matrix4();
+    const scaleVec = new THREE.Vector3();
+    const leafBuckets = leafMats.map(() => []);
+
+    const orientLeaf = (leaf, normal, shingleLift = 0.08) => {
+      const tangentDown = up.clone().sub(normal.clone().multiplyScalar(up.dot(normal)));
+      if (tangentDown.lengthSq() < 0.0001) tangentDown.set(0, 0, 1);
+      tangentDown.normalize().multiplyScalar(-1);
+      const faceNormal = normal.clone().addScaledVector(tangentDown, shingleLift).normalize();
+      const yAxis = tangentDown.clone().multiplyScalar(-1);
+      const xAxis = yAxis.clone().cross(faceNormal).normalize();
+      basis.makeBasis(xAxis, yAxis, faceNormal);
+      leaf.quaternion.setFromRotationMatrix(basis);
+    };
+
+    // Dome rows — upper hemisphere only, tighter than the tree
+    const addLeafRing = ({ count, phi, shell = 1, scale = 0.7, matIndex = 1, phase = 0, lift = 0.10 }) => {
+      for (let i = 0; i < count; i++) {
+        const a = (i / count) * Math.PI * 2 + phase + (Math.random() - 0.5) * 0.06;
+        const normal = new THREE.Vector3(
+          Math.sin(phi) * Math.cos(a),
+          Math.cos(phi),
+          Math.sin(phi) * Math.sin(a)
+        ).normalize();
+        const leaf = new THREE.Object3D();
+        leaf.position.set(
+          bushCenter.x + normal.x * bushRadius.x * shell,
+          bushCenter.y + normal.y * bushRadius.y * shell,
+          bushCenter.z + normal.z * bushRadius.z * shell
+        );
+        orientLeaf(leaf, normal, lift);
+        leaf.rotateX(0.02 + lift * 0.15);
+        leaf.rotateZ((Math.random() - 0.5) * 0.10);
+        const s = scale * (0.90 + Math.random() * 0.20);
+        scaleVec.set(s * 0.96, s * 1.12, s);
+        matrix.compose(leaf.position, leaf.quaternion, scaleVec);
+        leafBuckets[matIndex].push(matrix.clone());
+      }
+    };
+
+    // Cap cluster — tight rosette with tips converging at center.
+    // Use orientLeaf with a tilted normal so the tangent is valid near the pole.
+    const capCount = 4;
+    const capY = bushCenter.y + bushRadius.y * 1.18;
+    const capBaseR = 0.02;
+    for (let i = 0; i < capCount; i++) {
+      const a = (i / capCount) * Math.PI * 2 + (Math.random() - 0.5) * 0.04;
+      // Normal mostly up but tilted outward enough for a valid tangent
+      const capNormal = new THREE.Vector3(
+        Math.cos(a) * 0.35,
+        1.0,
+        Math.sin(a) * 0.35
+      ).normalize();
+      const leaf = new THREE.Object3D();
+      leaf.position.set(
+        bushCenter.x + Math.cos(a) * capBaseR,
+        capY,
+        bushCenter.z + Math.sin(a) * capBaseR
+      );
+      orientLeaf(leaf, capNormal, 0.44);
+      const s = 0.45 * (0.92 + Math.random() * 0.16);
+      scaleVec.set(s * 0.96, s * 1.12, s);
+      matrix.compose(leaf.position, leaf.quaternion, scaleVec);
+      leafBuckets[1].push(matrix.clone());
+    }
+    // Dome rings (upper hemisphere phi 0..PI/2)
+    const rowCounts = [7, 9, 12, 12, 9, 13];
+    for (let row = 0; row < rowCounts.length; row++) {
+      const t = row / (rowCounts.length - 1);
+      const phi = 0.20 + t * 1.35;
+      const rowScale = 0.68 + Math.sin((1 - t) * Math.PI * 0.5) * 0.12;
+      const matIndex = row === 0 ? 2 : row > 3 ? 0 : 1;
+      const rowLift = row === 0 ? 0.28 : 0.18 - t * 0.08;
+      addLeafRing({
+        count: rowCounts[row],
+        phi,
+        shell: 1.05 - t * 0.08 + (Math.random() - 0.5) * 0.02,
+        scale: rowScale,
+        matIndex,
+        phase: (row % 2) * (Math.PI / rowCounts[row]),
+        lift: rowLift,
+      });
+    }
+
+    // Instanced leaf batches
+    for (let i = 0; i < leafBuckets.length; i++) {
+      const outline = makeInstancedLeafBatch(leafOutlineGeo, leafOutlineMat, leafBuckets[i]);
+      if (outline) {
+        outline.castShadow = false;
+        outline.renderOrder = -1;
+        g.add(outline);
+      }
+    }
+    for (let i = 0; i < leafBuckets.length; i++) {
+      const leaves = makeInstancedLeafBatch(leafGeo, leafMats[i], leafBuckets[i]);
+      if (leaves) g.add(leaves);
+    }
+
+    // --- Shiny berries with per-bush color variation ---
+    // Pick a berry color variant per bush
+    const BERRY_PALETTES = [
+      { color: "#e63946", hsl: [0.98, 0.72, 0.45] },   // bright red
+      { color: "#d62839", hsl: [0.97, 0.65, 0.40] },   // deep crimson
+      { color: "#f4845f", hsl: [0.06, 0.80, 0.58] },   // coral-orange
+      { color: "#9b2335", hsl: [0.95, 0.60, 0.32] },   // dark wine
+      { color: "#ff6b6b", hsl: [0.0, 0.78, 0.62] },    // cherry pink
+      { color: "#c1440e", hsl: [0.06, 0.72, 0.35] },   // burnt orange
+      { color: "#8b1a4a", hsl: [0.92, 0.65, 0.30] },   // plum
+      { color: "#e85d75", hsl: [0.95, 0.72, 0.55] },    // rose
+    ];
+    const berryVariant = BERRY_PALETTES[Math.floor(Math.random() * BERRY_PALETTES.length)];
+    const berryBaseColor = new THREE.Color(berryVariant.color);
+
+    const berryMat = pooled("berrybush.berry.mat." + berryVariant.color, () =>
       new THREE.MeshStandardMaterial({
-        color: new THREE.Color(biome.accent),
-        roughness: 0.62,
+        color: berryBaseColor,
+        roughness: 0.18,
+        metalness: 0.05,
       })
     );
-    const berryGeo = pooled("berrybush.berry.geo", () => new THREE.SphereGeometry(0.05, 12, 8));
-    const berries = 4 + Math.floor(Math.random() * 4);
-    // Bush is an ellipsoid at (0, 0.28, 0): xz-radius 0.32, y-scale 0.85.
-    // Sink berry centers just inside the upper hemisphere so the berries read
-    // as attached fruit rather than beads hovering over the faceted canopy.
-    const R = 0.285;
-    for (let i = 0; i < berries; i++) {
+    const berryGeo = pooled("berrybush.berry.geo", () => new THREE.SphereGeometry(0.028, 8, 6));
+
+    // Place berries on the dome surface so they poke out between leaves.
+    // Reject placements that overlap an existing berry (min center-to-center gap).
+    const berryCount = 12 + Math.floor(Math.random() * 12);
+    const berryR = 0.37; // just outside the leaf shell so berries read on the surface
+    const minBerryGap = 0.15; // minimum distance between berry centers
+    const berryPositions = [];
+    for (let i = 0; i < berryCount; i++) {
       const a = Math.random() * Math.PI * 2;
-      const elev = 0.2 + Math.random() * 1.1; // [~11°, ~75°] above equator
+      const elev = 0.1 + Math.random() * 1.47;
       const c = Math.cos(elev);
       const s = Math.sin(elev);
+      const bx = Math.cos(a) * c * berryR;
+      const by = 0.30 + s * berryR * 0.85;
+      const bz = Math.sin(a) * c * berryR;
+      // Skip if too close to an existing berry
+      const tooClose = berryPositions.some(p =>
+        (p.x - bx) ** 2 + (p.y - by) ** 2 + (p.z - bz) ** 2 < minBerryGap * minBerryGap
+      );
+      if (tooClose) continue;
+      berryPositions.push({ x: bx, y: by, z: bz });
       const berry = new THREE.Mesh(berryGeo, berryMat);
-      berry.position.set(Math.cos(a) * c * R, 0.28 + s * R * 0.85, Math.sin(a) * c * R);
+      berry.position.set(bx, by, bz);
+      const bs = 0.85 + Math.random() * 0.20;
+      berry.scale.setScalar(bs);
+      berry.castShadow = true;
       g.add(berry);
     }
     return g;
