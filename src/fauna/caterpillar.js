@@ -5,7 +5,7 @@ import { pickGroundPoint, nearestCenter } from "../terrain.js";
 import { emitGroundMark } from "../environment.js";
 import { applyShellFur } from "../fur.js";
 import { BLOOM_LAYER } from "../postfx.js";
-import { WATER_AVOID_Y, avoidObstacles } from "./shared.js";
+import { WATER_AVOID_Y, avoidObstacles, sampleSlopes, addAntennae } from "./shared.js";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Caterpillar — head + 3-8 body spheres, body segments follow head's trail
@@ -204,28 +204,16 @@ export function makeCaterpillar(biome, opts = {}) {
   }
 
   // antennae always for caterpillars — feels right
-  const antMat = new THREE.MeshStandardMaterial({
-    color: baseCol.clone().offsetHSL(0, 0, -0.25),
+  addAntennae(head, biome, baseCol, {
+    stalkHeight: 0.22,
+    offsetX: 0.09,
+    baseY: 0.28,
+    baseZ: 0.05,
+    tiltAngle: 0.3,
+    tipRadius: 0.04,
+    colorDarken: 0.25,
+    emissiveStrength: 0.4,
   });
-  for (const sign of [-1, 1]) {
-    const stalk = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.012, 0.012, 0.22, 4),
-      antMat
-    );
-    stalk.position.set(sign * 0.09, 0.28, 0.05);
-    stalk.rotation.z = sign * -0.3;
-    head.add(stalk);
-    const tip = new THREE.Mesh(
-      new THREE.SphereGeometry(0.04, 6, 6),
-      new THREE.MeshStandardMaterial({
-        color: new THREE.Color(biome.accent),
-        emissive: new THREE.Color(biome.accent).multiplyScalar(0.4),
-      })
-    );
-    tip.layers.enable(BLOOM_LAYER);
-    tip.position.set(0, 0.11, 0);
-    stalk.add(tip);
-  }
 
   // ── body segments — all the same radius as the head ──────────────────
   for (let i = 0; i < segCount; i++) {
@@ -534,18 +522,10 @@ export function stepCaterpillar(c, dt, t, heightFn) {
   // hillside. The idle nodding bob is folded into the pitch target so it
   // adds on top of the slope rather than overwriting it.
   const ds = 0.25 * c.scale;
-  const ch = Math.cos(c.heading);
-  const sh = Math.sin(c.heading);
-  const yF = heightFn(nx + ch * ds, nz + sh * ds);
-  const yB = heightFn(nx - ch * ds, nz - sh * ds);
-  const yR = heightFn(nx + sh * ds, nz - ch * ds);
-  const yL = heightFn(nx - sh * ds, nz + ch * ds);
-  const slopeFwd = (yF - yB) / (2 * ds);
-  const slopeRight = (yR - yL) / (2 * ds);
-  const cl = (v) => Math.max(-2, Math.min(2, v));
+  const slopes = sampleSlopes(nx, nz, c.heading, ds, heightFn);
   const nod = Math.sin(c.age * 4) * 0.06;
-  const pitchTarget = -Math.atan(cl(slopeFwd)) + nod;
-  const rollTarget = Math.atan(cl(slopeRight));
+  const pitchTarget = slopes.pitchTarget + nod;
+  const rollTarget = slopes.rollTarget;
   const k = Math.min(1, dt * 5);
   head.rotation.x += (pitchTarget - head.rotation.x) * k;
   head.rotation.z += (rollTarget - head.rotation.z) * k;

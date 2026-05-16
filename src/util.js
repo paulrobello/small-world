@@ -78,3 +78,70 @@ export function applyWindSway(material, strength = 1.0) {
 export function randInt(lo, hi) {
   return lo + Math.floor(Math.random() * (hi - lo + 1));
 }
+
+/**
+ * Build a curved leaf BufferGeometry from a parametric grid.
+ * Used by leafballtree, berrybush, and any other flora with flat leaf plates.
+ *
+ * @param {Object} opts
+ * @param {number} opts.lengthSegs - Subdivisions along leaf length
+ * @param {number} opts.widthSegs - Subdivisions across leaf width
+ * @param {number} opts.length - Total leaf length (mapped to Y axis)
+ * @param {number} opts.maxWidth - Maximum half-width of the leaf
+ * @param {number} opts.minWidth - Minimum half-width before clamping
+ * @param {number} opts.profileExp - Exponent for sin-based width profile
+ * @param {number} [opts.taperEnd] - Width taper toward tip (0 = none)
+ * @param {number} opts.centerLift - Center rises more than edges
+ * @param {number} opts.centerLiftFade - How fast center lift fades toward tip
+ * @param {number} opts.tipCurlStrength - Amount of forward curl at the tip
+ * @param {number} opts.tipCurlExp - Exponent for tip curl falloff
+ * @param {number} opts.edgeCurlStrength - Amount of edge curl inward
+ */
+export function buildLeafGeo({
+  lengthSegs = 7,
+  widthSegs = 4,
+  length = 0.42,
+  maxWidth = 0.165,
+  minWidth = 0.006,
+  profileExp = 0.72,
+  taperEnd = 0.16,
+  centerLift = 0.010,
+  centerLiftFade = 0.35,
+  tipCurlStrength = 0.060,
+  tipCurlExp = 1.45,
+  edgeCurlStrength = 0.010,
+} = {}) {
+  const positions = [];
+  const uvs = [];
+  const indices = [];
+  for (let iy = 0; iy <= lengthSegs; iy++) {
+    const v = iy / lengthSegs;
+    const profile = Math.sin(Math.PI * v) ** profileExp;
+    const taper = taperEnd != null ? (1 - v * taperEnd) : 1;
+    const halfWidth = Math.max(minWidth, maxWidth * profile * taper);
+    for (let ix = 0; ix <= widthSegs; ix++) {
+      const u = ix / widthSegs;
+      const side = u * 2 - 1;
+      const cl = (1 - Math.abs(side)) * centerLift * (1 - v * centerLiftFade);
+      const tc = tipCurlStrength * v ** tipCurlExp;
+      const ec = -Math.abs(side) * edgeCurlStrength * Math.sin(Math.PI * v);
+      positions.push(side * halfWidth, -v * length, tc + cl + ec);
+      uvs.push(u, v);
+    }
+  }
+  for (let iy = 0; iy < lengthSegs; iy++) {
+    for (let ix = 0; ix < widthSegs; ix++) {
+      const a = iy * (widthSegs + 1) + ix;
+      const b = a + 1;
+      const c = a + widthSegs + 1;
+      const d = c + 1;
+      indices.push(a, c, b, b, c, d);
+    }
+  }
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
+  geo.setAttribute("uv", new THREE.Float32BufferAttribute(uvs, 2));
+  geo.setIndex(indices);
+  geo.computeVertexNormals();
+  return geo;
+}

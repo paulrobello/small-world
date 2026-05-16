@@ -1,9 +1,95 @@
+import * as THREE from "three";
 import { state } from "../state.js";
+import { BLOOM_LAYER } from "../postfx.js";
+import { nearestCenter } from "../terrain.js";
 
 // Terrain Y below which ground creatures are considered underwater. The water
 // plane sits a touch below 0 and oscillates ~±0.08; clamping walkers to
 // ground above 0 keeps them clear of waves and out of the shallow draft.
 export const WATER_AVOID_Y = 0.0;
+
+// ── Terrain helpers ──────────────────────────────────────────────────────
+// Shared terrain sampling utilities used by walkers, crawlers, and burrowers.
+
+/**
+ * Sample terrain normal at (x, z) via central finite differences.
+ * Returns a unit Vector3.
+ */
+export function sampleTerrainNormal(x, z, heightFn, eps = 0.1) {
+  const yl = heightFn(x - eps, z);
+  const yr = heightFn(x + eps, z);
+  const yf = heightFn(x, z - eps);
+  const yb = heightFn(x, z + eps);
+  return new THREE.Vector3(yl - yr, 2 * eps, yf - yb).normalize();
+}
+
+/**
+ * Sample terrain slope along heading and perpendicular to it.
+ * Returns { pitchTarget, rollTarget, slopeFwd, slopeRight } for use
+ * with group.rotation.x (pitch) and group.rotation.z (roll).
+ * Raw gradients are included for callers that cache world-space slopes.
+ */
+export function sampleSlopes(x, z, heading, ds, heightFn) {
+  const ch = Math.cos(heading);
+  const sh = Math.sin(heading);
+  const yF = heightFn(x + ch * ds, z + sh * ds);
+  const yB = heightFn(x - ch * ds, z - sh * ds);
+  const yR = heightFn(x + sh * ds, z - ch * ds);
+  const yL = heightFn(x - sh * ds, z + ch * ds);
+  const slopeFwd = (yF - yB) / (2 * ds);
+  const slopeRight = (yR - yL) / (2 * ds);
+  const cl = (v) => Math.max(-2, Math.min(2, v));
+  return {
+    pitchTarget: -Math.atan(cl(slopeFwd)),
+    rollTarget: Math.atan(cl(slopeRight)),
+    slopeFwd,
+    slopeRight,
+  };
+}
+
+/**
+ * Create a pair of antennae (stalk + emissive tip) parented to `parent`.
+ * Used by both blob creatures and caterpillars. Returns the stalk meshes
+ * (for sleep/wake scale animation in blob creatures).
+ */
+export function addAntennae(parent, biome, bodyColor, opts = {}) {
+  const {
+    stalkRadius = 0.012,
+    stalkHeight = 0.32,
+    offsetX = 0.1,
+    baseY = 0.36,
+    baseZ = 0.1,
+    tiltAngle = 0.25,
+    tipRadius = 0.04,
+    colorDarken = 0.2,
+    emissiveStrength = 0.35,
+  } = opts;
+  const antMat = new THREE.MeshStandardMaterial({
+    color: bodyColor.clone().offsetHSL(0, 0, -colorDarken),
+  });
+  const stalks = [];
+  for (const sign of [-1, 1]) {
+    const stalk = new THREE.Mesh(
+      new THREE.CylinderGeometry(stalkRadius, stalkRadius, stalkHeight, 4),
+      antMat
+    );
+    stalk.position.set(sign * offsetX, baseY, baseZ);
+    stalk.rotation.z = sign * -tiltAngle;
+    parent.add(stalk);
+    const tip = new THREE.Mesh(
+      new THREE.SphereGeometry(tipRadius, 6, 6),
+      new THREE.MeshStandardMaterial({
+        color: new THREE.Color(biome.accent),
+        emissive: new THREE.Color(biome.accent).multiplyScalar(emissiveStrength),
+      })
+    );
+    tip.layers.enable(BLOOM_LAYER);
+    tip.position.set(0, stalkHeight / 2, 0);
+    stalk.add(tip);
+    stalks.push(stalk);
+  }
+  return stalks;
+}
 
 // ── Spatial grid for static obstacle queries ──────────────────────────────
 // Built once per world-gen via buildObstacleGrid(). avoidObstacles() queries
@@ -236,5 +322,47 @@ export function pushOutOfObstacles(pos, vel, bodyR) {
         vel.z -= vn * nz * 1.6;
       }
     }
+  }
+}
+
+// ── Water floor and steering for flying insects ────────────────────────────
+// Butterflies and bees both need: (1) a minimum altitude above ground/water,
+// and (2) a drift-correcting steer back toward the nearest island center
+// when flying over open water. Centralized here to avoid duplicating the
+// same logic in both step functions.
+
+/**
+ * Enforce a minimum Y floor for a flying insect and steer toward the
+ * nearest island center if over open water. Mutates `pos` and `vel` in place.
+ *
+ * @param {Object} pos - position Vector3 (mutated)
+ * @param {Object} vel - velocity Vector3 (mutated)
+ * @param {number} ground - heightFn(pos.x, pos.z)
+ * @param {number} minLandY - Y offset above terrain when over land
+ * @param {number} minWaterY - Y offset above terrain when over water
+ * @param {number} steerStrength - acceleration toward island center
+ * @param {number} bounceVy - upward velocity when hitting the floor
+ * @param {number} dt
+ */
+export function applyWaterFloorAndSteer(pos, vel, ground, opts, dt) {
+  const {
+    minLandY = 0.12,
+    minWaterY = 0.45,
+    steerStrength = 3.2,
+    bounceVy = 0.2,
+  } = opts;
+  const overWater = state.waterMesh && ground < WATER_AVOID_Y;
+  const minY = overWater ? minWaterY : ground + minLandY;
+  if (pos.y < minY) {
+    pos.y = minY;
+    if (vel.y < 0) vel.y = bounceVy;
+  }
+  if (overWater) {
+    const near = nearestCenter(pos.x, pos.z);
+    const dx = near.cx - pos.x;
+    const dz = near.cz - pos.z;
+    const d = Math.sqrt(dx * dx + dz * dz) || 1;
+    vel.x += (dx / d) * steerStrength * dt;
+    vel.z += (dz / d) * steerStrength * dt;
   }
 }

@@ -1,7 +1,8 @@
 import * as THREE from "three";
 import { state } from "./state.js";
-import { jitterGeo, applyWindSway, TRUNK } from "./util.js";
+import { jitterGeo, applyWindSway, TRUNK, buildLeafGeo } from "./util.js";
 import { BLOOM_LAYER } from "./postfx.js";
+import { makePool } from "./pool.js";
 
 // Cactus needles. Each spine is a real little cone mesh sitting on the
 // capsule's surface, oriented along the outward normal — the shell-fur
@@ -86,18 +87,9 @@ function addCapsuleNeedles(parent, radius, length) {
 // the previous world) starts fresh resources. Only colors that are
 // fully derived from the biome (no per-instance Math.random) are pooled —
 // `rock`, `pillar`, and `archstone` keep their per-instance jitter.
-let _pool = new Map();
-export function resetFloraPool() {
-  _pool = new Map();
-}
-function pooled(key, factory) {
-  let v = _pool.get(key);
-  if (v === undefined) {
-    v = factory();
-    _pool.set(key, v);
-  }
-  return v;
-}
+const _floraPool = makePool();
+export const resetFloraPool = _floraPool.reset;
+const pooled = _floraPool.get;
 
 function applyLeafPlateWind(material, strength = 0.16) {
   const prev = material.onBeforeCompile;
@@ -416,45 +408,25 @@ export const FLORA_BUILDERS = {
         )
       ),
     ];
-    const leafGeo = pooled("leafballtree.leaf.geo", () => {
-      // Curved, anchored leaf. Local y=0 is the upper attachment point and
-      // local -Y is the tip. Local +Z bows outward, so upper-row tips sit in
-      // front of lower-row bases like overlapping shingles instead of coplanar
-      // cards fighting for depth.
-      const lengthSegs = 7;
-      const widthSegs = 4;
-      const positions = [];
-      const uvs = [];
-      const indices = [];
-      for (let iy = 0; iy <= lengthSegs; iy++) {
-        const v = iy / lengthSegs;
-        const halfWidth = Math.max(0.006, 0.165 * Math.sin(Math.PI * v) ** 0.72 * (1 - v * 0.16));
-        for (let ix = 0; ix <= widthSegs; ix++) {
-          const u = ix / widthSegs;
-          const side = u * 2 - 1;
-          const centerLift = (1 - Math.abs(side)) * 0.010 * (1 - v * 0.35);
-          const tipCurl = 0.060 * v ** 1.45;
-          const edgeCurl = -Math.abs(side) * 0.010 * Math.sin(Math.PI * v);
-          positions.push(side * halfWidth, -v * 0.42, tipCurl + centerLift + edgeCurl);
-          uvs.push(u, v);
-        }
-      }
-      for (let iy = 0; iy < lengthSegs; iy++) {
-        for (let ix = 0; ix < widthSegs; ix++) {
-          const a = iy * (widthSegs + 1) + ix;
-          const b = a + 1;
-          const c = a + widthSegs + 1;
-          const d = c + 1;
-          indices.push(a, c, b, b, c, d);
-        }
-      }
-      const geo = new THREE.BufferGeometry();
-      geo.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
-      geo.setAttribute("uv", new THREE.Float32BufferAttribute(uvs, 2));
-      geo.setIndex(indices);
-      geo.computeVertexNormals();
-      return geo;
-    });
+    // Curved, anchored leaf. Local y=0 is the upper attachment point and
+    // local -Y is the tip. Local +Z bows outward, so upper-row tips sit in
+    // front of lower-row bases like overlapping shingles.
+    const leafGeo = pooled("leafballtree.leaf.geo", () =>
+      buildLeafGeo({
+        lengthSegs: 7,
+        widthSegs: 4,
+        length: 0.42,
+        maxWidth: 0.165,
+        minWidth: 0.006,
+        profileExp: 0.72,
+        taperEnd: 0.16,
+        centerLift: 0.010,
+        centerLiftFade: 0.35,
+        tipCurlStrength: 0.060,
+        tipCurlExp: 1.45,
+        edgeCurlStrength: 0.010,
+      })
+    );
     const leafOutlineGeo = pooled("leafballtree.leaf.outline.geo", () => {
       const geo = leafGeo.clone();
       const pos = geo.attributes.position;
@@ -1437,42 +1409,22 @@ export const FLORA_BUILDERS = {
     ];
 
     // Wider, rounder leaf shape for bush foliage (not the teardrop leaf of the tree)
-    const leafGeo = pooled("berrybush.leaf.geo", () => {
-      const lengthSegs = 5;
-      const widthSegs = 3;
-      const positions = [];
-      const uvs = [];
-      const indices = [];
-      for (let iy = 0; iy <= lengthSegs; iy++) {
-        const v = iy / lengthSegs;
-        // Broader, more elliptical profile than the tree leaf
-        const halfWidth = Math.max(0.005, 0.165 * Math.sin(Math.PI * v) ** 0.55);
-        for (let ix = 0; ix <= widthSegs; ix++) {
-          const u = ix / widthSegs;
-          const side = u * 2 - 1;
-          const centerLift = (1 - Math.abs(side)) * 0.028 * (1 - v * 0.3);
-          const tipCurl = 0.040 * v ** 1.3;
-          const edgeCurl = -Math.abs(side) * 0.028 * Math.sin(Math.PI * v);
-          positions.push(side * halfWidth, -v * 0.28, tipCurl + centerLift + edgeCurl);
-          uvs.push(u, v);
-        }
-      }
-      for (let iy = 0; iy < lengthSegs; iy++) {
-        for (let ix = 0; ix < widthSegs; ix++) {
-          const a = iy * (widthSegs + 1) + ix;
-          const b = a + 1;
-          const c = a + widthSegs + 1;
-          const d = c + 1;
-          indices.push(a, c, b, b, c, d);
-        }
-      }
-      const geo = new THREE.BufferGeometry();
-      geo.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
-      geo.setAttribute("uv", new THREE.Float32BufferAttribute(uvs, 2));
-      geo.setIndex(indices);
-      geo.computeVertexNormals();
-      return geo;
-    });
+    const leafGeo = pooled("berrybush.leaf.geo", () =>
+      buildLeafGeo({
+        lengthSegs: 5,
+        widthSegs: 3,
+        length: 0.28,
+        maxWidth: 0.165,
+        minWidth: 0.005,
+        profileExp: 0.55,
+        taperEnd: null,
+        centerLift: 0.028,
+        centerLiftFade: 0.3,
+        tipCurlStrength: 0.040,
+        tipCurlExp: 1.3,
+        edgeCurlStrength: 0.028,
+      })
+    );
     const leafOutlineGeo = pooled("berrybush.leaf.outline.geo", () => {
       const geo = leafGeo.clone();
       const pos = geo.attributes.position;

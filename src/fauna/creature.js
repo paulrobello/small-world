@@ -32,11 +32,7 @@ function ensureMoundMesh(c) {
 function placeMoundAt(c, x, z, heightFn) {
   ensureMoundMesh(c);
   const y = heightFn(x, z);
-  // Sample terrain normal via finite differences
-  const eps = 0.1;
-  const yl = heightFn(x - eps, z), yr = heightFn(x + eps, z);
-  const yf = heightFn(x, z - eps), yb = heightFn(x, z + eps);
-  const normal = new THREE.Vector3(yl - yr, 2 * eps, yf - yb).normalize();
+  const normal = sampleTerrainNormal(x, z, heightFn);
   c.moundMesh.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), normal);
   c.moundMesh.position.set(x, y - 0.02, z);
 }
@@ -50,12 +46,8 @@ function showMound(c, heightFn) {
   const pos = c.group.position;
   placeMoundAt(c, pos.x, pos.z, heightFn);
   // Store terrain normal for creature sink animation
-  const eps = 0.1;
-  const yl = heightFn(pos.x - eps, pos.z), yr = heightFn(pos.x + eps, pos.z);
-  const yf = heightFn(pos.x, pos.z - eps), yb = heightFn(pos.x, pos.z + eps);
-  const nx = yl - yr, ny = 2 * eps, nz = yf - yb;
-  const len = Math.sqrt(nx * nx + ny * ny + nz * nz);
-  c.moundEmergeNormal = { x: nx / len, y: ny / len, z: nz / len };
+  const normal = sampleTerrainNormal(pos.x, pos.z, heightFn);
+  c.moundEmergeNormal = { x: normal.x, y: normal.y, z: normal.z };
   c.moundEmergeDist = 0.8 + 0.4 * c.scale;
   c.moundEmergeX = pos.x;
   c.moundEmergeZ = pos.z;
@@ -70,12 +62,8 @@ function showMoundRising(c, x, z, heightFn) {
   c.moundMesh.scale.set(MOUND_SCALE_XZ, 0, MOUND_SCALE_XZ);
   placeMoundAt(c, x, z, heightFn);
   // Store terrain normal and sink distance for creature emerge animation
-  const eps = 0.1;
-  const yl = heightFn(x - eps, z), yr = heightFn(x + eps, z);
-  const yf = heightFn(x, z - eps), yb = heightFn(x, z + eps);
-  const nx = yl - yr, ny = 2 * eps, nz = yf - yb;
-  const len = Math.sqrt(nx * nx + ny * ny + nz * nz);
-  c.moundEmergeNormal = { x: nx / len, y: ny / len, z: nz / len };
+  const normal = sampleTerrainNormal(x, z, heightFn);
+  c.moundEmergeNormal = { x: normal.x, y: normal.y, z: normal.z };
   c.moundEmergeDist = 0.8 + 0.4 * c.scale;
   c.moundEmergeX = x;
   c.moundEmergeZ = z;
@@ -156,7 +144,8 @@ function findEmergePoint(c, heightFn) {
 }
 import { applyShellFur } from "../fur.js";
 import { BLOOM_LAYER } from "../postfx.js";
-import { WATER_AVOID_Y, avoidObstacles, colorsClose } from "./shared.js";
+import { makePool } from "../pool.js";
+import { WATER_AVOID_Y, avoidObstacles, colorsClose, sampleTerrainNormal, sampleSlopes, addAntennae } from "./shared.js";
 
 // Personality presets — picked once per creature at spawn, tweak how it walks,
 // thinks, hops, herds, and sleeps. Subtle multipliers; the cute baseline is
@@ -221,18 +210,9 @@ function currentPerchPoint(perch) {
 // down the previous regen's pooled objects (each lives in state.world via
 // the first creature that consumed it). Without pooling, every creature
 // would allocate its own copies of identical resources.
-let _creaturePool = new Map();
-export function resetCreaturePool() {
-  _creaturePool = new Map();
-}
-function pooled(key, factory) {
-  let v = _creaturePool.get(key);
-  if (v === undefined) {
-    v = factory();
-    _creaturePool.set(key, v);
-  }
-  return v;
-}
+const _creaturePool = makePool();
+export const resetCreaturePool = _creaturePool.reset;
+const pooled = _creaturePool.get;
 
 // Shared single-"z" texture for the night-sleep particles. Built lazily on
 // first drowsy creature, then reused across every spawned z for the session.
@@ -490,36 +470,18 @@ export function makeCreature(biome, opts = {}) {
   }
 
   // antennae for some
-  const antennae = [];
+  let antennae = [];
   if (!isFish && (isBumblebee || Math.random() > 0.55)) {
-    const antMat = new THREE.MeshStandardMaterial({
-      color: bodyCol.clone().offsetHSL(0, 0, -0.2),
+    antennae = addAntennae(group, biome, bodyCol, {
+      stalkHeight: 0.32,
+      offsetX: 0.1,
+      baseY: 0.36,
+      baseZ: 0.1,
+      tiltAngle: 0.25,
+      tipRadius: 0.04,
+      colorDarken: 0.2,
+      emissiveStrength: 0.35,
     });
-    for (const sign of [-1, 1]) {
-      const stalk = new THREE.Mesh(
-        new THREE.CylinderGeometry(0.012, 0.012, 0.32, 4),
-        antMat
-      );
-      // Stalk center sits deeper inside the body so the base never floats
-      // free when a jitter-perturbed body vertex pulls in. Tip ends up at the
-      // same visible height (0.52) as before.
-      stalk.position.set(sign * 0.1, 0.36, 0.1);
-      stalk.rotation.z = sign * -0.25;
-      group.add(stalk);
-      const tip = new THREE.Mesh(
-        new THREE.SphereGeometry(0.04, 6, 6),
-        new THREE.MeshStandardMaterial({
-          color: new THREE.Color(biome.accent),
-          emissive: new THREE.Color(biome.accent).multiplyScalar(0.35),
-        })
-      );
-      tip.layers.enable(BLOOM_LAYER);
-      // Parented to the stalk so the tip rigidly tracks the stalk top
-      // through any rotation. Local +Y on the cylinder is the stalk's top.
-      tip.position.set(0, 0.16, 0);
-      stalk.add(tip);
-      antennae.push(stalk);
-    }
   }
 
   const feet = [];
@@ -1726,14 +1688,10 @@ export function stepCreature(c, dt, t, heightFn) {
         pos.z -= n.z * sinkDist;
       } else {
         // fallback: sample normal on the fly
-        const eps = 0.1;
-        const yl = heightFn(pos.x - eps, pos.z), yr = heightFn(pos.x + eps, pos.z);
-        const yf = heightFn(pos.x, pos.z - eps), yb = heightFn(pos.x, pos.z + eps);
-        const nx = yl - yr, ny = 2 * eps, nz = yf - yb;
-        const len = Math.sqrt(nx * nx + ny * ny + nz * nz);
-        pos.x -= (nx / len) * sinkDist;
-        pos.y -= (ny / len) * sinkDist;
-        pos.z -= (nz / len) * sinkDist;
+        const n = sampleTerrainNormal(pos.x, pos.z, heightFn);
+        pos.x -= n.x * sinkDist;
+        pos.y -= n.y * sinkDist;
+        pos.z -= n.z * sinkDist;
       }
     }
   }
@@ -1789,25 +1747,17 @@ export function stepCreature(c, dt, t, heightFn) {
       pitchTarget = -Math.atan(cl(slopeFwd));
       rollTarget = Math.atan(cl(slopeRight));
     } else {
-      const ch = Math.cos(c.heading);
-      const sh = Math.sin(c.heading);
-      const yF = heightFn(pos.x + ch * ds, pos.z + sh * ds);
-      const yB = heightFn(pos.x - ch * ds, pos.z - sh * ds);
-      const yR = heightFn(pos.x + sh * ds, pos.z - ch * ds);
-      const yL = heightFn(pos.x - sh * ds, pos.z + ch * ds);
+      const slopes = sampleSlopes(pos.x, pos.z, c.heading, ds, heightFn);
+      pitchTarget = slopes.pitchTarget;
+      rollTarget = slopes.rollTarget;
       // Cache world-space gradients (independent of heading so they stay
       // valid as long as position doesn't change much).
       c._slopeCache = {
-        sx: (yR - yL) / (2 * ds),
-        sz: (yF - yB) / (2 * ds),
+        sx: slopes.slopeRight,
+        sz: slopes.slopeFwd,
       };
       c._slopeCacheX = pos.x;
       c._slopeCacheZ = pos.z;
-      const slopeFwd = (yF - yB) / (2 * ds);
-      const slopeRight = (yR - yL) / (2 * ds);
-      const cl = (v) => Math.max(-2, Math.min(2, v));
-      pitchTarget = -Math.atan(cl(slopeFwd));
-      rollTarget = Math.atan(cl(slopeRight));
     }
     const k = Math.min(1, dt * 5);
     c.group.rotation.x += (pitchTarget - c.group.rotation.x) * k;

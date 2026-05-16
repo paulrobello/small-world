@@ -1,7 +1,6 @@
 import * as THREE from "three";
 import { state } from "../state.js";
-import { nearestCenter } from "../terrain.js";
-import { WATER_AVOID_Y, pushOutOfObstacles } from "./shared.js";
+import { WATER_AVOID_Y, pushOutOfObstacles, applyWaterFloorAndSteer } from "./shared.js";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Butterflies — small bright fliers that flutter between flowers
@@ -165,20 +164,12 @@ export function stepButterfly(b, dt, t, flowerSpots, heightFn) {
   // nearest island center when we've drifted out over open water so we
   // don't just hover above the surface forever.
   const ground = heightFn(pos.x, pos.z);
-  const overWater = state.waterMesh && ground < WATER_AVOID_Y;
-  const minY = overWater ? 0.45 : ground + 0.12;
-  if (pos.y < minY) {
-    pos.y = minY;
-    if (b.velocity.y < 0) b.velocity.y = 0.2;
-  }
-  if (overWater) {
-    const near = nearestCenter(pos.x, pos.z);
-    const dx = near.cx - pos.x;
-    const dz = near.cz - pos.z;
-    const d = Math.sqrt(dx * dx + dz * dz) || 1;
-    b.velocity.x += (dx / d) * 3.2 * dt;
-    b.velocity.z += (dz / d) * 3.2 * dt;
-  }
+  applyWaterFloorAndSteer(pos, b.velocity, ground, {
+    minLandY: 0.12,
+    minWaterY: 0.45,
+    steerStrength: 3.2,
+    bounceVy: 0.2,
+  }, dt);
 
   // Route around trunks below the canopy.
   pushOutOfObstacles(pos, b.velocity, 0.12);

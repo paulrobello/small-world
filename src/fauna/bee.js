@@ -1,7 +1,6 @@
 import * as THREE from "three";
 import { state } from "../state.js";
-import { nearestCenter } from "../terrain.js";
-import { WATER_AVOID_Y, pushOutOfObstacles } from "./shared.js";
+import { WATER_AVOID_Y, pushOutOfObstacles, applyWaterFloorAndSteer } from "./shared.js";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Bee swarms — small fast fliers that orbit a shared flower target.
@@ -159,20 +158,12 @@ export function stepBee(b, dt, t, flowerSpots, heightFn) {
   pos.z += b.velocity.z * dt;
 
   const ground = heightFn(pos.x, pos.z);
-  const overWater = state.waterMesh && ground < WATER_AVOID_Y;
-  const minY = overWater ? 0.5 : ground + 0.18;
-  if (pos.y < minY) {
-    pos.y = minY;
-    if (b.velocity.y < 0) b.velocity.y = 0.3;
-  }
-  if (overWater) {
-    const near = nearestCenter(pos.x, pos.z);
-    const dx = near.cx - pos.x;
-    const dz = near.cz - pos.z;
-    const d = Math.sqrt(dx * dx + dz * dz) || 1;
-    b.velocity.x += (dx / d) * 4.0 * dt;
-    b.velocity.z += (dz / d) * 4.0 * dt;
-  }
+  applyWaterFloorAndSteer(pos, b.velocity, ground, {
+    minLandY: 0.18,
+    minWaterY: 0.5,
+    steerStrength: 4.0,
+    bounceVy: 0.3,
+  }, dt);
 
   pushOutOfObstacles(pos, b.velocity, 0.1);
 
