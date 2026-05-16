@@ -919,6 +919,21 @@ export function initUi({ camera, canvas, controls, renderer }) {
   }
   renderBiomeFilter();
 
+  // All / None buttons
+  document.getElementById("biome-filter-all").addEventListener("click", () => {
+    for (const b of BIOMES) biomeFilter.add(b.id);
+    saveBiomeFilter(biomeFilter);
+    renderBiomeFilter();
+  });
+  document.getElementById("biome-filter-none").addEventListener("click", () => {
+    // Keep one enabled so regen always has a target
+    const first = BIOMES[0].id;
+    biomeFilter.clear();
+    biomeFilter.add(first);
+    saveBiomeFilter(biomeFilter);
+    renderBiomeFilter();
+  });
+
   function pickRegenSeed() {
     // If every biome is enabled, the filter is a no-op — keep the old
     // "avoid same biome twice" behaviour. Otherwise constrain to the set.

@@ -793,6 +793,27 @@ body.photo-mode .help-panel {
   gap: 6px;
   margin-bottom: 8px;
 }
+.biome-filter-actions {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+.biome-filter-action {
+  background: none;
+  border: 1px solid var(--ink-faint);
+  color: var(--ink-dim);
+  font-size: 9px;
+  letter-spacing: 0.15em;
+  text-transform: lowercase;
+  padding: 2px 8px;
+  border-radius: 3px;
+  cursor: pointer;
+  transition: border-color 0.2s ease, color 0.2s ease;
+}
+.biome-filter-action:hover {
+  border-color: var(--ink);
+  color: var(--ink);
+}
 .biome-chip {
   width: 22px;
   height: 22px;
