@@ -1246,6 +1246,11 @@ export function initUi({ camera, canvas, controls, renderer, scene }) {
       const s = 0.85 + 0.15 * t;
       group.scale.set(s, s, s);
       if (t < 1) requestAnimationFrame(animIn);
+      else {
+        // Switch to opaque so depth pre-pass includes the photo
+        mat.transparent = false; mat.needsUpdate = true;
+        borderMat.transparent = false; borderMat.needsUpdate = true;
+      }
     };
     requestAnimationFrame(animIn);
 
@@ -1389,6 +1394,8 @@ export function initUi({ camera, canvas, controls, renderer, scene }) {
       _photoFP.handlers = { onMove, onWheel, onClick, onKeyDown, onKeyUp, onLockChange };
       applyStrollVisualComfort(true);
     } else {
+      // Close any open photo review first
+      if (_photoReview) closePhotoReview();
       if (!_photoFP) { syncPhotoModeButton(); return; }
       const { handlers, savedCam } = _photoFP;
       document.removeEventListener("mousemove", handlers.onMove);
