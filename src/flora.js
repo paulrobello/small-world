@@ -335,13 +335,16 @@ export const FLORA_BUILDERS = {
     const trunkMat = pooled("leafballtree.trunk.mat", () =>
       new THREE.MeshStandardMaterial({
         color: new THREE.Color(TRUNK).lerp(new THREE.Color("#c38b45"), 0.52),
-        flatShading: false,
+        flatShading: true,
         roughness: 0.95,
+        vertexColors: true,
       })
     );
     const trunkGeo = pooled("leafballtree.trunk.geo", () => {
       const geo = new THREE.CylinderGeometry(0.12, 0.24, 1.45, 12, 12).translate(0, 0.725, 0);
       const pos = geo.attributes.position;
+      const colors = new Float32Array(pos.count * 3);
+      const ringCount = 7;
       for (let i = 0; i < pos.count; i++) {
         const y = pos.getY(i);
         const t = y / 1.45;
@@ -349,7 +352,16 @@ export const FLORA_BUILDERS = {
         const taperTwist = Math.sin(t * Math.PI * 2.2) * 0.026;
         pos.setX(i, pos.getX(i) + bend);
         pos.setZ(i, pos.getZ(i) + taperTwist);
+        // Bark-ring shading: horizontal bands with soft edges.
+        const ring = 0.5 + 0.5 * Math.sin(t * ringCount * Math.PI * 2);
+        const band = 0.82 + ring * 0.18;
+        // Slight per-vertex noise to break up uniformity.
+        const noise = 0.96 + Math.sin(pos.getX(i) * 13.7 + pos.getZ(i) * 9.3) * 0.04;
+        colors[i * 3] = band * noise;
+        colors[i * 3 + 1] = band * noise;
+        colors[i * 3 + 2] = band * noise;
       }
+      geo.setAttribute("color", new THREE.Float32BufferAttribute(colors, 3));
       geo.computeVertexNormals();
       return geo;
     });
@@ -493,7 +505,7 @@ export const FLORA_BUILDERS = {
       leaf.quaternion.setFromRotationMatrix(basis);
     };
 
-    const rowCounts = [8, 14, 17, 20, 24, 24, 21, 17, 13, 9, 6];
+    const rowCounts = [9, 14, 18, 22, 26, 26, 24, 20, 17, 13, 10];
     const addLeafRing = ({ count, phi, shell = 1, scale = 0.8, matIndex = 1, phase = 0, lift = 0.12, yOffset = 0 }) => {
       for (let i = 0; i < count; i++) {
         const a = (i / count) * Math.PI * 2 + phase + (Math.random() - 0.5) * 0.04;
@@ -518,7 +530,8 @@ export const FLORA_BUILDERS = {
       }
     };
 
-    addLeafRing({ count: 7, phi: 0.07, shell: 0.54, scale: 0.72, matIndex: 1, phase: 0.18, lift: 0.32, yOffset: 0.40 });
+    addLeafRing({ count: 6, phi: 0.07, shell: 0.54, scale: 0.72, matIndex: 1, phase: 0.18, lift: 0.32, yOffset: 0.40 });
+    let staggerPhase = 0;
     for (let row = 0; row < rowCounts.length; row++) {
       const t = row / (rowCounts.length - 1);
       const phi = 0.18 + t * 2.50;
@@ -530,9 +543,10 @@ export const FLORA_BUILDERS = {
         shell: 1.09 - t * 0.15 + (Math.random() - 0.5) * 0.01,
         scale: rowScale,
         matIndex,
-        phase: (row % 2) * (Math.PI / rowCounts[row]),
+        phase: staggerPhase,
         lift: row === rowCounts.length - 2 ? 0.48 - t * 0.08 : row === rowCounts.length - 1 ? 0.35 - t * 0.08 : 0.22 - t * 0.10,
       });
+      staggerPhase += Math.PI / rowCounts[row];
     }
 
     for (let i = 0; i < leafBuckets.length; i++) {
