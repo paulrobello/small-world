@@ -1228,7 +1228,7 @@ export const FLORA_BUILDERS = {
     // same strength keeps the stem-bend coherent: the y² bend grows from the
     // ground up so the slim stem flexes more than the cap (whose vertices
     // share nearly identical y ~ stemH and so move as a rigid block).
-    const BIG_WIND = 0.45;
+    const BIG_WIND = 0.34;
     const stemMat = pooled("bigmushroom.stem.mat.smooth", () =>
       applyWindSway(
         new THREE.MeshStandardMaterial({ color: "#f1e8d8", roughness: 0.95 }),

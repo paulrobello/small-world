@@ -660,8 +660,33 @@ export function generateWorld(seed) {
     f.scale.setScalar(s);
     // Mushroom grove gets one giant bigmushroom (4× scale)
     if (kind === "bigmushroom" && biome.id === "grove" && !groveGiantPlaced) {
+      // Only place in the inner 1/3 of the island so the giant cap
+      // doesn't overhang the edge.
+      const centers = state.currentLayout.centers;
+      let bDx = p.x - centers[0].cx, bDz = p.z - centers[0].cz;
+      for (let ci = 1; ci < centers.length; ci++) {
+        const ddx = p.x - centers[ci].cx, ddz = p.z - centers[ci].cz;
+        if (ddx * ddx + ddz * ddz < bDx * bDx + bDz * bDz) { bDx = ddx; bDz = ddz; }
+      }
+      if (Math.sqrt(bDx * bDx + bDz * bDz) > state.ISLAND_RADIUS / 3) continue;
       s *= 4;
       f.scale.setScalar(s);
+      // Disable wind on the giant mushroom — at 4× scale the sway
+      // amplitude looks exaggerated and comical. Clone materials first
+      // so other bigmushroom instances (which share pooled materials)
+      // are not affected.
+      f.traverse((child) => {
+        if (child.isMesh && child.material) {
+          const prev = child.material.onBeforeCompile;
+          child.material = child.material.clone();
+          child.material.onBeforeCompile = (shader) => {
+            prev(shader);
+            if (shader.uniforms.uWindStrength) shader.uniforms.uWindStrength.value = 0;
+          };
+        }
+      });
+      // Zero perchWind so creatures perched on the cap don't bob.
+      f.userData.perchWind = { strength: 0, localY: f.userData.perchWind?.localY ?? 0 };
       groveGiantPlaced = true;
     }
     // Verdant grove gets one giant leafballtree (3× scale) with a will-o-wisp
