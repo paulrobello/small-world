@@ -622,6 +622,107 @@ export const FLORA_BUILDERS = {
     return g;
   },
 
+  snowpine(biome) {
+    const g = new THREE.Group();
+    // Snow-covered pine — frosted branch edges via vertex colors baked into
+    // each cone geometry before its Y translation. Vertex colors blend from
+    // deep green at the apex to icy white at the base edge. Icicles hang
+    // below each tier's branch edge.
+    const PINE_WIND = 0.18;
+    const coneGreen = new THREE.Color(biome.accent).lerp(new THREE.Color("#0a2518"), 0.40);
+    const frostWhite = new THREE.Color("#dce6f0");
+
+    // Frost-tinted trunk — wood cooled toward blue-grey
+    const trunkGeo = pooled("snowpine.trunk.geo", () =>
+      new THREE.CylinderGeometry(0.08, 0.12, 0.4, 6).translate(0, 0.2, 0)
+    );
+    const trunkMat = pooled("snowpine.trunk.mat", () =>
+      applyWindSway(
+        new THREE.MeshStandardMaterial({
+          color: new THREE.Color(TRUNK).lerp(new THREE.Color("#8ba4b8"), 0.12),
+          flatShading: true,
+        }),
+        PINE_WIND
+      )
+    );
+    const trunk = new THREE.Mesh(trunkGeo, trunkMat);
+    trunk.castShadow = true;
+    g.add(trunk);
+
+    // Cone material with vertex colors enabled — actual green/frost coloring
+    // comes from per-vertex colors baked into each tier's geometry.
+    const coneMat = pooled("snowpine.cone.mat", () =>
+      applyWindSway(
+        new THREE.MeshStandardMaterial({
+          color: "#ffffff",
+          flatShading: true,
+          vertexColors: true,
+        }),
+        PINE_WIND
+      )
+    );
+
+    // Snow material for icicles — white with a faint blue undertone
+    const snowMat = pooled("snowpine.snow.mat", () =>
+      applyWindSway(
+        new THREE.MeshStandardMaterial({
+          color: "#e8eef4",
+          flatShading: true,
+          roughness: 0.85,
+        }),
+        PINE_WIND
+      )
+    );
+
+    const tiers = 3 + Math.floor(Math.random() * 2);
+    for (let i = 0; i < tiers; i++) {
+      const tierRadius = 0.65 - i * 0.13;
+      const tierY = 0.45 + i * 0.42;
+
+      // Cone with vertex colors for frost baked in before Y translation.
+      // ConeGeometry: tip at +height/2 (+0.325), base at -height/2 (-0.325).
+      // Only vertices near the base get frosted white.
+      const coneGeo = pooled("snowpine.cone.geo." + i, () => {
+        const geo = new THREE.ConeGeometry(tierRadius, 0.65, 6, 4);
+        const p = geo.attributes.position;
+        const colors = new Float32Array(p.count * 3);
+        for (let vi = 0; vi < p.count; vi++) {
+          const t = (p.getY(vi) + 0.325) / 0.65; // 0=base, 1=tip
+          const frost = (t < 0.12 || t > 0.88) ? 1.0 : 0.0;
+          const c = frost ? frostWhite : coneGreen;
+          colors[vi * 3] = c.r;
+          colors[vi * 3 + 1] = c.g;
+          colors[vi * 3 + 2] = c.b;
+        }
+        geo.setAttribute("color", new THREE.Float32BufferAttribute(colors, 3));
+        geo.translate(0, tierY, 0);
+        return geo;
+      });
+      const cone = new THREE.Mesh(coneGeo, coneMat);
+      cone.castShadow = true;
+      g.add(cone);
+
+      // Icicles — tiny downward cones hanging from the underside of each
+      // tier's branch edge (near the cone base, just below the green needles).
+      const icicleGeo = pooled("snowpine.icicle.geo", () =>
+        new THREE.ConeGeometry(0.01, 0.08, 4).rotateX(Math.PI).translate(0, -0.04, 0)
+      );
+      const icicleCount = 2 + Math.floor(Math.random() * 3);
+      for (let k = 0; k < icicleCount; k++) {
+        const angle = (k / icicleCount) * Math.PI * 2 + Math.random() * 0.5;
+        const icicle = new THREE.Mesh(icicleGeo, snowMat);
+        icicle.position.set(
+          Math.cos(angle) * tierRadius * 0.85,
+          tierY - 0.34,
+          Math.sin(angle) * tierRadius * 0.85
+        );
+        g.add(icicle);
+      }
+    }
+
+    return g;
+  },
+
   cactus() {
     const g = new THREE.Group();
     const m = pooled("cactus.mat", () =>

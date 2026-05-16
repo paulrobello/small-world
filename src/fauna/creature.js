@@ -856,6 +856,18 @@ function emitFlierLandingMarks(c, heightFn) {
     state.world.add(kick);
     state.dustKicks.push(kick);
   }
+  if (cfg.poof === "snow") {
+    const kick = makeDustKick(c.group.position.x, y, c.group.position.z, "#c8d4e0", {
+      count: 4,
+      size: 0.055,
+      opacity: 0.40,
+      velocityScale: 0.30,
+      life: 0.38,
+      poof: true,
+    });
+    state.world.add(kick);
+    state.dustKicks.push(kick);
+  }
 }
 
 // Nudge `c.heading` toward the nearest same-color creature so kin pair up
@@ -1725,6 +1737,17 @@ export function stepCreature(c, dt, t, heightFn) {
               opacity: 0.28,
               velocityScale: 0.35,
               life: 0.28,
+            });
+            state.world.add(kick);
+            state.dustKicks.push(kick);
+          }
+          if (fy > 0.1 && state.currentBiome?.groundMarks?.poof === "snow") {
+            const kick = makeDustKick(fx, fy, fz, "#c8d4e0", {
+              count: 3,
+              size: 0.055,
+              opacity: 0.35,
+              velocityScale: 0.25,
+              life: 0.35,
             });
             state.world.add(kick);
             state.dustKicks.push(kick);
