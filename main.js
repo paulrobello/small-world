@@ -364,6 +364,7 @@ function animate() {
   // Render photo review ON TOP of post-fx (not affected by outlines/tilt-shift)
   const reviewGroup = getPhotoReviewGroup();
   if (reviewGroup) {
+    reviewGroup.updateMatrixWorld(true);
     renderer.render(reviewGroup, camera);
   }
 }
