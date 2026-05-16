@@ -9,9 +9,13 @@ import { makeDirtPuff, makeDustKick, emitGroundMark } from "../environment.js";
 // Created on demand, reused across burrow cycles, removed when creature
 // is disposed.
 const MOUND_GEO = jitterGeo(new THREE.IcosahedronGeometry(0.22, 1), 0.04);
-function showMound(c, heightFn) {
-  // Cancel any in-progress sink animation
-  c.moundSinkT = -1;
+const MOUND_SCALE_Y = 0.35;
+const MOUND_SCALE_XZ = 2.0;
+const MOUND_SINK_SPEED = 1.25; // rate per second (~0.8s duration)
+const MOUND_RISE_SPEED = 1.5;  // rate per second (~0.67s duration)
+
+// Ensure c.moundMesh exists, with correct material and shadow flags.
+function ensureMoundMesh(c) {
   if (!c.moundMesh) {
     const mat = new THREE.MeshStandardMaterial({
       color: c.dirtColor.clone().offsetHSL(0.03, 0.1, 0.12),
@@ -22,32 +26,133 @@ function showMound(c, heightFn) {
     c.moundMesh.castShadow = true;
     c.moundMesh.receiveShadow = true;
   }
-  // Reset scale in case it was shrunk by a previous sink animation
-  c.moundMesh.scale.set(2.0, 0.35, 2.0);
-  const pos = c.group.position;
-  const y = heightFn(pos.x, pos.z);
+}
+
+// Position and orient a mound at (x, z) aligned to terrain normal.
+function placeMoundAt(c, x, z, heightFn) {
+  ensureMoundMesh(c);
+  const y = heightFn(x, z);
   // Sample terrain normal via finite differences
   const eps = 0.1;
-  const yl = heightFn(pos.x - eps, pos.z);
-  const yr = heightFn(pos.x + eps, pos.z);
-  const yf = heightFn(pos.x, pos.z - eps);
-  const yb = heightFn(pos.x, pos.z + eps);
+  const yl = heightFn(x - eps, z), yr = heightFn(x + eps, z);
+  const yf = heightFn(x, z - eps), yb = heightFn(x, z + eps);
   const normal = new THREE.Vector3(yl - yr, 2 * eps, yf - yb).normalize();
-  // Align mound's up (Y) with terrain normal
-  const up = new THREE.Vector3(0, 1, 0);
-  const quat = new THREE.Quaternion().setFromUnitVectors(up, normal);
-  c.moundMesh.quaternion.copy(quat);
-  c.moundMesh.position.set(pos.x, y - 0.02, pos.z);
+  c.moundMesh.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), normal);
+  c.moundMesh.position.set(x, y - 0.02, z);
+}
+
+// Show a fully-formed mound at the creature's current position.
+function showMound(c, heightFn) {
+  c.moundSinkT = -1;
+  c.moundRiseT = -1;
+  ensureMoundMesh(c);
+  c.moundMesh.scale.set(MOUND_SCALE_XZ, MOUND_SCALE_Y, MOUND_SCALE_XZ);
+  const pos = c.group.position;
+  placeMoundAt(c, pos.x, pos.z, heightFn);
+  // Store terrain normal for creature sink animation
+  const eps = 0.1;
+  const yl = heightFn(pos.x - eps, pos.z), yr = heightFn(pos.x + eps, pos.z);
+  const yf = heightFn(pos.x, pos.z - eps), yb = heightFn(pos.x, pos.z + eps);
+  const nx = yl - yr, ny = 2 * eps, nz = yf - yb;
+  const len = Math.sqrt(nx * nx + ny * ny + nz * nz);
+  c.moundEmergeNormal = { x: nx / len, y: ny / len, z: nz / len };
+  c.moundEmergeDist = 0.8 + 0.4 * c.scale;
+  c.moundEmergeX = pos.x;
+  c.moundEmergeZ = pos.z;
   c.moundMesh.visible = true;
   state.world.add(c.moundMesh);
 }
+
+// Show a flat mound at (x, z) that will rise via stepMoundRise.
+function showMoundRising(c, x, z, heightFn) {
+  c.moundSinkT = -1;
+  ensureMoundMesh(c);
+  c.moundMesh.scale.set(MOUND_SCALE_XZ, 0, MOUND_SCALE_XZ);
+  placeMoundAt(c, x, z, heightFn);
+  // Store terrain normal and sink distance for creature emerge animation
+  const eps = 0.1;
+  const yl = heightFn(x - eps, z), yr = heightFn(x + eps, z);
+  const yf = heightFn(x, z - eps), yb = heightFn(x, z + eps);
+  const nx = yl - yr, ny = 2 * eps, nz = yf - yb;
+  const len = Math.sqrt(nx * nx + ny * ny + nz * nz);
+  c.moundEmergeNormal = { x: nx / len, y: ny / len, z: nz / len };
+  c.moundEmergeDist = 0.8 + 0.4 * c.scale;
+  c.moundEmergeX = x;
+  c.moundEmergeZ = z;
+  c.moundMesh.visible = true;
+  state.world.add(c.moundMesh);
+  c.moundRiseT = 0;
+}
+
+// Start sinking the mound; animation driven by stepMoundSink.
 function hideMound(c) {
   if (c.moundMesh && c.moundMesh.visible) {
-    // Start sinking animation instead of instant removal
     c.moundSinkT = 0;
     c.moundSinkBaseY = c.moundMesh.position.y;
     c.moundSinkBaseScaleY = c.moundMesh.scale.y;
   }
+}
+
+// Advance the rise animation. Returns true when complete.
+function stepMoundRise(c, dt) {
+  if (c.moundRiseT < 0) return true;
+  c.moundRiseT += dt * MOUND_RISE_SPEED;
+  const t = Math.min(c.moundRiseT, 1);
+  if (c.moundMesh) c.moundMesh.scale.y = MOUND_SCALE_Y * t;
+  if (t >= 1) { c.moundRiseT = -1; return true; }
+  return false;
+}
+
+// Advance the sink animation. Returns true when complete (mound removed).
+function stepMoundSink(c, dt) {
+  if (c.moundSinkT < 0) return true;
+  c.moundSinkT += dt * MOUND_SINK_SPEED;
+  const t = Math.min(c.moundSinkT, 1);
+  if (c.moundMesh) {
+    c.moundMesh.position.y = c.moundSinkBaseY - t * 0.25;
+    c.moundMesh.scale.y = c.moundSinkBaseScaleY * (1 - t);
+  }
+  if (t >= 1) {
+    c.moundSinkT = -1;
+    if (c.moundMesh) {
+      c.moundMesh.visible = false;
+      state.world.remove(c.moundMesh);
+    }
+    return true;
+  }
+  return false;
+}
+
+// Find a valid emerge point near the creature. Returns {x, z} or null.
+function findEmergePoint(c, heightFn) {
+  const pos = c.group.position;
+  const cr = 0.25 * c.scale; // creature collision radius
+  for (let attempt = 0; attempt < 8; attempt++) {
+    const ang = Math.random() * Math.PI * 2;
+    const dist = 2.5 + Math.random() * 4;
+    let nx = pos.x + Math.cos(ang) * dist;
+    let nz = pos.z + Math.sin(ang) * dist;
+    // Must be on solid ground above waterline
+    if (heightFn(nx, nz) < WATER_AVOID_Y) continue;
+    // Must be well inside the island plateau (same check as walker edge avoidance)
+    const near = nearestCenter(nx, nz);
+    const dx = nx - near.cx, dz = nz - near.cz;
+    if (Math.sqrt(dx * dx + dz * dz) > near.radius * 0.9) continue;
+    // Must not overlap obstacles
+    let blocked = false;
+    for (const obs of state.obstacles) {
+      const minD = obs.r + cr;
+      const odx = nx - obs.x, odz = nz - obs.z;
+      if (odx * odx + odz * odz < minD * minD) { blocked = true; break; }
+    }
+    if (blocked) continue;
+    return { x: nx, z: nz };
+  }
+  // Fallback: nudge toward nearest island center
+  const near = nearestCenter(pos.x, pos.z);
+  const fx = near.cx, fz = near.cz;
+  if (heightFn(fx, fz) >= WATER_AVOID_Y) return { x: fx, z: fz };
+  return null;
 }
 import { applyShellFur } from "../fur.js";
 import { BLOOM_LAYER } from "../postfx.js";
@@ -719,6 +824,10 @@ export function makeCreature(biome, opts = {}) {
     moundSinkBaseScaleY: 0,
     moundRiseT: -1,           // >= 0 while rising at emerge location
     moundHideTimer: -1,       // countdown to hide mound after emerging
+    moundEmergeNormal: null,  // terrain normal at emerge point
+    moundEmergeDist: 0,       // full sink distance at emerge point
+    moundEmergeX: 0,          // X/Z to pin creature at during emerging
+    moundEmergeZ: 0,
     // Personality + behavior knobs read by stepCreature
     personality: personalityName,
     pauseChance: personality.pauseChance,
@@ -1171,48 +1280,19 @@ export function stepCreature(c, dt, t, heightFn) {
         c.burrowState = "moundGone";
       }
     } else if (c.burrowState === "moundGone") {
-      // teleport to a fresh nearby ground point and start mound rising
-      const pos = c.group.position;
-      const ang = Math.random() * Math.PI * 2;
-      const dist = 2.5 + Math.random() * 4;
-      let nx = pos.x + Math.cos(ang) * dist;
-      let nz = pos.z + Math.sin(ang) * dist;
-      if (heightFn(nx, nz) < 0) {
-        // fall back to a nudge toward origin if we'd surface in the void
-        nx = pos.x * 0.5;
-        nz = pos.z * 0.5;
+      // Pick a fresh nearby ground point for re-emergence
+      const ep = findEmergePoint(c, heightFn);
+      if (ep) {
+        c.burrowState = "moundRising";
+        showMoundRising(c, ep.x, ep.z, heightFn);
       }
-      pos.x = nx;
-      pos.z = nz;
-      c.burrowState = "moundRising";
-      // Create a flat mound at the emerge point and start rising
-      if (!c.moundMesh) {
-        const mat = new THREE.MeshStandardMaterial({
-          color: c.dirtColor.clone().offsetHSL(0.03, 0.1, 0.12),
-          flatShading: true,
-          roughness: 0.95,
-        });
-        c.moundMesh = new THREE.Mesh(MOUND_GEO, mat);
-        c.moundMesh.castShadow = true;
-        c.moundMesh.receiveShadow = true;
-      }
-      c.moundMesh.scale.set(2.0, 0, 2.0); // start flat
-      const my = heightFn(nx, nz);
-      c.moundMesh.position.set(nx, my - 0.02, nz);
-      // Align to terrain normal
-      const eps = 0.1;
-      const yl = heightFn(nx - eps, nz), yr = heightFn(nx + eps, nz);
-      const yf = heightFn(nx, nz - eps), yb = heightFn(nx, nz + eps);
-      const normal = new THREE.Vector3(yl - yr, 2 * eps, yf - yb).normalize();
-      c.moundMesh.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), normal);
-      c.moundMesh.visible = true;
-      state.world.add(c.moundMesh);
-      c.moundRiseT = 0;
-      c.moundSinkT = -1;
+      // If no valid point found, stay in moundGone and retry next frame
     } else if (c.burrowState === "moundRising") {
       // Wait for mound rise animation (driven by moundRiseT below)
       if (c.moundRiseT < 0) {
-        // Rise complete — show creature, emit dirt puff, start 1s hide timer
+        // Rise complete — move creature to mound position, show it
+        const mp = c.moundMesh.position;
+        c.group.position.set(mp.x, mp.y, mp.z);
         c.group.visible = true;
         c.burrowState = "emerging";
         c.moundHideTimer = 1;
@@ -1236,39 +1316,16 @@ export function stepCreature(c, dt, t, heightFn) {
         hideMound(c);
       }
     }
+    // ── mound animations (must run before early-return) ──
+    stepMoundRise(c, dt);
+    stepMoundSink(c, dt);
+
     // while burrowed, sinking, or mound rising, skip all motion/animation
     if (c.burrowState === "burrowed" || c.burrowState === "sinking" || c.burrowState === "moundRising") return;
   }
 
-  // ── mound rise animation ──
-  if (c.moundRiseT >= 0) {
-    c.moundRiseT += dt * 1.5; // ~0.67s rise duration
-    const t = Math.min(c.moundRiseT, 1);
-    if (c.moundMesh) {
-      c.moundMesh.scale.y = 0.35 * t;
-    }
-    if (t >= 1) {
-      c.moundRiseT = -1;
-    }
-  }
-
-  // ── mound sink animation ──
-  if (c.moundSinkT >= 0) {
-    c.moundSinkT += dt * 1.25; // ~0.8s sink duration
-    const t = Math.min(c.moundSinkT, 1);
-    if (c.moundMesh) {
-      c.moundMesh.position.y = c.moundSinkBaseY - t * 0.25;
-      c.moundMesh.scale.y = c.moundSinkBaseScaleY * (1 - t);
-    }
-    if (t >= 1) {
-      // Animation done — remove the mound
-      c.moundSinkT = -1;
-      if (c.moundMesh) {
-        c.moundMesh.visible = false;
-        state.world.remove(c.moundMesh);
-      }
-    }
-  }
+  // ── mound sink for emerging/surface (1s-delayed hide) ──
+  if (c.isBurrower) stepMoundSink(c, dt);
 
   // ── flier landing state machine ────────────────────────────────────────
   // Fish never land — they always float.
@@ -1662,9 +1719,28 @@ export function stepCreature(c, dt, t, heightFn) {
   } else {
     const bobAmp = (moving ? 0.08 : 0.02) * c.bobAmpMul;
     pos.y = ground + 0.35 * c.scale + Math.sin(c.bob) * bobAmp + c.hopOffset;
-    // burrowers sink/rise — burrowDepth=0 sits at surface, 1 fully under
+    // burrowers sink/rise along terrain normal — burrowDepth=0 surface, 1 fully under
     if (c.isBurrower && c.burrowDepth > 0) {
-      pos.y -= c.burrowDepth * (0.8 + 0.4 * c.scale);
+      // Pin X/Z to emerge point so walking code doesn't drift the creature
+      pos.x = c.moundEmergeX;
+      pos.z = c.moundEmergeZ;
+      const sinkDist = c.burrowDepth * (c.moundEmergeDist || (0.8 + 0.4 * c.scale));
+      const n = c.moundEmergeNormal;
+      if (n) {
+        pos.x -= n.x * sinkDist;
+        pos.y -= n.y * sinkDist;
+        pos.z -= n.z * sinkDist;
+      } else {
+        // fallback: sample normal on the fly
+        const eps = 0.1;
+        const yl = heightFn(pos.x - eps, pos.z), yr = heightFn(pos.x + eps, pos.z);
+        const yf = heightFn(pos.x, pos.z - eps), yb = heightFn(pos.x, pos.z + eps);
+        const nx = yl - yr, ny = 2 * eps, nz = yf - yb;
+        const len = Math.sqrt(nx * nx + ny * ny + nz * nz);
+        pos.x -= (nx / len) * sinkDist;
+        pos.y -= (ny / len) * sinkDist;
+        pos.z -= (nz / len) * sinkDist;
+      }
     }
   }
 
