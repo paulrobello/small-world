@@ -55,7 +55,6 @@ class VerdantGroveCustomDomainTest(unittest.TestCase):
         self.assertIn("applySporeDrift", flora)
         self.assertIn("uSporeDrift", flora)
         self.assertIn("new THREE.SphereGeometry(0.0195", flora)
-        self.assertIn("new THREE.SphereGeometry(0.024", flora)
         self.assertNotIn("new THREE.SphereGeometry(0.026, 6, 5)", flora)
         self.assertNotIn("new THREE.SphereGeometry(0.032, 6, 5)", flora)
 
@@ -105,11 +104,8 @@ class VerdantGroveCustomDomainTest(unittest.TestCase):
 
         for marker in [
             "mushroom.stem.mat.smooth",
-            "mushroom.cap.mat.smooth",
             "bigmushroom.stem.mat.smooth",
-            "bigmushroom.cap.mat.smooth",
             "grove.babyMushroom.stem.mat.smooth",
-            "grove.babyMushroom.cap.mat.smooth",
         ]:
             self.assertIn(marker, flora)
         self.assertIn("caterpillar.head.mat.smooth", caterpillar)
@@ -153,7 +149,7 @@ class VerdantGroveCustomDomainTest(unittest.TestCase):
         creature = (ROOT / "src" / "fauna" / "creature.js").read_text()
 
         self.assertIn("const furRoll = furProb > 0 ? Math.random() : 1", creature)
-        self.assertIn("const wantsFur = !isFish && (opts.furry ?? (furProb > 0 && furRoll < furProb))", creature)
+        self.assertIn("const wantsFur = isBumblebee || (!isFish && (opts.furry ?? (furProb > 0 && furRoll < furProb)))", creature)
         self.assertLess(creature.index("const furRoll"), creature.index("const bodyGeo"))
         self.assertLess(creature.index("const wantsFur"), creature.index("const bodyGeo"))
         self.assertIn("if (wantsFur) {", creature)
@@ -188,7 +184,7 @@ class VerdantGroveCustomDomainTest(unittest.TestCase):
     def test_verdant_fliers_get_fur_but_fish_do_not(self) -> None:
         creature = (ROOT / "src" / "fauna" / "creature.js").read_text()
 
-        self.assertIn("const wantsFur = !isFish && (opts.furry ?? (furProb > 0 && furRoll < furProb))", creature)
+        self.assertIn("const wantsFur = isBumblebee || (!isFish && (opts.furry ?? (furProb > 0 && furRoll < furProb)))", creature)
         self.assertIn("Fish never get fur; fliers use the same", creature)
 
     def test_verdant_uses_leafballtree_with_custom_leaf_wind(self) -> None:

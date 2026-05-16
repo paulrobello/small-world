@@ -690,7 +690,7 @@ export function generateWorld(seed) {
       // Canopy center: y + 1.46 * s, canopy max radius: 0.88 * s ≈ 2.64 at 3×
       const canopyCenterY = y + 1.46 * s;
       const canopyR = 1.3 * s + 0.5; // full canopy extent + padding
-      const wisp = makeWillOWisp(p.x, canopyCenterY, p.z, canopyR + 2.0);
+      const wisp = makeWillOWisp(p.x, canopyCenterY, p.z, canopyR + 0.8);
       wisp.innerRadius = canopyR;
       wisp.avoidX = p.x;
       wisp.avoidY = canopyCenterY;

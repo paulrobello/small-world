@@ -121,7 +121,7 @@ export function stepWillOWisp(w, dt, t, heightFn) {
       w.dartNx = Math.cos(angle) * Math.cos(pitch);
       w.dartNy = Math.sin(pitch);
       w.dartNz = Math.sin(angle) * Math.cos(pitch);
-      w.dartDur = 0.8 + Math.random() * 0.6;
+      w.dartDur = 0.4 + Math.random() * 0.4;
       w.dartTime = 0;
       w.darting = true;
     }
@@ -165,7 +165,7 @@ export function stepWillOWisp(w, dt, t, heightFn) {
         const r = minR + Math.random() * (wanderRadius - minR);
         tx = homeX + Math.cos(angle) * r;
         tz = homeZ + Math.sin(angle) * r;
-        ty = homeY + 0.15 + Math.random() * wanderRadius * 2;
+        ty = homeY + 0.15 + Math.random() * wanderRadius * 0.5;
         if (w.avoidR > 0) {
           const ax = tx - w.avoidX;
           const ay = ty - w.avoidY;
