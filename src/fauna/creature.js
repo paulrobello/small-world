@@ -310,7 +310,9 @@ export function makeCreature(biome, opts = {}) {
   const wantsFur = isBumblebee || (!isFish && (opts.furry ?? (furProb > 0 && furRoll < furProb)));
 
   // body — rounder for fliers, more elongated for walkers
-  const bodyGeo = jitterGeo(new THREE.IcosahedronGeometry(0.42, 1), 0.06);
+  // Furless creatures get +1 detail so the smoother surface reads clearly.
+  const bodyDetail = wantsFur ? 1 : 2;
+  const bodyGeo = jitterGeo(new THREE.IcosahedronGeometry(0.42, bodyDetail), 0.06);
   const body = new THREE.Mesh(
     bodyGeo,
     new THREE.MeshStandardMaterial({

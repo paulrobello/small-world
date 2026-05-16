@@ -32,6 +32,8 @@ import {
   setFollowTarget,
   isStrolling,
   stepStroll,
+  isAnyFP,
+  isPhotoFP,
   isPhotoMode,
   isSelectingCreature,
   isManualPaused,
@@ -192,7 +194,7 @@ function animate() {
     if (state.userSettings.windEnabled !== false) {
       state.windUniforms.uTime.value = t;
     }
-    stepGrass(camera, isStrolling() ? camera.position : controls.target);
+    stepGrass(camera, isAnyFP() ? camera.position : controls.target);
     updateDayNight(t);
   }
 
@@ -283,8 +285,8 @@ function animate() {
     state.mountains.position.z = state.mountainBasePos.z - Math.cos(az) * 0.6;
   }
 
-  if (isStrolling()) {
-    stepStroll(dt);
+  if (isAnyFP()) {
+    stepStroll(isPhotoFP() ? rawDt : dt);
     if (state.currentBiome?.cloudlike && scene.fog) {
       // Cloud fog is tuned for orbit mode; from eye level it can flatten the
       // whole frame. Pull it back only while strolling so nearby puffs and
@@ -337,12 +339,22 @@ function animate() {
   // Update tilt-shift focus: project the orbit target to screen-Y for the
   // sharp band, and measure camera→target distance for the depth focus.
   if (postfx.isActive && postfx.isActive()) {
-    const focusPoint = controls.target;
-    _focusProj.copy(focusPoint).project(camera);
+    // In first-person modes, focus tilt-shift on a point 8 units ahead of camera
+    let focusZ;
+    if (isAnyFP()) {
+      focusZ = 8;
+      _focusProj.set(
+        camera.position.x - Math.sin(camera.rotation.y) * 8,
+        camera.position.y - Math.sin(camera.rotation.x) * 8,
+        camera.position.z - Math.cos(camera.rotation.y) * 8,
+      ).project(camera);
+    } else {
+      _focusProj.copy(controls.target).project(camera);
+      focusZ = camera.position.distanceTo(controls.target);
+    }
     // _focusProj.y is in NDC [-1, 1]; convert to UV [0, 1]. Three's UV origin
     // is at bottom-left, so (.y * 0.5 + 0.5) gives the right vertical axis.
     const focusY = _focusProj.y * 0.5 + 0.5;
-    const focusZ = camera.position.distanceTo(focusPoint);
     postfx.updateTiltShiftFocus(focusY, focusZ);
     postfx.render(scene, camera);
   } else {

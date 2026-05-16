@@ -156,9 +156,17 @@ export function makeCaterpillar(biome, opts = {}) {
   // uniform radius for head + every body segment — keeps them touching
   const segRadius = isSnail ? 0.24 : 0.28;
 
+  // Roll fur before geometry so detail level can depend on it.
+  // Snails never get fur; caterpillars roll against biome.furProbability.
+  const _furProb = biome.furProbability ?? 0;
+  const _furRoll = _furProb > 0 ? Math.random() : 1;
+  const wantsFur = !isSnail && (opts.furry ?? (_furProb > 0 && _furRoll < _furProb));
+  // Furless creatures get +1 detail so the smoother surface reads clearly.
+  const segDetail = wantsFur ? 1 : 2;
+
   // ── head ───────────────────────────────────────────────────────────────
   const headGeo = jitterGeo(
-    new THREE.IcosahedronGeometry(segRadius, 1),
+    new THREE.IcosahedronGeometry(segRadius, segDetail),
     0.05
   );
   const headMat = new THREE.MeshStandardMaterial({
@@ -218,7 +226,7 @@ export function makeCaterpillar(biome, opts = {}) {
   // ── body segments — all the same radius as the head ──────────────────
   for (let i = 0; i < segCount; i++) {
     const segGeo = jitterGeo(
-      new THREE.IcosahedronGeometry(segRadius, 1),
+      new THREE.IcosahedronGeometry(segRadius, segDetail),
       segRadius * 0.14
     );
     const mat = new THREE.MeshStandardMaterial({
@@ -243,7 +251,7 @@ export function makeCaterpillar(biome, opts = {}) {
   // last body segment, in a contrasting color so it reads as a shell.
   if (isSnail) {
     const shellCol = baseCol.clone().offsetHSL(0.08, -0.05, -0.18);
-    const shellGeo = jitterGeo(new THREE.IcosahedronGeometry(segRadius * 1.7, 1), 0.04);
+    const shellGeo = jitterGeo(new THREE.IcosahedronGeometry(segRadius * 1.7, segDetail), 0.04);
     shellGeo.scale(1.0, 0.95, 0.9);
     const shell = new THREE.Mesh(
       shellGeo,
@@ -311,11 +319,10 @@ export function makeCaterpillar(biome, opts = {}) {
   // Fur — applied per segment so head and body each get their own shell stack.
   // Per-caterpillar roll against biome.furProbability (0 if missing); can be
   // forced via opts.furry. Snails are excluded (a furry snail shell reads as
-  // a hairy rock, not as a snail).
+  // a hairy rock, not as a snail). wantsFur was already rolled above to set
+  // the segment detail level.
   let furShells = null;
-  const furProb = biome.furProbability ?? 0;
-  const furRoll = furProb > 0 ? Math.random() : 1;
-  if (!isSnail && (opts.furry ?? (furProb > 0 && furRoll < furProb))) {
+  if (wantsFur) {
     furShells = [];
     // Length scaled to segment radius (creatures use 0.072 on radius 0.42,
     // ~17% — match that ratio here).

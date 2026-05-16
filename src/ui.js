@@ -13,6 +13,8 @@ let selectingCreature = false;
 
 // First-person stroll state — populated when enabled, null otherwise.
 let _stroll = null;
+// Photo mode first-person state — populated when photo mode is active.
+let _photoFP = null;
 // Bound exit function for the Escape handler; set inside initUi().
 let _exitStroll = () => {};
 
@@ -126,6 +128,14 @@ export function isStrolling() {
   return _stroll !== null;
 }
 
+export function isPhotoFP() {
+  return _photoFP !== null;
+}
+
+export function isAnyFP() {
+  return _stroll !== null || _photoFP !== null;
+}
+
 function applyStrollVisualComfort(on) {
   // Big surrounding cloud halos look lovely from orbit but wash out the view
   // when the camera is inside them. Hide them only during first-person stroll;
@@ -163,9 +173,10 @@ function setManualPaused(on) {
 // yaw/pitch. Caller (main.js) calls this in lieu of controls.update() each
 // frame while stroll mode is active.
 export function stepStroll(dt) {
-  if (!_stroll) return;
+  if (!_stroll && !_photoFP) return;
+  const fp = _stroll || _photoFP;
   applyStrollVisualComfort(true);
-  const { camera, keys, savedTarget } = _stroll;
+  const { camera: cam, keys } = fp;
   // Move speed scales with the world — at higher worldScale the island is
   // bigger in world coords, so a fixed-units speed feels slower. Multiply
   // by ws so traversal time stays roughly constant across scales.
@@ -184,12 +195,12 @@ export function stepStroll(dt) {
     // World-space movement: forward at yaw y is (-sin y, 0, -cos y); right
     // is (cos y, 0, -sin y). With fz=-1 for W (forward) and fx=+1 for D
     // (right), Δp = fx·right + (-fz)·forward, which simplifies to:
-    const cy = Math.cos(_stroll.yaw);
-    const sy = Math.sin(_stroll.yaw);
+    const cy = Math.cos(fp.yaw);
+    const sy = Math.sin(fp.yaw);
     const dx = (fx * cy + fz * sy) * speed;
     const dz = (-fx * sy + fz * cy) * speed;
-    camera.position.x += dx;
-    camera.position.z += dz;
+    cam.position.x += dx;
+    cam.position.z += dz;
   }
   // Lock camera to terrain height + eye offset, but never sink below the
   // base plane so walking off an island just hovers at minimum height.
@@ -199,8 +210,8 @@ export function stepStroll(dt) {
   // mesh-local before sampling heightFn, then scale the result back up.
   const ws = state.userSettings.worldScale ?? 1;
   const wsi = 1 / ws;
-  const cx = camera.position.x * wsi;
-  const cz = camera.position.z * wsi;
+  const cx = cam.position.x * wsi;
+  const cz = cam.position.z * wsi;
   // Probe radius is 0.45 in world units — convert to mesh-local before sampling.
   const probe = 0.45 * wsi;
   // Sample center + four short cardinal offsets so a slope or small ridge
@@ -217,21 +228,22 @@ export function stepStroll(dt) {
   // Smooth Y for soft cresting on bumps — but clamp so the camera never
   // dips below groundY + 1.0×ws (high enough that the near plane stays
   // out of the terrain even when you're inches from a wall on a slope).
-  const next = camera.position.y + (targetY - camera.position.y) * Math.min(1, dt * 8);
-  camera.position.y = Math.max(next, groundY + 1.0 * ws);
+  const next = cam.position.y + (targetY - cam.position.y) * Math.min(1, dt * 8);
+  cam.position.y = Math.max(next, groundY + 1.0 * ws);
 
   // Apply yaw / pitch as a quaternion so the camera doesn't roll.
-  camera.rotation.order = "YXZ";
-  camera.rotation.y = _stroll.yaw;
-  camera.rotation.x = _stroll.pitch;
-  camera.rotation.z = 0;
+  cam.rotation.order = "YXZ";
+  cam.rotation.y = fp.yaw;
+  cam.rotation.x = fp.pitch;
+  cam.rotation.z = 0;
 
   // Keep OrbitControls' target far ahead so when we exit, the orbit
   // anchor lands somewhere sensible (avoids snapping the camera back).
-  savedTarget.set(
-    camera.position.x - Math.sin(_stroll.yaw) * 8,
-    camera.position.y - Math.sin(_stroll.pitch) * 8,
-    camera.position.z - Math.cos(_stroll.yaw) * 8
+  const st = fp.savedTarget || fp.controls.target;
+  st.set(
+    cam.position.x - Math.sin(fp.yaw) * 8,
+    cam.position.y - Math.sin(fp.pitch) * 8,
+    cam.position.z - Math.cos(fp.yaw) * 8
   );
 }
 
@@ -1128,8 +1140,21 @@ export function initUi({ camera, canvas, controls, renderer }) {
   }, 250);
   photoSeedValueEl.textContent = formatSeed(state.currentSeed);
 
-  // Photo mode — toggled with P. Hides every overlay, freezes auto-rotate,
-  // and shows the seed at the bottom of the canvas for clean screenshots.
+  // Photo mode — toggled with P. First-person camera with WASD + mouse-look,
+  // HUD reticle overlay, and clean PNG capture (DOM overlays excluded).
+  const photoHudEl = document.getElementById("photo-hud");
+  const photoZoomEl = document.getElementById("photo-zoom");
+  _photoFP = null;
+  const PHOTO_BASE_FOV = 50;
+  const PHOTO_FOV_MIN = PHOTO_BASE_FOV / 3.0; // ×3.0 zoom
+  const PHOTO_FOV_MAX = PHOTO_BASE_FOV / 0.5; // ×0.5 zoom
+
+  function _updatePhotoZoom() {
+    if (!_photoFP) return;
+    const zoom = PHOTO_BASE_FOV / camera.fov;
+    photoZoomEl.textContent = `×${Math.min(3.0, Math.max(0.5, zoom)).toFixed(1)}`;
+  }
+
   let _photoSavedAutoRotate = controls.autoRotate;
   function capturePhoto() {
     // canvas already holds the most recent render (preserveDrawingBuffer:true)
@@ -1162,15 +1187,150 @@ export function initUi({ camera, canvas, controls, renderer }) {
   }
   function setPhotoMode(on) {
     if (on) {
+      if (_stroll) exitStroll();
       if (_locatorOpen) setLocatorOpen(false);
+      setFollowTarget(null);
+      setSelectingCreature(false);
+      setSettingsOpen(false);
+
+      // Save orbit state for restore
       _photoSavedAutoRotate = controls.autoRotate;
       controls.autoRotate = false;
+      controls.enabled = false;
+
+      // Compute initial yaw from camera → orbit target
+      const lookX = controls.target.x;
+      const lookZ = controls.target.z;
+      const dx = lookX - camera.position.x;
+      const dz = lookZ - camera.position.z;
+      const yaw = Math.atan2(-dx, -dz);
+      const pitch = 0; // start horizontal
+
+      // Snap to island if over void (same as stroll)
+      const onIsland = (x, z) => {
+        for (const c of state.currentLayout.centers) {
+          if (islandFalloff(c, x, z) > 0.15) return true;
+        }
+        return false;
+      };
+      if (!onIsland(camera.position.x, camera.position.z)) {
+        const c = nearestCenter(camera.position.x, camera.position.z);
+        let tx = camera.position.x, tz = camera.position.z;
+        const ddx = c.cx - tx, ddz = c.cz - tz;
+        const dist = Math.hypot(ddx, ddz);
+        if (dist > 0.01) {
+          const step = Math.max(0.5, c.radius * 0.05);
+          const ux = ddx / dist, uz = ddz / dist;
+          for (let i = 0; i < 200 && !onIsland(tx, tz); i++) {
+            tx += ux * step; tz += uz * step;
+          }
+        } else { tx = c.cx; tz = c.cz; }
+        camera.position.x = tx;
+        camera.position.z = tz;
+      }
+
+      // Drop to eye height
+      const ws = state.userSettings.worldScale ?? 1;
+      const groundY = state.heightFn(camera.position.x / ws, camera.position.z / ws) * ws;
+      camera.position.y = groundY + 1.9 * ws;
+
+      _photoFP = {
+        camera,
+        controls,
+        savedCam: {
+          pos: camera.position.clone(),
+          target: controls.target.clone(),
+          fov: camera.fov,
+          autoRotate: _photoSavedAutoRotate,
+        },
+        yaw,
+        pitch,
+        keys: { w: false, a: false, s: false, d: false, shift: false },
+        handlers: {},
+        _hadLock: false,
+      };
+      camera.fov = PHOTO_BASE_FOV;
+      camera.updateProjectionMatrix();
+
       document.body.classList.add("photo-mode");
       photoSeedEl.setAttribute("aria-hidden", "false");
+      photoHudEl.setAttribute("aria-hidden", "false");
+      _updatePhotoZoom();
+      canvas.requestPointerLock?.();
+
+      const onMove = (e) => {
+        if (!_photoFP) return;
+        const sens = 0.0022;
+        _photoFP.yaw -= e.movementX * sens;
+        _photoFP.pitch -= e.movementY * sens;
+        const lim = Math.PI / 2 - 0.05;
+        if (_photoFP.pitch > lim) _photoFP.pitch = lim;
+        if (_photoFP.pitch < -lim) _photoFP.pitch = -lim;
+      };
+      const onWheel = (e) => {
+        if (!_photoFP) return;
+        e.preventDefault();
+        const delta = e.deltaY > 0 ? 2 : -2;
+        camera.fov = Math.max(PHOTO_FOV_MIN, Math.min(PHOTO_FOV_MAX, camera.fov + delta));
+        camera.updateProjectionMatrix();
+        _updatePhotoZoom();
+      };
+      const onKey = (down) => (e) => {
+        if (!_photoFP) return;
+        const k = e.key.toLowerCase();
+        if (k === "w") _photoFP.keys.w = down;
+        else if (k === "a") _photoFP.keys.a = down;
+        else if (k === "s") _photoFP.keys.s = down;
+        else if (k === "d") _photoFP.keys.d = down;
+        else if (k === "shift") _photoFP.keys.shift = down;
+        else return;
+        e.preventDefault();
+      };
+      const onLockChange = () => {
+        if (!_photoFP) return;
+        if (document.pointerLockElement === canvas) {
+          _photoFP._hadLock = true;
+        } else if (_photoFP._hadLock) {
+          setPhotoMode(false);
+        }
+      };
+      const onClick = (e) => {
+        if (!_photoFP) return;
+        if (e.button === 0) capturePhoto();
+      };
+      const onKeyDown = onKey(true);
+      const onKeyUp = onKey(false);
+      document.addEventListener("mousemove", onMove);
+      canvas.addEventListener("wheel", onWheel, { passive: false });
+      canvas.addEventListener("mousedown", onClick);
+      window.addEventListener("keydown", onKeyDown);
+      window.addEventListener("keyup", onKeyUp);
+      document.addEventListener("pointerlockchange", onLockChange);
+      _photoFP.handlers = { onMove, onWheel, onClick, onKeyDown, onKeyUp, onLockChange };
+      applyStrollVisualComfort(true);
     } else {
-      controls.autoRotate = _photoSavedAutoRotate;
+      if (!_photoFP) { syncPhotoModeButton(); return; }
+      const { handlers, savedCam } = _photoFP;
+      document.removeEventListener("mousemove", handlers.onMove);
+      canvas.removeEventListener("wheel", handlers.onWheel);
+      canvas.removeEventListener("mousedown", handlers.onClick);
+      window.removeEventListener("keydown", handlers.onKeyDown);
+      window.removeEventListener("keyup", handlers.onKeyUp);
+      document.removeEventListener("pointerlockchange", handlers.onLockChange);
+      if (document.pointerLockElement === canvas) document.exitPointerLock?.();
+
+      camera.position.copy(savedCam.pos);
+      controls.target.copy(savedCam.target);
+      camera.fov = savedCam.fov;
+      camera.updateProjectionMatrix();
+      controls.autoRotate = savedCam.autoRotate && state.userSettings.autoRotate;
+      controls.enabled = true;
+      _photoFP = null;
+
       document.body.classList.remove("photo-mode");
       photoSeedEl.setAttribute("aria-hidden", "true");
+      photoHudEl.setAttribute("aria-hidden", "true");
+      applyStrollVisualComfort(false);
     }
     syncPhotoModeButton();
   }
@@ -1525,7 +1685,11 @@ export function initUi({ camera, canvas, controls, renderer }) {
       else if (_settingsPanel.classList.contains("open")) setSettingsOpen(false);
     } else if (e.key === "p" || e.key === "P") {
       setPhotoMode(!document.body.classList.contains("photo-mode"));
-    } else if ((e.key === "s" || e.key === "S") && document.body.classList.contains("photo-mode")) {
+    } else if ((e.key === "s" || e.key === "S") && document.body.classList.contains("photo-mode") && !_photoFP) {
+      e.preventDefault();
+      capturePhoto();
+    } else if (e.code === "Space" && document.body.classList.contains("photo-mode")) {
+      // Space captures in photo mode (WASD uses s for movement)
       e.preventDefault();
       capturePhoto();
     } else if (e.key === "f" || e.key === "F") {

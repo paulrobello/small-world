@@ -225,8 +225,8 @@ export function stepWillOWisp(w, dt, t, heightFn) {
     }
   }
 
-  // Gentle bob
-  pos.y += Math.sin(t * 2.0 + seed) * 0.003;
+  // Gentle bob (skip when paused — dt-independent additive drift)
+  if (dt > 0) pos.y += Math.sin(t * 2.0 + seed) * 0.003;
 
   // Stay above terrain
   const groundY = heightFn(pos.x, pos.z);
@@ -240,9 +240,9 @@ export function stepWillOWisp(w, dt, t, heightFn) {
   const mvDx = pos.x - w.prevX;
   const mvDz = pos.z - w.prevZ;
   const moved = Math.sqrt(mvDx * mvDx + mvDz * mvDz);
-  w.trailTimer += dt;
+  if (dt > 0) w.trailTimer += dt;
 
-  if (moved > 0.004 && w.trailTimer > 0.055) {
+  if (dt > 0 && moved > 0.004 && w.trailTimer > 0.055) {
     w.trailTimer = 0;
     w.prevX = pos.x;
     w.prevY = pos.y;
@@ -262,16 +262,18 @@ export function stepWillOWisp(w, dt, t, heightFn) {
     w.trailIdx++;
   }
 
-  // Fade & shrink old sparkles
-  for (const sp of sparkles) {
-    if (!sp.visible) continue;
-    const age = t - (sp.userData.born ?? 0);
-    if (age > TRAIL_LIFE) {
-      sp.visible = false;
-      continue;
+  // Fade & shrink old sparkles (skip when paused — uses frozen t)
+  if (dt > 0) {
+    for (const sp of sparkles) {
+      if (!sp.visible) continue;
+      const age = t - (sp.userData.born ?? 0);
+      if (age > TRAIL_LIFE) {
+        sp.visible = false;
+        continue;
+      }
+      const frac = age / TRAIL_LIFE;
+      sp.material.opacity = 0.7 * (1.0 - frac);
+      sp.scale.setScalar(1.0 - frac * 0.6);
     }
-    const frac = age / TRAIL_LIFE;
-    sp.material.opacity = 0.7 * (1.0 - frac);
-    sp.scale.setScalar(1.0 - frac * 0.6);
   }
 }

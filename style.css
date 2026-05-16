@@ -1049,9 +1049,56 @@ body.photo-mode .locator-panel {
 }
 
 /* ─── Photo mode ─────────────────────────────────────────────────────── */
+.photo-hud {
+  position: fixed;
+  inset: 0;
+  z-index: 11;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.4s ease;
+}
+body.photo-mode .photo-hud { opacity: 1; }
+body:not(.photo-mode) .photo-hud { display: none; }
+
+.photo-reticle {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.reticle-center {
+  stroke: var(--ink-dim);
+  stroke-width: 1;
+  fill: none;
+}
+.reticle-corner {
+  stroke: var(--ink);
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  fill: none;
+}
+.reticle-zoom {
+  fill: var(--ink-dim);
+  font-family: "DM Mono", monospace;
+  font-size: 10px;
+  letter-spacing: 0.08em;
+}
+.reticle-tick {
+  stroke: var(--ink-dim);
+  stroke-width: 1;
+  stroke-linecap: round;
+}
+.reticle-frame {
+  stroke: var(--ink-faint);
+  stroke-width: 0.5;
+  fill: none;
+}
+
 .photo-seed {
   position: fixed;
-  bottom: max(18px, env(safe-area-inset-bottom));
+  bottom: max(4px, env(safe-area-inset-bottom));
   left: 50%;
   transform: translateX(-50%);
   z-index: 12;
