@@ -1215,8 +1215,15 @@ export function initUi({ camera, canvas, controls, renderer, scene }) {
     // Position photo in front of camera
     const dir = new THREE.Vector3();
     camera.getWorldDirection(dir);
-    group.position.copy(camera.position).addScaledVector(dir, 8);
+    // Scale distance and size by FOV so the photo appears at a consistent
+    // screen size regardless of zoom level. 50° is the reference FOV.
+    const fovScale = camera.fov / 50;
+    const dist = 6 * fovScale;
+    group.position.copy(camera.position).addScaledVector(dir, dist);
     group.quaternion.copy(camera.quaternion);
+    // Scale the group so its screen footprint stays roughly constant
+    const screenScale = fovScale;
+    group.scale.set(screenScale, screenScale, screenScale);
     // Don't add to scene during main render — see main.js post-fx overlay
 
     // Dim overlay
@@ -1235,7 +1242,7 @@ export function initUi({ camera, canvas, controls, renderer, scene }) {
     `;
     document.body.appendChild(actions);
 
-    _photoReview = { group, mesh, borderMesh, tex, mat, borderMat, dim, actions, biomeTag, seedTag, dataUrl };
+    _photoReview = { group, mesh, borderMesh, tex, mat, borderMat, dim, actions, biomeTag, seedTag, dataUrl, screenScale };
 
     // Animate photo in
     const start = performance.now();
@@ -1244,7 +1251,7 @@ export function initUi({ camera, canvas, controls, renderer, scene }) {
       const t = Math.min(1, (performance.now() - start) / 300);
       mat.opacity = t;
       borderMat.opacity = t;
-      const s = 0.85 + 0.15 * t;
+      const s = (0.85 + 0.15 * t) * screenScale;
       group.scale.set(s, s, s);
       if (t < 1) requestAnimationFrame(animIn);
     };
@@ -1268,7 +1275,8 @@ export function initUi({ camera, canvas, controls, renderer, scene }) {
     const { group, mesh, borderMesh, tex, mat, borderMat, dim, actions } = _photoReview;
     mat.opacity = 0;
     borderMat.opacity = 0;
-    group.scale.set(0.9, 0.9, 0.9);
+    const ss = _photoReview.screenScale;
+    group.scale.set(0.9 * ss, 0.9 * ss, 0.9 * ss);
     setTimeout(() => {
       // Group is not in the scene (rendered separately after postfx)
       mesh.geometry.dispose();
