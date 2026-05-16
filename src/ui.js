@@ -177,6 +177,7 @@ export function stepStroll(dt) {
   const fp = _stroll || _photoFP;
   applyStrollVisualComfort(true);
   const { camera: cam, keys } = fp;
+  const fly = fp.fly === true;
   // Move speed scales with the world — at higher worldScale the island is
   // bigger in world coords, so a fixed-units speed feels slower. Multiply
   // by ws so traversal time stays roughly constant across scales.
@@ -188,7 +189,8 @@ export function stepStroll(dt) {
   if (keys.s) fz += 1;
   if (keys.a) fx -= 1;
   if (keys.d) fx += 1;
-  if (fx !== 0 || fz !== 0) {
+  const moving = fx !== 0 || fz !== 0;
+  if (moving) {
     const len = Math.hypot(fx, fz);
     fx /= len;
     fz /= len;
@@ -201,35 +203,31 @@ export function stepStroll(dt) {
     const dz = (-fx * sy + fz * cy) * speed;
     cam.position.x += dx;
     cam.position.z += dz;
+    // Fly mode: also move along the pitch axis so W follows the look direction
+    if (fly) cam.position.y -= fz * Math.sin(fp.pitch) * speed;
   }
-  // Lock camera to terrain height + eye offset, but never sink below the
-  // base plane so walking off an island just hovers at minimum height.
-  // state.world is uniformly scaled by userSettings.worldScale, so terrain
-  // mesh vertices live at (localX*ws, heightFn(localX,localZ)*ws, localZ*ws)
-  // in world coords. The camera moves in world coords, so convert XZ to
-  // mesh-local before sampling heightFn, then scale the result back up.
-  const ws = state.userSettings.worldScale ?? 1;
-  const wsi = 1 / ws;
-  const cx = cam.position.x * wsi;
-  const cz = cam.position.z * wsi;
-  // Probe radius is 0.45 in world units — convert to mesh-local before sampling.
-  const probe = 0.45 * wsi;
-  // Sample center + four short cardinal offsets so a slope or small ridge
-  // close to the player lifts the camera over it instead of letting the
-  // terrain mesh slice through the near plane.
-  const hC = state.heightFn(cx, cz);
-  const hN = state.heightFn(cx, cz + probe);
-  const hS = state.heightFn(cx, cz - probe);
-  const hE = state.heightFn(cx + probe, cz);
-  const hW = state.heightFn(cx - probe, cz);
-  const groundY = Math.max(hC, hN, hS, hE, hW) * ws;
-  // Eye height: clears grass (~0.7 world units at default scale) and small flora.
-  const targetY = groundY + 1.9 * ws;
-  // Smooth Y for soft cresting on bumps — but clamp so the camera never
-  // dips below groundY + 1.0×ws (high enough that the near plane stays
-  // out of the terrain even when you're inches from a wall on a slope).
-  const next = cam.position.y + (targetY - cam.position.y) * Math.min(1, dt * 8);
-  cam.position.y = Math.max(next, groundY + 1.0 * ws);
+
+  if (fly) {
+    // Fly mode: E rises, Q descends
+    if (keys.e) cam.position.y += speed;
+    if (keys.q) cam.position.y -= speed;
+  } else {
+    // Ground mode: lock camera to terrain height + eye offset
+    const ws = state.userSettings.worldScale ?? 1;
+    const wsi = 1 / ws;
+    const cx = cam.position.x * wsi;
+    const cz = cam.position.z * wsi;
+    const probe = 0.45 * wsi;
+    const hC = state.heightFn(cx, cz);
+    const hN = state.heightFn(cx, cz + probe);
+    const hS = state.heightFn(cx, cz - probe);
+    const hE = state.heightFn(cx + probe, cz);
+    const hW = state.heightFn(cx - probe, cz);
+    const groundY = Math.max(hC, hN, hS, hE, hW) * ws;
+    const targetY = groundY + 1.9 * ws;
+    const next = cam.position.y + (targetY - cam.position.y) * Math.min(1, dt * 8);
+    cam.position.y = Math.max(next, groundY + 1.0 * ws);
+  }
 
   // Apply yaw / pitch as a quaternion so the camera doesn't roll.
   cam.rotation.order = "YXZ";
@@ -1193,46 +1191,20 @@ export function initUi({ camera, canvas, controls, renderer }) {
       setSelectingCreature(false);
       setSettingsOpen(false);
 
+      // Auto-pause the sim for still captures; Space toggles for action shots
+      if (!_manualPause) setManualPaused(true);
+
       // Save orbit state for restore
       _photoSavedAutoRotate = controls.autoRotate;
       controls.autoRotate = false;
       controls.enabled = false;
 
-      // Compute initial yaw from camera → orbit target
-      const lookX = controls.target.x;
-      const lookZ = controls.target.z;
-      const dx = lookX - camera.position.x;
-      const dz = lookZ - camera.position.z;
-      const yaw = Math.atan2(-dx, -dz);
-      const pitch = 0; // start horizontal
-
-      // Snap to island if over void (same as stroll)
-      const onIsland = (x, z) => {
-        for (const c of state.currentLayout.centers) {
-          if (islandFalloff(c, x, z) > 0.15) return true;
-        }
-        return false;
-      };
-      if (!onIsland(camera.position.x, camera.position.z)) {
-        const c = nearestCenter(camera.position.x, camera.position.z);
-        let tx = camera.position.x, tz = camera.position.z;
-        const ddx = c.cx - tx, ddz = c.cz - tz;
-        const dist = Math.hypot(ddx, ddz);
-        if (dist > 0.01) {
-          const step = Math.max(0.5, c.radius * 0.05);
-          const ux = ddx / dist, uz = ddz / dist;
-          for (let i = 0; i < 200 && !onIsland(tx, tz); i++) {
-            tx += ux * step; tz += uz * step;
-          }
-        } else { tx = c.cx; tz = c.cz; }
-        camera.position.x = tx;
-        camera.position.z = tz;
-      }
-
-      // Drop to eye height
-      const ws = state.userSettings.worldScale ?? 1;
-      const groundY = state.heightFn(camera.position.x / ws, camera.position.z / ws) * ws;
-      camera.position.y = groundY + 1.9 * ws;
+      // Compute initial yaw and pitch from current camera orientation
+      camera.updateMatrixWorld();
+      const lookDir = new THREE.Vector3();
+      camera.getWorldDirection(lookDir);
+      const yaw = Math.atan2(-lookDir.x, -lookDir.z);
+      const pitch = Math.asin(Math.max(-1, Math.min(1, -lookDir.y)));
 
       _photoFP = {
         camera,
@@ -1245,7 +1217,8 @@ export function initUi({ camera, canvas, controls, renderer }) {
         },
         yaw,
         pitch,
-        keys: { w: false, a: false, s: false, d: false, shift: false },
+        fly: true, // free-flight — no terrain lock
+        keys: { w: false, a: false, s: false, d: false, shift: false, space: false, ctrl: false, e: false, q: false },
         handlers: {},
         _hadLock: false,
       };
@@ -1283,6 +1256,8 @@ export function initUi({ camera, canvas, controls, renderer }) {
         else if (k === "s") _photoFP.keys.s = down;
         else if (k === "d") _photoFP.keys.d = down;
         else if (k === "shift") _photoFP.keys.shift = down;
+        else if (k === "e") _photoFP.keys.e = down;
+        else if (k === "q") _photoFP.keys.q = down;
         else return;
         e.preventDefault();
       };
@@ -1326,6 +1301,9 @@ export function initUi({ camera, canvas, controls, renderer }) {
       controls.autoRotate = savedCam.autoRotate && state.userSettings.autoRotate;
       controls.enabled = true;
       _photoFP = null;
+
+      // Unpause the sim when exiting photo mode
+      setManualPaused(false);
 
       document.body.classList.remove("photo-mode");
       photoSeedEl.setAttribute("aria-hidden", "true");
@@ -1688,10 +1666,6 @@ export function initUi({ camera, canvas, controls, renderer }) {
     } else if ((e.key === "s" || e.key === "S") && document.body.classList.contains("photo-mode") && !_photoFP) {
       e.preventDefault();
       capturePhoto();
-    } else if (e.code === "Space" && document.body.classList.contains("photo-mode")) {
-      // Space captures in photo mode (WASD uses s for movement)
-      e.preventDefault();
-      capturePhoto();
     } else if (e.key === "f" || e.key === "F") {
       e.preventDefault();
       if (_stroll) exitStroll();
@@ -1720,10 +1694,10 @@ export function initUi({ camera, canvas, controls, renderer }) {
       e.preventDefault();
       document.getElementById("regen").click();
     } else if (e.key === " " || e.code === "Space") {
-      // Spacebar toggles a manual sim pause. Photo / stroll / selection
-      // already freeze the sim on their own, so skip the toggle in those
-      // modes to avoid surprising overlaps with their exit semantics.
-      if (_stroll || document.body.classList.contains("photo-mode") || selectingCreature) return;
+      // Spacebar toggles a manual sim pause. Stroll / selection freeze
+      // the sim on their own so skip in those modes. In photo mode the sim
+      // is frozen by default; Space unfreezes it for action shots.
+      if (_stroll || selectingCreature) return;
       e.preventDefault();
       setManualPaused(!_manualPause);
     }

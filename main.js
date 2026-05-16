@@ -162,7 +162,7 @@ function animate() {
   // funcs use sin(t*speed) for idle bobbing, which would still drift if t
   // kept advancing). Camera input and rendering keep running on the frozen
   // state so the user can still rotate and aim.
-  const paused = isPhotoMode() || isSelectingCreature() || isManualPaused();
+  const paused = isSelectingCreature() || isManualPaused();
   if (!paused) state.lastSimT = rawT;
   const dt = paused ? 0 : rawDt;
   const t = paused ? (state.lastSimT ?? rawT) : rawT;
