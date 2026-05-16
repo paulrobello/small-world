@@ -867,40 +867,349 @@ export function placeInstanced(geo, mat, count, heightFn, opts = {}) {
 
 export { makeGrassField } from "./grass.js";
 
+// ─── wildflower geometries (pooled, shared across all calls) ───
+
+// Thin tapered stem.
+const _wfStemGeo = /* @__PURE__ */ (() => {
+  const geo = new THREE.CylinderGeometry(0.006, 0.012, 0.44, 5, 3).translate(0, 0.22, 0);
+  // slight organic curve
+  const pos = geo.attributes.position;
+  for (let i = 0; i < pos.count; i++) {
+    const y = pos.getY(i);
+    const t = y / 0.44;
+    pos.setX(i, pos.getX(i) + Math.sin(t * Math.PI * 0.8) * 0.008);
+  }
+  pos.needsUpdate = true;
+  geo.computeVertexNormals();
+  return geo;
+})();
+
+// Small pistil (flower center) — flattened yellow sphere.
+const _wfPistilGeo = /* @__PURE__ */ (() => {
+  const geo = new THREE.SphereGeometry(0.018, 6, 5);
+  geo.scale(1, 0.55, 1);
+  return geo;
+})();
+const _wfPistilMat = /* @__PURE__ */ new THREE.MeshStandardMaterial({
+  color: "#ffe135",
+  flatShading: true,
+  roughness: 0.5,
+});
+
+// Small petal — a shorter, wider version of the leafball teardrop.
+const _wfPetalGeo = /* @__PURE__ */ (() => {
+  const lengthSegs = 4;
+  const widthSegs = 3;
+  const positions = [];
+  const uvs = [];
+  const indices = [];
+  for (let iy = 0; iy <= lengthSegs; iy++) {
+    const v = iy / lengthSegs;
+    const halfWidth = Math.max(0.004, 0.045 * Math.sin(Math.PI * v) ** 0.6);
+    for (let ix = 0; ix <= widthSegs; ix++) {
+      const u = ix / widthSegs;
+      const side = u * 2 - 1;
+      const centerLift = (1 - Math.abs(side)) * 0.006 * (1 - v * 0.4);
+      const tipCurl = 0.025 * v ** 1.3;
+      positions.push(side * halfWidth, v * 0.08, tipCurl + centerLift);
+      uvs.push(u, v);
+    }
+  }
+  for (let iy = 0; iy < lengthSegs; iy++) {
+    for (let ix = 0; ix < widthSegs; ix++) {
+      const a = iy * (widthSegs + 1) + ix;
+      const b = a + 1;
+      const c = a + widthSegs + 1;
+      const d = c + 1;
+      indices.push(a, c, b, b, c, d);
+    }
+  }
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
+  geo.setAttribute("uv", new THREE.Float32BufferAttribute(uvs, 2));
+  geo.setIndex(indices);
+  geo.computeVertexNormals();
+  return geo;
+})();
+
+// Small leaf — reused from leafballtree shape but miniaturised.
+const _wfLeafGeo = /* @__PURE__ */ (() => {
+  const lengthSegs = 5;
+  const widthSegs = 3;
+  const positions = [];
+  const uvs = [];
+  const indices = [];
+  for (let iy = 0; iy <= lengthSegs; iy++) {
+    const v = iy / lengthSegs;
+    const halfWidth = Math.max(0.003, 0.045 * Math.sin(Math.PI * v) ** 0.72 * (1 - v * 0.16));
+    for (let ix = 0; ix <= widthSegs; ix++) {
+      const u = ix / widthSegs;
+      const side = u * 2 - 1;
+      const centerLift = (1 - Math.abs(side)) * 0.005 * (1 - v * 0.35);
+      const tipCurl = 0.030 * v ** 1.45;
+      const edgeCurl = -Math.abs(side) * 0.005 * Math.sin(Math.PI * v);
+      positions.push(side * halfWidth, -v * 0.15, tipCurl + centerLift + edgeCurl);
+      uvs.push(u, v);
+    }
+  }
+  for (let iy = 0; iy < lengthSegs; iy++) {
+    for (let ix = 0; ix < widthSegs; ix++) {
+      const a = iy * (widthSegs + 1) + ix;
+      const b = a + 1;
+      const c = a + widthSegs + 1;
+      const d = c + 1;
+      indices.push(a, c, b, b, c, d);
+    }
+  }
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
+  geo.setAttribute("uv", new THREE.Float32BufferAttribute(uvs, 2));
+  geo.setIndex(indices);
+  geo.computeVertexNormals();
+  return geo;
+})();
+
+// Pooled materials (green stem/leaf, per-color petal).
+const _wfStemMat = /* @__PURE__ */ applyWindSway(
+  new THREE.MeshStandardMaterial({
+    color: "#2d5a1e",
+    flatShading: true,
+    roughness: 0.85,
+  }),
+  1.0
+);
+const _wfLeafMat = /* @__PURE__ */ applyWindSway(
+  new THREE.MeshStandardMaterial({
+    color: "#3a7228",
+    side: THREE.DoubleSide,
+    flatShading: true,
+    roughness: 0.80,
+  }),
+  1.0
+);
+
+function _wfPetalMat(color, glow) {
+  const baseCol = new THREE.Color(color);
+  return applyWindSway(
+    new THREE.MeshStandardMaterial({
+      color: baseCol,
+      emissive: glow ? baseCol.clone() : 0x000000,
+      emissiveIntensity: glow ? 1.1 : 0,
+      side: THREE.DoubleSide,
+      flatShading: true,
+      roughness: 0.4,
+    }),
+    1.2
+  );
+}
+
+// Helper: create an InstancedMesh from pre-computed matrices (same as flora.js).
+function _makeInstancedBatch(geometry, material, matrices) {
+  if (!matrices.length) return null;
+  const mesh = new THREE.InstancedMesh(geometry, material, matrices.length);
+  for (let i = 0; i < matrices.length; i++) mesh.setMatrixAt(i, matrices[i]);
+  mesh.instanceMatrix.setUsage(THREE.StaticDrawUsage);
+  mesh.instanceMatrix.needsUpdate = true;
+  mesh.castShadow = true;
+  mesh.computeBoundingSphere();
+  return mesh;
+}
+
+// Pick a ground position using the same rejection sampling as placeInstanced,
+// but return just { x, y, z } instead of building an InstancedMesh.
+function _pickWildflowerPos(heightFn, opts) {
+  const {
+    maxRadiusFrac = 0.88,
+    minHeight = -0.15,
+    maxHeight = Infinity,
+    avoidObstacleKindSet = null,
+    avoidRadius = 0,
+    visualRadius = false,
+    excludedCircles = [],
+  } = opts;
+  let attempts = 0;
+  while (attempts < 20) {
+    attempts++;
+    const p = pickGroundPoint(maxRadiusFrac, { visualRadius });
+    const x = p.x, z = p.z;
+    if (avoidObstacleKindSet) {
+      let blocked = false;
+      for (const obstacle of state.obstacles) {
+        if (!avoidObstacleKindSet.has(obstacle.kind)) continue;
+        const minD = obstacle.r + avoidRadius;
+        const dx = x - obstacle.x, dz = z - obstacle.z;
+        if (dx * dx + dz * dz < minD * minD) { blocked = true; break; }
+      }
+      if (blocked) continue;
+    }
+    let excluded = false;
+    for (const c of excludedCircles) {
+      const dx = x - c.x, dz = z - c.z;
+      if (dx * dx + dz * dz < c.r * c.r) { excluded = true; break; }
+    }
+    if (excluded) continue;
+    const y = heightFn(x, z);
+    if (y < minHeight || y > maxHeight) continue;
+    return { x, y, z };
+  }
+  return null;
+}
+
 export function makeWildflowerField(biome, heightFn, excludedCircles = []) {
   const palette = WILDFLOWER_PALETTES[biome.id] ?? ["#ffffff"];
   const total = _coverScale(FLOWER_DENSITY[biome.id] ?? 100, 1.6);
-  const perColor = Math.max(8, Math.floor(total / palette.length));
+  const perColor = Math.max(3, Math.floor(total / palette.length / 3));
+  const glow = !!biome.glowFlowers;
   const meshes = [];
 
-  for (const color of palette) {
-    const g = new THREE.IcosahedronGeometry(0.05, 0);
-    g.scale(1, 0.7, 1);
-    const baseCol = new THREE.Color(color);
-    const m = applyWindSway(
-      new THREE.MeshStandardMaterial({
-        color: baseCol,
-        emissive: biome.glowFlowers ? baseCol.clone() : 0x000000,
-        emissiveIntensity: biome.glowFlowers ? 1.1 : 0,
-        flatShading: true,
-        roughness: 0.4,
-      }),
-      1.2
-    );
-    const inst = placeInstanced(g, m, perColor, heightFn, {
-      yOffset: 0.08,
-      minScale: 0.6,
-      maxScale: 1.5,
-      tilt: 0,
-      avoidObstacleKinds: ["lavafissure"],
-      avoidRadius: 0.12,
-      visualRadius: true,
-      excludedCircles,
-    });
-    if (biome.glowFlowers) inst.layers.enable(BLOOM_LAYER);
-    inst.userData.inspect = { category: "flora", variant: "wildflower" };
-    meshes.push(inst);
+  const placeOpts = {
+    maxRadiusFrac: 0.88,
+    minHeight: -0.15,
+    avoidObstacleKindSet: new Set(["lavafissure"]),
+    avoidRadius: 0.12,
+    visualRadius: true,
+    excludedCircles,
+  };
+
+  // Pre-compute petal materials per palette colour.
+  const petalMats = palette.map(c => _wfPetalMat(c, glow));
+
+  // We build all matrices first, then batch into InstancedMeshes per type.
+  // For each colour: stem matrices, leaf matrices, petal matrices.
+  const stemMatrices = [];
+  const leafMatrices = [];
+  const pistilMatrices = [];
+  const petalMatrices = palette.map(() => []);
+  const allPositions = []; // flowerSpots
+
+  const _m = new THREE.Matrix4();
+  const _v = new THREE.Vector3();
+  const _q = new THREE.Quaternion();
+  const _s = new THREE.Vector3();
+  const _e = new THREE.Euler();
+  const _q2 = new THREE.Quaternion();
+  const _axis = new THREE.Vector3();
+  const _q3 = new THREE.Quaternion();
+
+  for (let ci = 0; ci < palette.length; ci++) {
+    for (let fi = 0; fi < perColor; fi++) {
+      const pos = _pickWildflowerPos(heightFn, placeOpts);
+      if (!pos) continue;
+
+      const { x, y, z } = pos;
+      // Cluster of 2-4 flowers around this spot.
+      const clusterSize = 2 + Math.floor(Math.random() * 3);
+      for (let cf = 0; cf < clusterSize; cf++) {
+        // Small offset within the cluster.
+        const co = (cf / clusterSize) * Math.PI * 2 + Math.random() * 0.5;
+        const cr = 0.02 + Math.random() * 0.03;
+        const fx = x + Math.sin(co) * cr;
+        const fz = z + Math.cos(co) * cr;
+        const flowerScale = (0.9 + Math.random() * 1.0) * 1.25; // 25% larger
+        const heightMul = 1 + Math.random() * 0.5 / 0.44; // up to +0.5 extra stem height
+        const stemH = 0.44 * heightMul; // effective stem height
+        const yRot = Math.atan2(fx, fz) + (Math.random() - 0.5) * 0.5;
+        const lean = 0.5 + Math.random() * 0.5;
+
+        // stem — yaw to lean direction, then pitch in local space.
+        _v.set(fx, y + 0.08, fz);
+        _e.set(0, yRot, 0);
+        _q.setFromEuler(_e);
+        _q2.setFromAxisAngle(_axis.set(1, 0, 0), lean);
+        _q.multiply(_q2);
+        _s.set(flowerScale, flowerScale * heightMul, flowerScale);
+        _m.compose(_v, _q, _s);
+        stemMatrices.push(_m.clone());
+
+        // 1-2 leaves attached partway up the leaned stem
+        const leafCount = Math.random() < 0.6 ? 2 : 1;
+        for (let li = 0; li < leafCount; li++) {
+          const leafAngle = yRot + (li === 0 ? Math.PI * 0.5 : -Math.PI * 0.5) + (Math.random() - 0.5) * 0.5;
+          const leafDroop = (Math.random() - 0.5) * 0.4;
+          const stemFrac = 0.4 + Math.random() * 0.4;
+          const stemLocal = new THREE.Vector3(0, stemH * stemFrac * flowerScale, 0);
+          stemLocal.applyQuaternion(_q);
+          _v.set(fx + stemLocal.x, y + 0.08 + stemLocal.y, fz + stemLocal.z);
+          _e.set(0, leafAngle, 0);
+          _q2.setFromEuler(_e);
+          const leafQ = _q2.clone()
+            .multiply(_q3.setFromAxisAngle(_axis.set(1, 0, 0), -Math.PI / 2 + leafDroop))
+            .multiply(_q3.setFromAxisAngle(_axis.set(0, 0, 1), (Math.random() - 0.5) * 0.6))
+            .multiply(_q3.setFromAxisAngle(_axis.set(0, 1, 0), (Math.random() - 0.5) * 0.4));
+          _s.setScalar(flowerScale * (0.6 + Math.random() * 0.3));
+          _m.compose(_v, leafQ, _s);
+          leafMatrices.push(_m.clone());
+        }
+
+        // 4-6 petals at the stem tip, fanning outward.
+        const petalCount = 4 + Math.floor(Math.random() * 3);
+        const stemTipLocal = new THREE.Vector3(0, stemH * flowerScale, 0);
+        stemTipLocal.applyQuaternion(_q);
+        const stemTipX = fx + stemTipLocal.x;
+        const stemTipY = y + 0.08 + stemTipLocal.y;
+        const stemTipZ = fz + stemTipLocal.z;
+        for (let pi = 0; pi < petalCount; pi++) {
+          const pa = (pi / petalCount) * Math.PI * 2;
+          _v.set(stemTipX, stemTipY + (Math.random() - 0.5) * 0.005, stemTipZ);
+          _q2.setFromAxisAngle(_axis.set(0, 1, 0), pa);
+          const petalQ = _q.clone().multiply(_q2);
+          _q3.setFromAxisAngle(_axis.set(1, 0, 0), 1.15 + Math.random() * 0.35);
+          petalQ.multiply(_q3);
+          _s.setScalar(flowerScale * (0.8 + Math.random() * 0.4));
+          _m.compose(_v, petalQ, _s);
+          petalMatrices[ci].push(_m.clone());
+        }
+
+        // Pistil (yellow center) at stem tip, oriented with stem.
+        _v.set(stemTipX, stemTipY, stemTipZ);
+        _m.compose(_v, _q, _s.setScalar(flowerScale));
+        pistilMatrices.push(_m.clone());
+      } // end cluster
+
+      allPositions.push({ x, y: y + 0.08, z });
+    }
   }
+
+  // Build InstancedMeshes.
+  const stemMesh = _makeInstancedBatch(_wfStemGeo, _wfStemMat, stemMatrices);
+  if (stemMesh) {
+    stemMesh.userData.inspect = { category: "flora", variant: "wildflower" };
+    meshes.push(stemMesh);
+  }
+
+  const leafMesh = _makeInstancedBatch(_wfLeafGeo, _wfLeafMat, leafMatrices);
+  if (leafMesh) {
+    leafMesh.userData.inspect = { category: "flora", variant: "wildflower" };
+    meshes.push(leafMesh);
+  }
+
+  const pistilMesh = _makeInstancedBatch(_wfPistilGeo, _wfPistilMat, pistilMatrices);
+  if (pistilMesh) {
+    pistilMesh.userData.inspect = { category: "flora", variant: "wildflower" };
+    meshes.push(pistilMesh);
+  }
+
+  let positionsAttached = false;
+  for (let ci = 0; ci < palette.length; ci++) {
+    const petalMesh = _makeInstancedBatch(_wfPetalGeo, petalMats[ci], petalMatrices[ci]);
+    if (petalMesh) {
+      if (glow) petalMesh.layers.enable(BLOOM_LAYER);
+      // Only attach positions to the first petal mesh so world.js doesn't
+      // duplicate flowerSpots when iterating all returned meshes.
+      if (!positionsAttached) {
+        petalMesh.userData.positions = allPositions;
+        positionsAttached = true;
+      }
+      petalMesh.userData.inspect = { category: "flora", variant: "wildflower" };
+      meshes.push(petalMesh);
+    }
+  }
+
+  // Fallback: ensure flowerSpots are available on at least one mesh.
+  if (!positionsAttached && meshes.length > 0) {
+    meshes[0].userData.positions = allPositions;
+  }
+
   return meshes;
 }
 

@@ -76,30 +76,165 @@ const INSPECT_SCENERY_BUILDERS = {
   wildflower(biome) {
     const palette = WILDFLOWER_PALETTES[biome.id] ?? ["#ffffff"];
     const g = new THREE.Group();
-    const flowerGeo = new THREE.IcosahedronGeometry(0.05, 0);
-    flowerGeo.scale(1, 0.7, 1);
-    // 3 wildflowers in a tight cluster, each a different palette color, so
-    // a multi-color biome (verdant, marsh) shows its range at a glance.
-    for (let i = 0; i < Math.min(3, palette.length); i++) {
-      const baseCol = new THREE.Color(palette[i]);
-      const m = applyWindSway(
+    const glow = !!biome.glowFlowers;
+
+    // Show 3 detailed flowers in a cluster, one per palette color.
+    // Stem geometry (6× scale for inspect distance).
+    const stemGeo = new THREE.CylinderGeometry(0.006, 0.012, 0.44, 5, 3).translate(0, 0.22, 0);
+    const stemMat = applyWindSway(
+      new THREE.MeshStandardMaterial({ color: "#2d5a1e", flatShading: true, roughness: 0.85 }),
+      1.0
+    );
+
+    // Petal geometry (small curved teardrop).
+    const petalGeo = (() => {
+      const segs = 4, wSegs = 3;
+      const pos = [], uvs = [], idx = [];
+      for (let iy = 0; iy <= segs; iy++) {
+        const v = iy / segs;
+        const hw = Math.max(0.004, 0.045 * Math.sin(Math.PI * v) ** 0.6);
+        for (let ix = 0; ix <= wSegs; ix++) {
+          const u = ix / wSegs;
+          const s = u * 2 - 1;
+          const cl = (1 - Math.abs(s)) * 0.006 * (1 - v * 0.4);
+          const tc = 0.025 * v ** 1.3;
+          pos.push(s * hw, v * 0.08, tc + cl);
+          uvs.push(u, v);
+        }
+      }
+      for (let iy = 0; iy < segs; iy++)
+        for (let ix = 0; ix < wSegs; ix++) {
+          const a = iy * (wSegs + 1) + ix, b = a + 1, c = a + wSegs + 1, d = c + 1;
+          idx.push(a, c, b, b, c, d);
+        }
+      const geo = new THREE.BufferGeometry();
+      geo.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3));
+      geo.setAttribute("uv", new THREE.Float32BufferAttribute(uvs, 2));
+      geo.setIndex(idx);
+      geo.computeVertexNormals();
+      return geo;
+    })();
+
+    // Leaf geometry (mini leafball-style).
+    const leafGeo = (() => {
+      const segs = 5, wSegs = 3;
+      const pos = [], uvs = [], idx = [];
+      for (let iy = 0; iy <= segs; iy++) {
+        const v = iy / segs;
+        const hw = Math.max(0.004, 0.06 * Math.sin(Math.PI * v) ** 0.72 * (1 - v * 0.16));
+        for (let ix = 0; ix <= wSegs; ix++) {
+          const u = ix / wSegs;
+          const s = u * 2 - 1;
+          const cl = (1 - Math.abs(s)) * 0.005 * (1 - v * 0.35);
+          const tc = 0.030 * v ** 1.45;
+          const ec = -Math.abs(s) * 0.005 * Math.sin(Math.PI * v);
+          pos.push(s * hw, -v * 0.15, tc + cl + ec);
+          uvs.push(u, v);
+        }
+      }
+      for (let iy = 0; iy < segs; iy++)
+        for (let ix = 0; ix < wSegs; ix++) {
+          const a = iy * (wSegs + 1) + ix, b = a + 1, c = a + wSegs + 1, d = c + 1;
+          idx.push(a, c, b, b, c, d);
+        }
+      const geo = new THREE.BufferGeometry();
+      geo.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3));
+      geo.setAttribute("uv", new THREE.Float32BufferAttribute(uvs, 2));
+      geo.setIndex(idx);
+      geo.computeVertexNormals();
+      return geo;
+    })();
+    const leafMat = applyWindSway(
+      new THREE.MeshStandardMaterial({ color: "#3a7228", side: THREE.DoubleSide, flatShading: true, roughness: 0.80 }),
+      1.0
+    );
+
+    const count = Math.min(3, palette.length);
+    for (let fi = 0; fi < count; fi++) {
+      const baseCol = new THREE.Color(palette[fi]);
+      const petalMat = applyWindSway(
         new THREE.MeshStandardMaterial({
           color: baseCol,
-          emissive: biome.glowFlowers ? baseCol.clone() : 0x000000,
-          emissiveIntensity: biome.glowFlowers ? 1.1 : 0,
+          emissive: glow ? baseCol.clone() : 0x000000,
+          emissiveIntensity: glow ? 1.1 : 0,
+          side: THREE.DoubleSide,
           flatShading: true,
           roughness: 0.4,
         }),
         1.2
       );
-      const flower = new THREE.Mesh(flowerGeo, m);
-      // ~6× the field-instance scale so the cluster reads at inspect distance.
-      flower.scale.setScalar(6);
-      const a = (i / 3) * Math.PI * 2;
-      flower.position.set(Math.cos(a) * 0.18, 0, Math.sin(a) * 0.18);
-      flower.castShadow = true;
-      if (biome.glowFlowers) flower.layers.enable(BLOOM_LAYER);
-      g.add(flower);
+
+      const angle = (fi / count) * Math.PI * 2;
+      // Position flowers so that Ry(angle) points local +Z outward from cluster center.
+      // Ry(angle) maps +Z to (sin(angle), 0, cos(angle)), so position along that.
+      const cx = Math.sin(angle) * 0.22;
+      const cz = Math.cos(angle) * 0.22;
+      const sc = 5; // inspect scale
+
+      // Stem — lean outward from cluster center.
+      const stemLean = 0.4;
+      const stem = new THREE.Mesh(stemGeo, stemMat);
+      stem.scale.setScalar(sc);
+      stem.position.set(cx, 0, cz);
+      stem.rotation.set(0, angle, 0);
+      stem.rotateX(stemLean);
+      stem.castShadow = true;
+      g.add(stem);
+
+      // Leaves.
+      for (let li = 0; li < 2; li++) {
+        const la = angle + (li === 0 ? Math.PI * 0.5 : -Math.PI * 0.5);
+        // Position leaf along the leaned stem, ~30-50% up.
+        const stemFrac = 0.4 + li * 0.2;
+        const stemTip = new THREE.Vector3(0, stemH * stemFrac, 0);
+        stemTip.applyQuaternion(stem.quaternion);
+        const leaf = new THREE.Mesh(leafGeo, leafMat);
+        leaf.scale.setScalar(sc * 0.6);
+        leaf.position.set(
+          cx + stemTip.x * sc,
+          stemTip.y * sc,
+          cz + stemTip.z * sc
+        );
+        // Leaf geo hangs along -Y; yaw outward then pitch horizontal.
+        leaf.rotation.set(0, la, 0);
+        leaf.rotateX(-Math.PI / 2 + li * 0.15);
+        leaf.rotateZ((Math.random() - 0.5) * 0.6);
+        leaf.rotateY((Math.random() - 0.5) * 0.4);
+        leaf.castShadow = true;
+        g.add(leaf);
+      }
+
+      // Petals — at stem tip.
+      const petalStemTip = new THREE.Vector3(0, stemH, 0);
+      petalStemTip.applyQuaternion(stem.quaternion);
+      const tipX = cx + petalStemTip.x * sc;
+      const tipY = petalStemTip.y * sc;
+      const tipZ = cz + petalStemTip.z * sc;
+      const petalCount = 5;
+      for (let pi = 0; pi < petalCount; pi++) {
+        const pa = (pi / petalCount) * Math.PI * 2;
+        const petal = new THREE.Mesh(petalGeo, petalMat);
+        petal.scale.setScalar(sc * 1.2);
+        petal.position.set(tipX, tipY, tipZ);
+        // Inherit stem rotation, spin around stem axis, then splay outward.
+        petal.quaternion.copy(stem.quaternion);
+        petal.rotateY(pa);
+        petal.rotateX(1.15 + Math.random() * 0.35);
+        petal.castShadow = true;
+        if (glow) petal.layers.enable(BLOOM_LAYER);
+        g.add(petal);
+      }
+
+      // Pistil (yellow center) at stem tip.
+      const pistilGeo = new THREE.SphereGeometry(0.018, 6, 5);
+      pistilGeo.scale(1, 0.55, 1);
+      const pistilMat = new THREE.MeshStandardMaterial({ color: "#ffe135", flatShading: true, roughness: 0.5 });
+      const pistil = new THREE.Mesh(pistilGeo, pistilMat);
+      pistil.scale.setScalar(sc);
+      pistil.position.set(tipX, tipY, tipZ);
+      pistil.quaternion.copy(stem.quaternion);
+      pistil.castShadow = true;
+      g.add(pistil);
     }
     return g;
   },
