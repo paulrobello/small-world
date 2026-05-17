@@ -39,4 +39,4 @@ Remove completed items from this list, commit and push so its live on github pag
 
 ---
 
-_Conventions reminder for any of the above: no build step, no npm. New libraries (if truly needed) go through the importmap in `index.html`. Determinism-sensitive code must run synchronously inside `generateWorld` before `Math.random` is restored._
+_Conventions reminder for any of the above: runtime dependencies are npm packages bundled by Vite; use `make dev` for local HMR and `make build` for production verification. Determinism-sensitive code must run synchronously inside `generateWorld` before `Math.random` is restored._

@@ -166,19 +166,6 @@ export const BIOMES = [
     creatureCount: [10, 15],
     furProbability: 0.15,
     groundMarks: { color: "#704218", opacity: 0.22, life: 6.2, softness: 1.0 },
-    edgeAura: {
-      pattern: "grass",
-      colors: ["#743D15", "#743D15", "#743D15"],
-      alpha: 1.0,
-      innerSoft: 0.24,
-      outerSoft: 10.5,
-      inwardOverlap: 0.23,
-      outwardFadeStart: 0.18,
-      y: 0.02,
-      noiseScale: 0.14,
-      streakScale: 34.0,
-      windStrength: 0.85,
-    },
     dusk: { sky: "#e89a5a", fog: "#c0824c", sun: "#ffc070", ground: "#5a3a18" },
     night: { sky: "#0a0a1c", fog: "#06061a", sun: "#a08a70", ground: "#100805" },
   },
@@ -385,14 +372,18 @@ export const BIOMES = [
 ];
 
 export const WILDFLOWER_PALETTES = {
+  // Bright, varied garden biomes.
   verdant: ["#f4a261", "#e76f51", "#fefae0", "#fff2b3"],
+  marsh:   ["#ffba08", "#ff6d6d", "#c9a8e8", "#ffd166"],
+  twilight:["#ffd97a", "#ffb070", "#c9a8e8", "#fff2b3"],
+  coral:   ["#ff7a8c", "#ffb88a", "#fff2b3", "#7ad6e0"],
+
+  // Tighter biome palettes — stay close to the local material range.
   desert:  ["#e63946", "#f4a261", "#fefae0"],
   frozen:  ["#cad2ff", "#f1faee", "#e0c3fc"],
-  marsh:   ["#ffba08", "#ff6d6d", "#c9a8e8", "#ffd166"],
   ashen:   ["#e63946", "#f77f00", "#fcbf49"],
-  golden:  ["#fefae0", "#dda15e", "#f1c890", "#a3b18a"],
+  golden:  ["#fefae0", "#f1c890", "#dda15e", "#bc8a45"],
   mossy:   ["#cdef8f", "#fff2b3", "#a8d8a3"],
-  twilight:["#ffd97a", "#ffb070", "#c9a8e8", "#fff2b3"],
   cloud:   ["#ffffff", "#e3eaff", "#fff2b3"],
   grove:   ["#ff90c0", "#fff2b3", "#9c84d4"],
   obsidian:["#ff7a2a", "#ffb060", "#fcbf49"],
@@ -401,7 +392,7 @@ export const WILDFLOWER_PALETTES = {
 // 0 = no grass field (burnt/volcanic biomes and bare atolls read wrong with grass blades).
 export const GRASS_DENSITY = {
   verdant: 300, desert:  0, frozen: 0,
-  marsh:   500, ashen:    0, golden: 750,
+  marsh:   500, ashen:    0, golden: 1500,
   mossy:   650, twilight: 1620, coral: 0,
   cloud:     0, grove:   800, obsidian: 0,
 };
@@ -426,7 +417,7 @@ export const BALD_THRESHOLD = {
 export const FLOWER_DENSITY = {
   verdant: 180, desert: 60, frozen: 90,
   marsh:   220, ashen:  50, golden: 200,
-  mossy:   140, twilight: 240, coral: 0,
+  mossy:   140, twilight: 240, coral: 110,
   cloud:   80,  grove:   170, obsidian: 60,
 };
 // Per-biome cloud count for the sky-backdrop. 0 / undefined = no clouds

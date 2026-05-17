@@ -23,11 +23,31 @@ export function sampleTerrainNormal(x, z, heightFn, eps = 0.1) {
   return new THREE.Vector3(yl - yr, 2 * eps, yf - yb).normalize();
 }
 
+const SLOPE_LIMIT = 2;
+const clampSlope = (v) => Math.max(-SLOPE_LIMIT, Math.min(SLOPE_LIMIT, v));
+
+/**
+ * Convert cached world-space terrain gradients into heading-local pitch/roll.
+ */
+export function slopeTargetsFromGradient(gradientX, gradientZ, heading) {
+  const ch = Math.cos(heading);
+  const sh = Math.sin(heading);
+  const slopeFwd = ch * gradientX + sh * gradientZ;
+  const slopeRight = sh * gradientX - ch * gradientZ;
+  return {
+    pitchTarget: -Math.atan(clampSlope(slopeFwd)),
+    rollTarget: Math.atan(clampSlope(slopeRight)),
+    slopeFwd,
+    slopeRight,
+  };
+}
+
 /**
  * Sample terrain slope along heading and perpendicular to it.
  * Returns { pitchTarget, rollTarget, slopeFwd, slopeRight } for use
  * with group.rotation.x (pitch) and group.rotation.z (roll).
- * Raw gradients are included for callers that cache world-space slopes.
+ * World-space gradients are included for callers that cache slopes across
+ * heading changes.
  */
 export function sampleSlopes(x, z, heading, ds, heightFn) {
   const ch = Math.cos(heading);
@@ -38,12 +58,12 @@ export function sampleSlopes(x, z, heading, ds, heightFn) {
   const yL = heightFn(x - sh * ds, z + ch * ds);
   const slopeFwd = (yF - yB) / (2 * ds);
   const slopeRight = (yR - yL) / (2 * ds);
-  const cl = (v) => Math.max(-2, Math.min(2, v));
+  const gradientX = ch * slopeFwd + sh * slopeRight;
+  const gradientZ = sh * slopeFwd - ch * slopeRight;
   return {
-    pitchTarget: -Math.atan(cl(slopeFwd)),
-    rollTarget: Math.atan(cl(slopeRight)),
-    slopeFwd,
-    slopeRight,
+    ...slopeTargetsFromGradient(gradientX, gradientZ, heading),
+    gradientX,
+    gradientZ,
   };
 }
 

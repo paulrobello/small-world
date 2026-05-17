@@ -145,7 +145,7 @@ function findEmergePoint(c, heightFn) {
 import { applyShellFur } from "../fur.js";
 import { BLOOM_LAYER } from "../postfx.js";
 import { makePool } from "../pool.js";
-import { WATER_AVOID_Y, avoidObstacles, colorsClose, sampleTerrainNormal, sampleSlopes, addAntennae } from "./shared.js";
+import { WATER_AVOID_Y, avoidObstacles, colorsClose, sampleTerrainNormal, sampleSlopes, slopeTargetsFromGradient, addAntennae } from "./shared.js";
 
 // Personality presets — picked once per creature at spawn, tweak how it walks,
 // thinks, hops, herds, and sleeps. Subtle multipliers; the cute baseline is
@@ -1757,13 +1757,9 @@ export function stepCreature(c, dt, t, heightFn) {
       // Reuse cached slopes but recompute heading-dependent atan — heading
       // may change even when position doesn't.
       const sc = c._slopeCache;
-      const ch = Math.cos(c.heading);
-      const sh = Math.sin(c.heading);
-      const slopeFwd = ch * sc.sx + sh * sc.sz;
-      const slopeRight = sh * sc.sx - ch * sc.sz;
-      const cl = (v) => Math.max(-2, Math.min(2, v));
-      pitchTarget = -Math.atan(cl(slopeFwd));
-      rollTarget = Math.atan(cl(slopeRight));
+      const targets = slopeTargetsFromGradient(sc.gradientX, sc.gradientZ, c.heading);
+      pitchTarget = targets.pitchTarget;
+      rollTarget = targets.rollTarget;
     } else {
       const slopes = sampleSlopes(pos.x, pos.z, c.heading, ds, heightFn);
       pitchTarget = slopes.pitchTarget;
@@ -1771,8 +1767,8 @@ export function stepCreature(c, dt, t, heightFn) {
       // Cache world-space gradients (independent of heading so they stay
       // valid as long as position doesn't change much).
       c._slopeCache = {
-        sx: slopes.slopeRight,
-        sz: slopes.slopeFwd,
+        gradientX: slopes.gradientX,
+        gradientZ: slopes.gradientZ,
       };
       c._slopeCacheX = pos.x;
       c._slopeCacheZ = pos.z;

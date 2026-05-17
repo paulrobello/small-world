@@ -68,10 +68,29 @@ assert(
   'golden steppe grass blade bald/spot percentage should be 0.'
 );
 assert(
+  !goldenBlock.includes('edgeAura:') && !goldenBlock.includes('pattern: "grass"'),
+  'golden steppe should not render the grass edge/ring aura.'
+);
+assert(
   floraSource.includes('const branchReach = 0.62'),
   'leafballtree internal branches should reach closer to the canopy than the old 0.46 radius.'
 );
 assert(
   floraSource.includes('const minLeafMotionGap = 0.20') && floraSource.includes('canopyRadius.x - minLeafMotionGap'),
   'leafballtree branch reach should retain a clearance gap for leaf wind motion.'
+);
+
+const leafballFootprintMatch = worldSource.match(/leafballtree:\s*([0-9.]+)/);
+assert(leafballFootprintMatch, 'leafballtree should have an explicit slope-plant footprint.');
+assert(
+  Number.parseFloat(leafballFootprintMatch[1]) <= 0.35,
+  'leafballtree slope-plant footprint should describe the trunk base, not the canopy width, so bases stay near the terrain surface.'
+);
+assert(
+  worldSource.includes('CANOPY_SPACING_KINDS = new Set(["tree", "leafballtree"'),
+  'leafballtree broad-canopy spacing should remain handled by canopy spacing, not slope-plant footprint.'
+);
+assert(
+  worldSource.includes('if (kind === "berrybush") s *= 1 + Math.random() * 0.25;'),
+  'berry bushes should keep the existing size as the minimum and vary up to 25% larger.'
 );

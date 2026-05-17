@@ -328,11 +328,13 @@ body {
   .controls .hint { display: none; }
   .controls-row { flex: 1 1 auto; }
   .regen {
-    flex: 1 1 auto;
+    flex: 1 1 0;
     justify-content: center;
-    padding: 14px 16px;
+    gap: 8px;
+    padding: 14px 10px;
     font-size: 10px;
-    letter-spacing: 0.28em;
+    letter-spacing: 0.18em;
+    min-width: 0;
     min-height: 44px;
   }
   .settings-toggle,
@@ -353,6 +355,7 @@ body {
 }
 
 @media (max-width: 420px) {
+  .regen-label { display: none; }
   .biome-card { max-width: 42vw; }
   .title { font-size: clamp(24px, 8vw, 36px); }
   .stats { gap: 10px 14px; }

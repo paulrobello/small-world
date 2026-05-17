@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-A single-page Three.js "terrarium" that procedurally generates a small floating-island world (biome, terrain, flora, creatures, birds, particles) from a 16-bit seed. Vite provides the dev server (HMR) and optimized production builds. Three.js and simplex-noise are npm packages, bundled and tree-shaken.
+A single-page Three.js "terrarium" that procedurally generates a small floating-island world (biome, terrain, flora, creatures, birds, particles) from a 16-bit seed. Vite provides the dev server (HMR) and optimized production builds. Three.js and simplex-noise are npm packages, bundled and tree-shaken. Live site: https://small-world.pardev.net/
 
 ## Navigation quick start
 
@@ -18,22 +18,20 @@ Source-of-truth docs/backlog:
 
 ## Running it
 
-`make dev` starts the Vite dev server with hot reload on `http://localhost:1999`. Edits to `main.js` / `src/*.js` / `style.css` / `index.html` are reflected instantly without a full reload when possible.
+`make dev` starts the Vite dev server in the foreground with hot reload on `http://localhost:2001`; `make dev-start` / `make dev-stop` / `make dev-restart` manage the same Vite server in the background. Edits to `main.js` / `src/*.js` / `style.css` / `index.html` are reflected instantly without a full reload when possible.
 
 `make build` produces an optimized production bundle in `dist/` (minified, tree-shaken, content-hashed assets). `make preview` serves the built output locally.
 
-The legacy Python server (`make start` / `make stop` / `make restart`) is still available for no-HMR static serving.
-
 ```
-make dev       # Vite dev server with HMR (recommended)
-make build     # production build → dist/
-make preview   # preview production build
-make start     # legacy Python static server (no HMR)
-make stop
-make restart
-make status
-make logs      # tail -f the Python server log
-make clean     # rm -rf dist
+make dev          # Vite dev server with HMR in the foreground
+make dev-start    # Vite dev server with HMR in the background
+make dev-stop     # stop the background dev server, or any process on PORT
+make dev-restart  # restart the background dev server
+make build        # production build → dist/
+make preview      # preview production build
+make lint         # ESLint over main.js and src/
+make checkall     # all JS/Python tests + lint + production build
+make clean        # rm -rf dist
 ```
 
 Runtime dependencies (three.js, simplex-noise) are installed via npm and bundled by Vite — they're no longer loaded from CDN. `node_modules/` is gitignored; run `npm install` before `make dev` or `make build`.

@@ -183,10 +183,10 @@ export function makeGrassMaterial(biome, opts = {}) {
           vec2 windWorld = bendDir * amp * 0.18;
           transformed.x += dot(axW, windWorld) * invXZScaleSq;
           transformed.z += dot(azW, windWorld) * invXZScaleSq;
-          // Creature push: bend tips radially outward from each pusher's
-          // XZ. Roots stay anchored (aTipFactor² weighting) and the tip
-          // also dips slightly so trampled grass reads as flattened rather
-          // than just splayed.
+          // Creature push: bend blades radially outward from each pusher's
+          // XZ. Roots stay anchored, while the under-body core lets mid-blade
+          // vertices participate and compresses height so grass lays flatter
+          // without being sunk below the ground.
           for (int pi = 0; pi < MAX_PUSHERS; pi++) {
             if (pi >= uPusherCount) break;
             vec4 push = uPushers[pi];
@@ -200,11 +200,14 @@ export function makeGrassMaterial(biome, opts = {}) {
             vec2 pdir = pdl > 0.0001 ? pd / pdl : vec2(1.0, 0.0);
             float ft = 1.0 - pdl / pr;
             float pushFalloff = ft * ft;
-            float pushAmp = aTipFactor * aTipFactor * pushFalloff * push.w;
-            vec2 pushWorld = pdir * pushAmp;
+            float pushCore = smoothstep(0.35, 0.85, ft);
+            float pushBladeWeight = mix(aTipFactor * aTipFactor, aTipFactor * (0.45 + 0.55 * aTipFactor), pushCore);
+            float pushAmp = pushBladeWeight * pushFalloff * push.w;
+            vec2 pushWorld = pdir * pushAmp * mix(1.0, 1.15, pushCore);
+            float pushFlatten = pushFalloff * pushCore * 0.65;
             transformed.x += dot(axW, pushWorld) * invXZScaleSq;
             transformed.z += dot(azW, pushWorld) * invXZScaleSq;
-            transformed.y -= pushAmp * 0.35;
+            transformed.y *= 1.0 - pushFlatten;
           }
           float dist = length(worldXZ - uCameraXZ);
           float fade = mix(1.0, 1.0 - smoothstep(uFadeStart, uFadeEnd, dist), uFadeEnabled);

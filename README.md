@@ -30,29 +30,37 @@ A handful of seeds across different biomes — click any image to load that exac
 
 ## Running it locally
 
-No build step, no npm. Just a static HTTP server. The Makefile wraps Python's `http.server` with cache disabled:
+Install dependencies, then start the Vite dev server with hot reload:
 
 ```sh
-make start      # serves at http://localhost:1999
-make stop
-make restart
-make status
-make logs
+npm install
+make dev        # foreground server at http://localhost:2001
+make dev-start  # background server at http://localhost:2001
+make dev-stop
+make dev-restart
 ```
 
-Then open http://localhost:1999. Edits to any source file (`main.js`, `src/*.js`, `style.css`, `index.html`) take effect on browser reload.
+Production build and preview:
+
+```sh
+make build
+make preview    # serves the built app at http://localhost:2001
+```
+
+Edits to `main.js`, `src/*.js`, `style.css`, and `index.html` are reflected by Vite HMR when possible.
 
 ## Development notes
 
-- There is intentionally no build step, package manager, test runner, linter, or formatter in this repo.
+- Runtime dependencies are installed via npm and bundled by Vite.
+- `make lint` runs ESLint over `main.js` and `src/`; `make checkall` runs all JS/Python tests, lint, and the production build.
 - Deployment is via GitHub Pages at the live demo URL above; completed enhancements are typically committed and pushed to publish.
 - AI coding agents should start with [`CLAUDE.md`](CLAUDE.md), which is also referenced by `AGENTS.md` and `GEMINI.md` compatibility stubs.
 
 ## Stack
 
-- [Three.js](https://threejs.org/) r0.184 (ES module, loaded via importmap from jsDelivr)
+- [Three.js](https://threejs.org/) r0.184, bundled by Vite
 - [simplex-noise](https://github.com/jwagner/simplex-noise.js) for terrain
-- Plain vanilla JS — no bundler, no package manager, no transpilation
+- Plain vanilla JS modules with Vite for development and production builds
 
 ## Project layout
 
@@ -60,7 +68,7 @@ Then open http://localhost:1999. Edits to any source file (`main.js`, `src/*.js`
 - `src/` — world generation, entities, UI, terrain, biomes, etc. (one file per concern)
 - `src/fauna/` — per-entity modules (creatures, caterpillars, butterflies, bees, will-o'-wisps)
 - `index.html` / `style.css` — static HUD shell
-- `server.py` / `Makefile` — local dev server
+- `Makefile` — Vite dev/build/preview/lint shortcuts
 - `dist/` — deployment build (GitHub Pages)
 - [`CLAUDE.md`](CLAUDE.md) — architecture notes, conventions, and the project's design constraints
 - [`ideas.md`](ideas.md) — running enhancement list

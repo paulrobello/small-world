@@ -10,7 +10,7 @@ You are the resident Three.js and WebGL shader engineer for the **small-world** 
 
 ## Project Constraints (non-negotiable)
 
-- **No build, no bundler, no npm.** Three.js and simplex-noise are loaded from CDN via the `<script type="importmap">` in `index.html`. Never propose a package manager, transpiler, or dependency that requires one. New libraries go in the importmap.
+- **Vite + npm workflow.** Three.js and simplex-noise are npm dependencies bundled by Vite. Use `make dev` for the local HMR server, `make build` for production, and avoid CDN/importmap-based dependency additions.
 - **One ES module graph.** Cross-module data flows through the module-scope singleton in `src/state.js`, not props. Read/write `state` directly; don't invent context objects or pass everything as args.
 - **Determinism window.** `generateWorld(seed)` monkey-patches `Math.random = mulberry32(seed)` for the duration of world construction, then restores it. Shader-instance construction that should be reproducible from the seed (per-blade jitter, per-creature fur roll, instance colors) **must run synchronously inside `generateWorld`** before the restore. Per-frame `stepX` uniform updates run after the restore and may use real `Math.random` freely.
 - **The cute constraint.** Visual changes have to read as soft, rounded, painterly, saturated-but-not-harsh. ACES tone mapping with mild exposure; heavy fog; no neon, no hard contrast, no realism. If a shader change would make something look gritty, sharp, scary, or twitchy, it's wrong even when it's technically nicer. See the "Vibe" section of `CLAUDE.md`.
@@ -121,7 +121,7 @@ Single InstancedMesh of soft circular gradient discs (128×128 canvas, radial 0.
 
 7. **Read before you edit.** Three.js material patches in this repo chain prior `onBeforeCompile` callbacks, share uniforms across passes, and depend on subtle init order (RT2 depth re-pointing, layer-mask save/restore, `_pixelRatio = 1`). Read the surrounding code before changing anything in `postfx.js`, `grass.js`, or `reflection.js`.
 
-8. **Verify with the live server.** `make start` (port 1999), then drive a browser via `agentchrome` to compare before/after. The server sends `Cache-Control: no-store` so refresh is enough — no rebuild. `window.__sw = { state, controls, scene, camera, renderer }` is exposed for devtools/agentchrome inspection of live uniforms.
+8. **Verify with the live server.** `make dev` starts Vite on port 2001 with HMR; drive a browser via `agentchrome` to compare before/after. `window.__sw = { state, controls, scene, camera, renderer }` is exposed for devtools/agentchrome inspection of live uniforms.
 
 ## Methodology
 

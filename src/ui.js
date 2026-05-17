@@ -281,7 +281,7 @@ function setSelectingCreature(on) {
   _canvas.style.cursor = on ? "crosshair" : "";
 }
 
-export function initUi({ camera, canvas, controls, renderer, scene }) {
+export function initUi({ camera, canvas, controls, renderer }) {
   // Inject app version into header eyebrow
   const versionEl = document.getElementById("app-version");
   if (versionEl) versionEl.textContent = APP_VERSION;
@@ -923,7 +923,7 @@ export function initUi({ camera, canvas, controls, renderer, scene }) {
     if (document.body.classList.contains("photo-mode")) return;
     if (performance.now() < _autoRegenAt) return;
     resetAutoRegenClock();
-    document.getElementById("regen").click();
+    document.getElementById("regen-random-biome").click();
   }, 5000);
 
   // Biome filter — restore from storage, build the chip row, and use it
@@ -975,7 +975,7 @@ export function initUi({ camera, canvas, controls, renderer, scene }) {
     renderBiomeFilter();
   });
 
-  function pickRegenSeed() {
+  function pickRandomBiomeSeed() {
     // If every biome is enabled, the filter is a no-op — keep the old
     // "avoid same biome twice" behaviour. Otherwise constrain to the set.
     const all = biomeFilter.size === BIOMES.length;
@@ -985,27 +985,37 @@ export function initUi({ camera, canvas, controls, renderer, scene }) {
     });
   }
 
-  // Regenerate world button — guarded so a rapid double-click can't queue a
+  function pickSameBiomeSeed() {
+    return newRandomSeed({
+      allowedBiomeIds: state.currentBiome ? [state.currentBiome.id] : undefined,
+    });
+  }
+
+  // Regenerate world buttons — guarded so a rapid double-click can't queue a
   // second rebuild while the fade-out + generateWorld pass is still in flight.
   let _regenInFlight = false;
-  document.getElementById("regen").addEventListener("click", () => {
-    if (_regenInFlight) return;
-    _regenInFlight = true;
-    const overlay = document.createElement("div");
-    overlay.style.cssText = `
-      position:fixed; inset:0; background:#000; z-index:50; pointer-events:none;
-      opacity:0; transition:opacity .35s ease;`;
-    document.body.appendChild(overlay);
-    requestAnimationFrame(() => (overlay.style.opacity = "0.7"));
-    setTimeout(() => {
-      generateWorld(pickRegenSeed());
-      overlay.style.opacity = "0";
+  function wireRegenButton(id, pickSeed) {
+    document.getElementById(id).addEventListener("click", () => {
+      if (_regenInFlight) return;
+      _regenInFlight = true;
+      const overlay = document.createElement("div");
+      overlay.style.cssText = `
+        position:fixed; inset:0; background:#000; z-index:50; pointer-events:none;
+        opacity:0; transition:opacity .35s ease;`;
+      document.body.appendChild(overlay);
+      requestAnimationFrame(() => (overlay.style.opacity = "0.7"));
       setTimeout(() => {
-        overlay.remove();
-        _regenInFlight = false;
-      }, 400);
-    }, 360);
-  });
+        generateWorld(pickSeed());
+        overlay.style.opacity = "0";
+        setTimeout(() => {
+          overlay.remove();
+          _regenInFlight = false;
+        }, 400);
+      }, 360);
+    });
+  }
+  wireRegenButton("regen-same-biome", pickSameBiomeSeed);
+  wireRegenButton("regen-random-biome", pickRandomBiomeSeed);
 
   // Share — copy current URL (which always reflects the current seed)
   const copyBtn = document.getElementById("setting-copy-link");
@@ -1852,7 +1862,7 @@ export function initUi({ camera, canvas, controls, renderer, scene }) {
       locatorNavigateTo(pos, isCreature ? entity : null, isCreature);
     } else if (e.key === "r" || e.key === "R") {
       e.preventDefault();
-      document.getElementById("regen").click();
+      document.getElementById("regen-random-biome").click();
     } else if (e.key === ",") {
       e.preventDefault();
       const opening = !_settingsPanel.classList.contains("open");

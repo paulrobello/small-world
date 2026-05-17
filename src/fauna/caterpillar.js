@@ -158,9 +158,9 @@ export function makeCaterpillar(biome, opts = {}) {
 
   // Roll fur before geometry so detail level can depend on it.
   // Snails never get fur; caterpillars roll against biome.furProbability.
-  const _furProb = biome.furProbability ?? 0;
-  const _furRoll = _furProb > 0 ? Math.random() : 1;
-  const wantsFur = !isSnail && (opts.furry ?? (_furProb > 0 && _furRoll < _furProb));
+  const furProb = biome.furProbability ?? 0;
+  const furRoll = furProb > 0 ? Math.random() : 1;
+  const wantsFur = !isSnail && (opts.furry ?? (furProb > 0 && furRoll < furProb));
   // Furless creatures get +1 detail so the smoother surface reads clearly.
   const segDetail = wantsFur ? 1 : 2;
 

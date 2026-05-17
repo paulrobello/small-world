@@ -72,9 +72,13 @@
         <button class="settings-toggle" id="settings-toggle" aria-label="settings" title="settings">
           <span class="settings-glyph">⚙</span>
         </button>
-        <button class="regen" id="regen">
+        <button class="regen" id="regen-same-biome" title="regenerate current biome">
           <span class="regen-glyph">↻</span>
-          <span class="regen-label">regenerate world</span>
+          <span class="regen-label">same biome</span>
+        </button>
+        <button class="regen" id="regen-random-biome" title="regenerate random biome">
+          <span class="regen-glyph">⇄</span>
+          <span class="regen-label">random biome</span>
         </button>
       </div>
     </div>
@@ -98,8 +102,10 @@
     <section class="settings-section">
       <div class="settings-section-label">modes</div>
       <dl class="help-list">
-        <dt>regenerate</dt>
-        <dd>bottom-right button or <kbd>r</kbd> rolls a new world seed.</dd>
+        <dt>same biome</dt>
+        <dd><span aria-hidden="true">↻</span> rolls a fresh seed that stays in the current biome, ignoring biome-filter chips.</dd>
+        <dt>random biome</dt>
+        <dd><span aria-hidden="true">⇄</span> or <kbd>r</kbd> keeps the old regenerate behavior: pick from enabled biome-filter chips and avoid repeating the current biome when possible.</dd>
         <dt>locator</dt>
         <dd><kbd>l</kbd> opens the entity locator panel. Click a type to fly the camera to the nearest instance. Creatures enter follow mode. <kbd>tab</kbd> cycles through all instances of the selected type. <kbd>esc</kbd> closes the panel.</dd>
         <dt>follow creature</dt>
@@ -123,7 +129,7 @@
         <dt>hover a sleeper</dt><dd>gently wakes drowsing creatures.</dd>
         <dt><kbd>l</kbd></dt><dd>open entity locator.</dd>
         <dt><kbd>tab</kbd></dt><dd>cycle instances of last located type.</dd>
-        <dt><kbd>r</kbd></dt><dd>regenerate world.</dd>
+        <dt><kbd>r</kbd></dt><dd>regenerate with the random-biome button behavior.</dd>
         <dt><kbd>p</kbd></dt><dd>toggle photo mode.</dd>
         <dt><kbd>s</kbd></dt><dd>save the current frame as a png (photo mode only).</dd>
         <dt><kbd>f</kbd></dt><dd>enter or exit first-person stroll.</dd>
@@ -164,7 +170,8 @@
     <section class="settings-section">
       <div class="settings-section-label">buttons</div>
       <dl class="help-list">
-        <dt>↻ regenerate</dt><dd>roll a new world seed.</dd>
+        <dt>↻ same biome</dt><dd>roll a new seed while staying in this biome.</dd>
+        <dt>⇄ random biome</dt><dd>roll from enabled biome filters; same as pressing <kbd>r</kbd>.</dd>
         <dt>? help</dt><dd>open this panel.</dd>
         <dt>⚙ settings</dt><dd>open settings — follow mode, photo mode, biome filters, and more.</dd>
       </dl>
@@ -413,7 +420,7 @@
         </div>
       </div>
       <div class="biome-filter" id="biome-filter"></div>
-      <div class="biome-filter-hint">tap to toggle. regenerate only picks from enabled biomes.</div>
+      <div class="biome-filter-hint">tap to toggle. random biome picks from enabled biomes; same biome stays current.</div>
     </section>
   </aside>
 

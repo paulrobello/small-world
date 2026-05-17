@@ -1,6 +1,6 @@
 {
   "name": "small-world",
-  "version": "1.1.1",
+  "version": "1.1.2",
   "description": "A Three.js terrarium that grows a tiny floating-island world — biome, terrain, flora, creatures, birds, and weather — from a 16-bit seed. Cute and painterly by design.",
   "main": "main.js",
   "directories": {
@@ -8,11 +8,11 @@
     "test": "tests"
   },
   "scripts": {
-    "dev": "vite",
+    "dev": "vite --port 2001",
     "build": "vite build",
-    "preview": "vite preview",
+    "preview": "vite preview --port 2001",
     "lint": "eslint main.js src/",
-    "start": "python3 server.py"
+    "start": "vite --host 0.0.0.0 --port 2001"
   },
   "repository": {
     "type": "git",

@@ -407,7 +407,10 @@ export function generateWorld(seed) {
   // trunks need a wider sample so the downhill side stays buried on slopes.
   // Anything not listed falls back to FLORA_FOOTPRINT_DEFAULT.
   const FLORA_FOOTPRINT = {
-    tree: 0.28, leafballtree: 0.90, pine: 0.28, deadtree: 0.22, mushroom: 0.18,
+    // Footprints describe the root/base contact patch for slope planting.
+    // Broad crowns are spaced separately by CANOPY_SPACING_KINDS; using the
+    // canopy width here samples far downhill and can bury the trunk center.
+    tree: 0.28, leafballtree: 0.32, pine: 0.28, deadtree: 0.22, mushroom: 0.18,
     bigmushroom: 0.45, fairyring: 1.15, lantern: 0.18, pillar: 0.30, archstone: 0.55,
     balloontree: 0.22, crystal: 0.30, obsidianshard: 0.28, skull: 0.22,
     berrybush: 0.30, coral: 0.25, braincoral: 0.26, cupcoral: 0.22,
@@ -650,6 +653,7 @@ export function generateWorld(seed) {
     let s = 0.7 + Math.random() * 0.7;
     // Double the scale for tree types
     if (kind === "tree" || kind === "leafballtree" || kind === "pine" || kind === "deadtree" || kind === "balloontree") s *= 2;
+    if (kind === "berrybush") s *= 1 + Math.random() * 0.25;
     const fp = (FLORA_FOOTPRINT[kind] ?? FLORA_FOOTPRINT_DEFAULT) * s;
     const placementBlockKinds = kind === "lavafissure" ? null : PLACEMENT_BLOCK_KINDS;
     if (blocksFloraPlacement(p.x, p.z, fp * 1.2, placementBlockKinds)) continue;
