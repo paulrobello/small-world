@@ -370,7 +370,13 @@ body {
   .regen:hover::before,
   .regen:hover::after { border-color: var(--ink-dim); }
   .regen:hover .regen-glyph { transform: none; }
+  /* Show mobile help, hide desktop help on touch-first devices */
+  .help-desktop { display: none; }
+  .help-mobile { display: block; }
 }
+
+/* Desktop: hide mobile help by default */
+.help-mobile { display: none; }
 
 /* ─── Inline toggles (live in .controls-row, left of regenerate) ─────── */
 .controls-row {

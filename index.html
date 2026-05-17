@@ -100,6 +100,8 @@
       <button class="settings-close" id="help-close" aria-label="close">×</button>
     </div>
 
+    <!-- Desktop help (hidden on touch-first devices) -->
+    <div class="help-desktop">
     <section class="settings-section">
       <div class="settings-section-label">modes</div>
       <dl class="help-list">
@@ -140,6 +142,29 @@
         <dt><kbd>esc</kbd></dt><dd>cancel focus · exit any mode · close panels.</dd>
       </dl>
     </section>
+    </div>
+
+    <!-- Mobile help (hidden on pointer devices) -->
+    <div class="help-mobile">
+    <section class="settings-section">
+      <div class="settings-section-label">gestures</div>
+      <dl class="help-list">
+        <dt>one-finger drag</dt><dd>rotate the camera.</dd>
+        <dt>pinch</dt><dd>zoom in / out.</dd>
+        <dt>two-finger drag</dt><dd>zoom and rotate together.</dd>
+        <dt>tap a creature</dt><dd>follow it — the camera tracks it around the island.</dd>
+      </dl>
+    </section>
+
+    <section class="settings-section">
+      <div class="settings-section-label">buttons</div>
+      <dl class="help-list">
+        <dt>↻ regenerate</dt><dd>roll a new world seed.</dd>
+        <dt>? help</dt><dd>open this panel.</dd>
+        <dt>⚙ settings</dt><dd>open settings — follow mode, photo mode, biome filters, and more.</dd>
+      </dl>
+    </section>
+    </div>
   </aside>
 
   <aside class="settings-panel" id="settings-panel" aria-hidden="true">
