@@ -558,7 +558,7 @@ export const FLORA_BUILDERS = {
 
     const topHighlightRows = 4;
     const topMotionTuckRows = 4;
-    const topMotionTuckAngle = 0.045 + THREE.MathUtils.degToRad(2);
+    const topMotionTuckAngle = -(0.045 + THREE.MathUtils.degToRad(2));
     addLeafRing({ count: 6, phi: 0.07, shell: 0.54, scale: 0.72, matIndex: 2, phase: 0.18, lift: 0.32, yOffset: 0.40, pitchOffset: topMotionTuckAngle });
     let staggerPhase = 0;
     for (let row = 0; row < rowCounts.length; row++) {
