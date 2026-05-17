@@ -115,6 +115,15 @@ class GroundMarksStaticTest(unittest.TestCase):
         self.assertIn("groundMarkDistance", source)
         self.assertIn('c.type === "snail"', source)
 
+    def test_crawler_trails_are_lifetime_compensated_for_slow_speed(self) -> None:
+        source = CATERPILLAR_JS.read_text()
+
+        self.assertIn("CRAWLER_TRAIL_TARGET_SPEED", source)
+        self.assertIn("crawlerTrailLifeScale", source)
+        self.assertIn("CRAWLER_TRAIL_TARGET_SPEED / Math.max(0.01, c.speed)", source)
+        self.assertIn("life: cfg.life * crawlerTrailLifeScale", source)
+
+
 
 if __name__ == "__main__":
     unittest.main()

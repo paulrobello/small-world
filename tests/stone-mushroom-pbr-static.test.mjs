@@ -7,12 +7,16 @@ const utilSource = readFileSync(new URL('../src/util.js', import.meta.url), 'utf
 
 assert(
   pbrSource.includes('export function makeStonePBRMaterial')
+    && pbrSource.includes('export function makePlainRockPBRMaterial')
     && pbrSource.includes('export function makeMushroomCapPBRMaterial'),
-  'PBR helpers should expose stone and mushroom-cap material builders.'
+  'PBR helpers should expose stone, plain-rock, and mushroom-cap material builders.'
 );
 
 assert(
   pbrSource.includes('buildStoneTextures')
+    && pbrSource.includes('buildPlainRockTextures')
+    && pbrSource.includes('rockDetailHeight')
+    && pbrSource.includes('smoothHashNoise')
     && pbrSource.includes('buildMushroomCapTextures')
     && pbrSource.includes('stoneCrack')
     && pbrSource.includes('verticalScratch')
@@ -29,9 +33,13 @@ assert(
 );
 
 assert(
-  floraSource.includes('jitterGeo(new THREE.IcosahedronGeometry(r, 0), r * 0.3, { sphericalUvs: true })')
+  floraSource.includes('function makePlainRockGeometry')
+    && floraSource.includes('new THREE.IcosahedronGeometry(radius, detail)')
+    && floraSource.includes('makePlainRockGeometry(chipRadius, { shoulder: true })')
+    && floraSource.includes('makePlainRockPBRMaterial')
+    && floraSource.includes('flatShading: true')
     && floraSource.includes('jitterGeo(new THREE.IcosahedronGeometry(r, 0), r * 0.25, { sphericalUvs: true })'),
-  'Jittered rock geometry should restore spherical UVs so procedural PBR maps can render.'
+  'Plain rock makeover and limestone geometry should restore spherical UVs so procedural PBR maps can render.'
 );
 
 assert(

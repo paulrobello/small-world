@@ -43,7 +43,9 @@ void main() {
   vec4 mv = modelViewMatrix * vec4(position, 1.0);
   vViewZ = -mv.z; // positive distance in front of camera, matches readViewDist in postfx.js
   float size = uBaseSize;
-  #if PARTICLE_KIND == 12
+  #if PARTICLE_KIND == 11
+    size *= (0.80 + 1.80 * fract(aSeed * 11.317)) * (0.82 + 0.18 * sin(aLife * 6.2831));
+  #elif PARTICLE_KIND == 12
     size *= (0.45 + 1.35 * fract(aSeed * 17.173)) * (1.0 - aLife * 0.7);
   #elif PARTICLE_KIND == 4 || PARTICLE_KIND == 9
     size *= 1.0 - aLife * 0.7;
@@ -78,7 +80,11 @@ void main() {
   float d = length(c);
   #if PARTICLE_KIND == 10
     float a = smoothstep(0.5, 0.0, abs(c.x) * 2.0) * smoothstep(0.5, 0.0, abs(c.y));
-  #elif PARTICLE_KIND == 11 || PARTICLE_KIND == 12
+  #elif PARTICLE_KIND == 11
+    // broader low dune streaks: wide along wind, narrow vertically
+    float a = smoothstep(0.5, 0.0, abs(c.x)) * smoothstep(0.5, 0.0, abs(c.y) * 2.0);
+    a *= 0.72 + 0.28 * sin(vLife * 6.2831 + vSeed);
+  #elif PARTICLE_KIND == 12
     // horizontal streak — stretched in x, tight in y
     float a = smoothstep(0.5, 0.0, abs(c.x)) * smoothstep(0.5, 0.0, abs(c.y) * 2.6);
     // gust pulse: vary alpha by life so individual grains breathe
@@ -87,7 +93,9 @@ void main() {
     float a = smoothstep(0.5, 0.0, d);
   #endif
   vec3 col = uColor;
-  #if PARTICLE_KIND == 4 || PARTICLE_KIND == 9 || PARTICLE_KIND == 12
+  #if PARTICLE_KIND == 11
+    col = mix(uColor, uColor2, vLife * 0.45);
+  #elif PARTICLE_KIND == 4 || PARTICLE_KIND == 9 || PARTICLE_KIND == 12
     col = mix(uColor, uColor2, vLife);
     a *= 1.0 - vLife;
   #elif PARTICLE_KIND == 3
@@ -110,12 +118,42 @@ void main() {
 }
 `;
 
+const _sandParticleVS = `
+attribute float aSeed;
+attribute float aLife;
+varying float vLife;
+varying float vSeed;
+uniform float uPixelRatio;
+uniform float uBaseSize;
+void main() {
+  vLife = aLife;
+  vSeed = aSeed;
+  vec4 mv = modelViewMatrix * vec4(position, 1.0);
+  gl_Position = projectionMatrix * mv;
+  gl_PointSize = uBaseSize * uPixelRatio * (300.0 / max(0.001, -mv.z));
+}
+`;
+
+const _sandParticleFS = `
+precision highp float;
+uniform vec3 uColor;
+uniform float uOpacity;
+varying float vLife;
+varying float vSeed;
+void main() {
+  vec2 c = gl_PointCoord - 0.5;
+  if (length(c) > 0.34) discard;
+  float a = 0.62 + 0.28 * fract(vSeed * 0.173 + vLife);
+  gl_FragColor = vec4(uColor, a * uOpacity);
+}
+`;
+
 export function makeParticles(biome) {
   const kind = biome.particle;
   const baseCount = {
     pollen: 240, dust: 320, snow: 500, firefly: 90, ember: 180,
     lichenmote: 140, feather: 120, bubble: 140, leaf: 120, spark: 240, rain: 520,
-    sand: 420, cinder: 520,
+    sand: 3120, cinder: 520,
   }[kind] || 200;
   const count = _lowfxScale(baseCount);
 
@@ -129,7 +167,12 @@ export function makeParticles(biome) {
     const a = Math.random() * Math.PI * 2;
     positions[i * 3 + 0] = Math.cos(a) * r;
     // Sand/cinders hug the ground — sample low so grains read as wind-swept, not airborne.
-    positions[i * 3 + 1] = (kind === "sand" || kind === "cinder") ? 0.1 + Math.random() * 2.8 : Math.random() * 14;
+    if (kind === "sand") {
+      const groundY = state.heightFn ? state.heightFn(positions[i * 3 + 0], positions[i * 3 + 2]) : 0;
+      positions[i * 3 + 1] = Math.max(0.05, groundY + 0.08) + Math.random() * 0.38;
+    } else {
+      positions[i * 3 + 1] = kind === "cinder" ? 0.1 + Math.random() * 2.8 : Math.random() * 14;
+    }
     positions[i * 3 + 2] = Math.sin(a) * r;
     velocities[i * 3 + 0] = (Math.random() - 0.5) * 0.4;
     velocities[i * 3 + 1] = (Math.random() - 0.5) * 0.4;
@@ -154,12 +197,12 @@ export function makeParticles(biome) {
     firefly: biome.accent, ember: biome.accent, lichenmote: biome.accent,
     feather: "#ffffff", bubble: biome.water || biome.sky,
     leaf: biome.accent, spark: biome.sun, rain: biome.sun,
-    sand: (biome.ground && biome.ground[2]) || biome.fog,
+    sand: "#d89a4f",
     cinder: biome.sun,
   };
   // Ember/spark/cinder fade toward a smokier secondary colour over life.
   const color2Map = {
-    ember: "#3a2018", spark: "#fff2b3", cinder: "#4a2018",
+    sand: "#edbd72", ember: "#3a2018", spark: "#fff2b3", cinder: "#4a2018",
   };
   const sizeMap = {
     firefly: 0.16,
@@ -173,13 +216,13 @@ export function makeParticles(biome) {
     pollen: 0.08,
     dust: 0.09,
     ember: 0.12,
-    sand: 0.16,
+    sand: 0.28,
     cinder: 0.19,
   };
   const opacityMap = {
     dust: 0.35, feather: 0.7, bubble: 0.55, leaf: 0.85, spark: 0.95, rain: 0.55,
     pollen: 0.85, snow: 0.85, firefly: 0.85, ember: 0.85, lichenmote: 0.85,
-    sand: 0.55, cinder: 0.95,
+    sand: 0.58, cinder: 0.95,
   };
   const additive = new Set(["firefly", "ember", "lichenmote", "spark", "cinder"]);
 
@@ -188,7 +231,7 @@ export function makeParticles(biome) {
   const camera = state.camera;
   // Soft particles require the depth pre-pass — null under LOWFX, in which
   // case uSoftParticles stays 0 and the shader skips the depth-fade branch.
-  const softOn = !!(state.depthTexture && state.userSettings.softParticles);
+  const softOn = kind !== "sand" && !!(state.depthTexture && state.userSettings.softParticles);
 
   const mat = new THREE.ShaderMaterial({
     uniforms: {
@@ -205,9 +248,10 @@ export function makeParticles(biome) {
       uSoftParticles: { value: softOn ? 1.0 : 0.0 },
     },
     defines: { PARTICLE_KIND: PARTICLE_KIND_ID[kind] ?? 0 },
-    vertexShader: _particleVS,
-    fragmentShader: _particleFS,
+    vertexShader: kind === "sand" ? _sandParticleVS : _particleVS,
+    fragmentShader: kind === "sand" ? _sandParticleFS : _particleFS,
     transparent: true,
+    depthTest: true,
     depthWrite: false,
     blending: additive.has(kind) ? THREE.AdditiveBlending : THREE.NormalBlending,
   });
@@ -293,17 +337,18 @@ export function stepParticles(points, dt, t) {
       // small per-grain wobble. Grains stay near the surface; when blown past
       // the downwind edge they wrap back to the upwind side so the stream is
       // continuous.
-      const gust = 0.7 + 0.6 * Math.sin(t * 0.35 + s * 0.07);
-      // Slight cross-wind on Z so streaks aren't pure straight lines.
-      const cross = 0.25 * Math.sin(t * 0.5 + s * 0.13);
-      x += (5.5 * gust + Math.sin(t * 1.6 + s) * 0.6) * dt;
-      z += (cross + Math.cos(t * 0.9 + s * 1.3) * 0.4) * dt;
+      const gust = 0.95 + 0.70 * Math.sin(t * 0.35 + s * 0.07);
+      const windBand = 0.65 + 0.35 * Math.sin(z * 0.23 + t * 0.8 + s * 0.05);
+      // Slight cross-wind on Z so the grit doesn't move in ruler-straight rows.
+      const cross = 0.18 * Math.sin(t * 0.5 + s * 0.13);
+      x += (7.8 * gust * windBand + Math.sin(t * 1.6 + s) * 0.45) * dt;
+      z += (cross + Math.cos(t * 0.9 + s * 1.3) * 0.24) * dt;
       // Tiny vertical wobble — sand grains don't really climb, they skip.
-      y += Math.sin(t * 2.0 + s * 1.7) * 0.18 * dt - 0.05 * dt;
+      y += Math.sin(t * 2.0 + s * 1.7) * 0.08 * dt - 0.01 * dt;
       // Sample terrain to clamp grains close to the ground so they hug dunes.
       const groundY = state.heightFn ? state.heightFn(x, z) : 0;
       const floor = Math.max(0.05, groundY + 0.08);
-      const ceil = groundY + 2.4;
+      const ceil = floor + 0.42 + windBand * 0.18;
       if (y < floor) y = floor;
       else if (y > ceil) y = ceil;
       // Wrap from downwind edge back to upwind edge.
@@ -311,7 +356,7 @@ export function stepParticles(points, dt, t) {
         x = -state.ISLAND_RADIUS * 1.05 + Math.random() * 1.0;
         z = (Math.random() - 0.5) * state.ISLAND_RADIUS * 2.0;
         const gy = state.heightFn ? state.heightFn(x, z) : 0;
-        y = Math.max(0.1, gy + 0.1) + Math.random() * 2.0;
+        y = Math.max(0.05, gy + 0.08) + Math.random() * 0.38;
       } else if (Math.abs(z) > state.ISLAND_RADIUS * 1.15) {
         z = -Math.sign(z) * state.ISLAND_RADIUS * 1.05;
       }
@@ -1116,6 +1161,7 @@ function _pickWildflowerPos(heightFn, opts) {
 export function makeWildflowerField(biome, heightFn, excludedCircles = []) {
   const palette = WILDFLOWER_PALETTES[biome.id] ?? ["#ffffff"];
   const total = _coverScale(FLOWER_DENSITY[biome.id] ?? 100, 1.6);
+  if (total <= 0) return [];
   const perColor = Math.max(3, Math.floor(total / palette.length / 3));
   const glow = !!biome.glowFlowers;
   const meshes = [];

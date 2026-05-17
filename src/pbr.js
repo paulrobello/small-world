@@ -6,6 +6,7 @@ const TERRAIN_PBR_TEX_SIZE = 384;
 const LEAFBALL_BARK_TEX_SIZE = 256;
 const LEAFBALL_LEAF_TEX_SIZE = 128;
 const STONE_PBR_TEX_SIZE = 128;
+const PLAIN_ROCK_PBR_TEX_SIZE = 128;
 const MUSHROOM_CAP_TEX_SIZE = 128;
 
 function clamp01(value) {
@@ -22,6 +23,20 @@ function makeCanvas(size) {
 function hashNoise(x, z, seed) {
   const n = Math.sin(x * 12.9898 + z * 78.233 + seed * 0.071) * 43758.5453;
   return n - Math.floor(n);
+}
+
+function smoothHashNoise(x, z, seed) {
+  const ix = Math.floor(x);
+  const iz = Math.floor(z);
+  const fx = x - ix;
+  const fz = z - iz;
+  const sx = fx * fx * (3 - 2 * fx);
+  const sz = fz * fz * (3 - 2 * fz);
+  const a = hashNoise(ix, iz, seed);
+  const b = hashNoise(ix + 1, iz, seed);
+  const c = hashNoise(ix, iz + 1, seed);
+  const d = hashNoise(ix + 1, iz + 1, seed);
+  return (a + (b - a) * sx) + (c + (d - c) * sx - (a + (b - a) * sx)) * sz;
 }
 
 function detailNoise(x, z, seed) {
@@ -259,6 +274,68 @@ function buildStoneTextures() {
   };
 }
 
+function rockDetailHeight(u, v, seed) {
+  const warpA = smoothHashNoise(u * 3.4, v * 3.1, seed + 1421) - 0.5;
+  const warpB = smoothHashNoise(u * 4.7, v * 4.2, seed + 1453) - 0.5;
+  const wu = u + warpA * 0.08;
+  const wv = v + warpB * 0.08;
+  const broadMottle = smoothHashNoise(wu * 5.8, wv * 5.1, seed + 1481);
+  const fineMottle = smoothHashNoise(wu * 17.0, wv * 15.0, seed + 1499);
+  const poreNoise = smoothHashNoise(wu * 36.0, wv * 34.0, seed + 1511);
+  const crackField = smoothHashNoise(wu * 4.6 + fineMottle * 0.52, wv * 4.1 - broadMottle * 0.45, seed + 1531);
+  const crackMask = smoothHashNoise(wu * 8.3, wv * 7.7, seed + 1543);
+  const irregularCracks = Math.max(0, 1 - Math.abs(crackField - 0.52) * 25) * Math.max(0, crackMask - 0.47);
+  const pits = Math.max(0, 0.56 - poreNoise) * 0.42;
+  return (broadMottle - 0.5) * 0.30 + (fineMottle - 0.5) * 0.13 - pits - irregularCracks * 0.55;
+}
+
+function buildPlainRockTextures() {
+  const size = PLAIN_ROCK_PBR_TEX_SIZE;
+  const rockNormalCanvas = makeCanvas(size);
+  const rockMaterialCanvas = makeCanvas(size);
+  const normalCtx = rockNormalCanvas.getContext("2d");
+  const materialCtx = rockMaterialCanvas.getContext("2d");
+  const normalImage = normalCtx.createImageData(size, size);
+  const materialImage = materialCtx.createImageData(size, size);
+  const seed = state.currentSeed + 1409;
+
+  for (let py = 0; py < size; py++) {
+    const v = py / (size - 1);
+    for (let px = 0; px < size; px++) {
+      const u = px / (size - 1);
+      const step = 1 / size;
+      const hL = rockDetailHeight(Math.max(0, u - step), v, seed);
+      const hR = rockDetailHeight(Math.min(1, u + step), v, seed);
+      const hD = rockDetailHeight(u, Math.max(0, v - step), seed);
+      const hU = rockDetailHeight(u, Math.min(1, v + step), seed);
+      const h = rockDetailHeight(u, v, seed);
+      const pore = Math.max(0, -h);
+      const nx = (hL - hR) * 0.86;
+      const ny = (hD - hU) * 0.86;
+      const nz = Math.sqrt(Math.max(0.12, 1 - nx * nx - ny * ny));
+      const roughness = 0.84 + pore * 0.16 + smoothHashNoise(u * 19.0, v * 17.0, seed + 61) * 0.05;
+      const specular = 0.07 + Math.max(0, h) * 0.06;
+      const index = (py * size + px) * 4;
+
+      normalImage.data[index + 0] = Math.round((nx * 0.5 + 0.5) * 255);
+      normalImage.data[index + 1] = Math.round((ny * 0.5 + 0.5) * 255);
+      normalImage.data[index + 2] = Math.round(nz * 255);
+      normalImage.data[index + 3] = 255;
+
+      materialImage.data[index + 0] = Math.round(clamp01(roughness) * 255);
+      materialImage.data[index + 1] = Math.round(clamp01(roughness) * 255);
+      materialImage.data[index + 2] = 0;
+      materialImage.data[index + 3] = Math.round(clamp01(specular) * 255);
+    }
+  }
+  normalCtx.putImageData(normalImage, 0, 0);
+  materialCtx.putImageData(materialImage, 0, 0);
+  return {
+    normalTexture: configurePBRTexture(new THREE.CanvasTexture(rockNormalCanvas)),
+    materialTexture: configurePBRTexture(new THREE.CanvasTexture(rockMaterialCanvas)),
+  };
+}
+
 function buildMushroomCapTextures() {
   const size = MUSHROOM_CAP_TEX_SIZE;
   const capNormalCanvas = makeCanvas(size);
@@ -384,6 +461,21 @@ export function makeStonePBRMaterial(params) {
   });
   const { normalTexture, materialTexture } = buildStoneTextures();
   material.normalScale.set(0.74, 0.74);
+  return applyDetailMaps(material, normalTexture, materialTexture);
+}
+
+export function makePlainRockPBRMaterial(params) {
+  if (LOWFX || state.userSettings.pbrDetails === false) {
+    return new THREE.MeshStandardMaterial(params);
+  }
+  const material = new THREE.MeshPhysicalMaterial({
+    ...params,
+    reflectivity: 0.12,
+    specularIntensity: 0.24,
+    specularColor: new THREE.Color(params.color).lerp(new THREE.Color(0xffffff), 0.18),
+  });
+  const { normalTexture, materialTexture } = buildPlainRockTextures();
+  material.normalScale.set(0.42, 0.42);
   return applyDetailMaps(material, normalTexture, materialTexture);
 }
 

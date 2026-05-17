@@ -11,6 +11,7 @@ import { WATER_AVOID_Y, avoidObstacles, sampleSlopes, addAntennae } from "./shar
 // ─────────────────────────────────────────────────────────────────────────────
 const TRAIL_RETENTION_PADDING = 1.0;
 const TRAIL_MIN_POINT_DISTANCE = 1e-6;
+const CRAWLER_TRAIL_TARGET_SPEED = 0.85;
 
 // ── Ring buffer trail ──────────────────────────────────────────────────────
 // Pre-allocated ring buffer to avoid per-frame array unshift/trim overhead.
@@ -386,6 +387,13 @@ function emitCrawlerGroundMark(c, x, z, heading, heightFn) {
   if (state.waterMesh && y < WATER_AVOID_Y) return;
   c.groundMarkDistance = 0;
 
+  // Crawlers move slower than walkers. Scale mark life inversely with speed so
+  // the visible trail covers a comparable world distance to footprint paths.
+  const crawlerTrailLifeScale = Math.min(
+    7.0,
+    Math.max(1.0, CRAWLER_TRAIL_TARGET_SPEED / Math.max(0.01, c.speed))
+  );
+
   emitGroundMark(marks, {
     x,
     z,
@@ -395,7 +403,7 @@ function emitCrawlerGroundMark(c, x, z, heading, heightFn) {
     width: (isSnail ? 0.34 : 0.22) * c.scale,
     length: (isSnail ? 0.46 : 0.36) * c.scale,
     opacity: cfg.opacity * (isSnail ? 0.82 : 0.66),
-    life: cfg.life * (isSnail ? 1.15 : 0.9),
+    life: cfg.life * crawlerTrailLifeScale,
   });
 
   c.lastGroundMarkX = x;

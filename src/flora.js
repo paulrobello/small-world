@@ -7,6 +7,7 @@ import {
   makeLeafballTreeLeafPBRMaterial,
   makeLeafballTreeTrunkPBRMaterial,
   makeMushroomCapPBRMaterial,
+  makePlainRockPBRMaterial,
   makeStonePBRMaterial,
 } from "./pbr.js";
 
@@ -334,26 +335,40 @@ function addGroveMushroomFamily(group, biome, { radius = 0.44, count = 3, capY =
   }
 }
 
-function addPillarSurfaceMarks(drum, radius, height, baseColor) {
+function addPillarSurfaceMarks(drum, topRadius, bottomRadius, height, baseColor) {
   const points = [];
   const markCount = 9 + Math.floor(Math.random() * 5);
-  const scratchColor = baseColor.clone().offsetHSL(0, -0.10, -0.34);
+  const scratchColor = baseColor.clone().offsetHSL(0, -0.05, -0.18);
+  const sideCount = 7;
+  const facePad = 0.08;
+
+  const pointOnFace = (face, sideT, y) => {
+    const yT = y / height + 0.5;
+    const radius = bottomRadius + (topRadius - bottomRadius) * yT;
+    const a0 = (face / sideCount) * Math.PI * 2;
+    const a1 = ((face + 1) / sideCount) * Math.PI * 2;
+    const p0 = new THREE.Vector3(Math.cos(a0) * radius, y, Math.sin(a0) * radius);
+    const p1 = new THREE.Vector3(Math.cos(a1) * radius, y, Math.sin(a1) * radius);
+    const mid = (a0 + a1) * 0.5;
+    const normal = new THREE.Vector3(Math.cos(mid), 0, Math.sin(mid));
+    return p0.lerp(p1, sideT).addScaledVector(normal, 0.0015);
+  };
 
   for (let i = 0; i < markCount; i++) {
     const vertical = Math.random() < 0.58;
-    let angle = Math.random() * Math.PI * 2;
+    const face = Math.floor(Math.random() * sideCount);
+    let sideT = facePad + Math.random() * (1 - facePad * 2);
     let y = (Math.random() - 0.5) * height * 0.72;
     const steps = vertical ? 3 + Math.floor(Math.random() * 3) : 2 + Math.floor(Math.random() * 3);
     const yStep = height * (vertical ? 0.12 : 0.07);
-    const angleStep = (Math.random() - 0.5) * (vertical ? 0.08 : 0.22);
+    const sideStep = (Math.random() - 0.5) * (vertical ? 0.08 : 0.26);
     let prev = null;
 
     for (let j = 0; j <= steps; j++) {
-      angle += angleStep + (Math.random() - 0.5) * 0.06;
+      sideT = Math.max(facePad, Math.min(1 - facePad, sideT + sideStep + (Math.random() - 0.5) * 0.05));
       y += (vertical ? -1 : Math.random() < 0.5 ? -1 : 1) * yStep * (0.55 + Math.random() * 0.55);
       y = Math.max(-height * 0.43, Math.min(height * 0.43, y));
-      const r = radius + 0.006;
-      const next = new THREE.Vector3(Math.cos(angle) * r, y, Math.sin(angle) * r);
+      const next = pointOnFace(face, sideT, y);
       if (prev) points.push(prev.x, prev.y, prev.z, next.x, next.y, next.z);
       prev = next;
     }
@@ -364,12 +379,50 @@ function addPillarSurfaceMarks(drum, radius, height, baseColor) {
   const material = new THREE.LineBasicMaterial({
     color: scratchColor,
     transparent: true,
-    opacity: 0.88,
+    opacity: 0.52,
     depthWrite: false,
   });
   const marks = new THREE.LineSegments(geometry, material);
   marks.renderOrder = 1;
   drum.add(marks);
+}
+
+function makePlainRockGeometry(radius, { shoulder = false } = {}) {
+  const detail = shoulder ? 0 : 1;
+  const geometry = jitterGeo(
+    new THREE.IcosahedronGeometry(radius, detail),
+    radius * (shoulder ? 0.14 : 0.18),
+    { sphericalUvs: true }
+  );
+  const position = geometry.attributes.position;
+  const squash = shoulder ? 0.62 : 0.74;
+  const xScale = 1.12 + Math.random() * 0.28;
+  const zScale = 0.86 + Math.random() * 0.24;
+  const chipAngle = Math.random() * Math.PI * 2;
+  const chipX = Math.cos(chipAngle);
+  const chipZ = Math.sin(chipAngle);
+
+  for (let i = 0; i < position.count; i++) {
+    const x = position.getX(i);
+    const y = position.getY(i);
+    const z = position.getZ(i);
+    const side = (x * chipX + z * chipZ) / radius;
+    const top = Math.max(0, y / radius);
+    const bottom = Math.max(0, -y / radius);
+    const chip = Math.max(0, side - 0.38) * (shoulder ? 0.18 : 0.34);
+    const ledge = Math.max(0, Math.sin((x - z) * 7.5)) * 0.035 * radius;
+
+    position.setXYZ(
+      i,
+      (x * xScale - chipX * chip * radius) * (1 + top * 0.07 - bottom * 0.10),
+      Math.max(y * squash - bottom * 0.11 * radius + ledge, -radius * 0.30),
+      (z * zScale - chipZ * chip * radius) * (1 + top * 0.04 - bottom * 0.08)
+    );
+  }
+
+  position.needsUpdate = true;
+  geometry.computeVertexNormals();
+  return geometry;
 }
 
 export const FLORA_BUILDERS = {
@@ -913,24 +966,43 @@ export const FLORA_BUILDERS = {
   },
 
   rock(biome) {
+    const g = new THREE.Group();
     const r = 0.18 + Math.random() * 0.35;
-    const geo = jitterGeo(new THREE.IcosahedronGeometry(r, 0), r * 0.3, { sphericalUvs: true });
     const baseCol = new THREE.Color(biome.cliff).offsetHSL(
       0,
       0,
       0.05 + Math.random() * 0.1
     );
-    const mesh = new THREE.Mesh(
-      geo,
-      makeStonePBRMaterial({
-        color: baseCol,
-        flatShading: true,
-        roughness: 1,
-      })
-    );
-    mesh.scale.y = 0.55 + Math.random() * 0.4;
+    const mat = makePlainRockPBRMaterial({
+      color: baseCol,
+      flatShading: true,
+      roughness: 1,
+    });
+    const mesh = new THREE.Mesh(makePlainRockGeometry(r), mat);
     mesh.castShadow = true;
-    return mesh;
+    g.add(mesh);
+
+    const shoulders = 2;
+    const shoulderPhase = Math.random() * Math.PI * 2;
+    for (let i = 0; i < shoulders; i++) {
+      const a = shoulderPhase + i * Math.PI * 0.82;
+      const chipRadius = r * (0.46 + Math.random() * 0.18);
+      const chipColor = baseCol.clone().offsetHSL(0, -0.02, -0.03 + Math.random() * 0.08);
+      const chip = new THREE.Mesh(
+        makePlainRockGeometry(chipRadius, { shoulder: true }),
+        makePlainRockPBRMaterial({
+          color: chipColor,
+          flatShading: true,
+          roughness: 1,
+        })
+      );
+      chip.position.set(Math.cos(a) * r * 0.74, -r * 0.14, Math.sin(a) * r * 0.62);
+      chip.rotation.y = a + Math.PI * (0.25 + Math.random() * 0.5);
+      chip.castShadow = true;
+      g.add(chip);
+    }
+
+    return g;
   },
 
   limestonerock(biome) {
@@ -1182,7 +1254,7 @@ export const FLORA_BUILDERS = {
       drum.rotation.y = Math.random() * Math.PI * 2;
       drum.rotation.z = (Math.random() - 0.5) * 0.08;
       drum.castShadow = true;
-      addPillarSurfaceMarks(drum, r, h, useLichen ? lichenCol : stoneCol);
+      addPillarSurfaceMarks(drum, r, r * 1.05, h, useLichen ? lichenCol : stoneCol);
       g.add(drum);
       y += h - 0.02;
     }
