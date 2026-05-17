@@ -10,7 +10,7 @@ import {
   DENSITY_BASE,
   disposeGroup,
 } from "./state.js";
-import { BIOMES, WILDFLOWER_PALETTES, FLOWER_DENSITY } from "./biomes.js";
+import { BIOMES, WILDFLOWER_PALETTES, FLOWER_DENSITY, BLOOM_RADIUS_SCALE } from "./biomes.js";
 import { mulberry32, formatSeed, writeSeedToUrl } from "./seed.js";
 import { randInt } from "./util.js";
 import {
@@ -636,6 +636,8 @@ export function generateWorld(seed) {
     // terrain. Footprint scales with flora kind (and with the random scale
     // applied below so a 1.4× tree gets a wider sample than a 0.7× one).
     let s = 0.7 + Math.random() * 0.7;
+    // Double the scale for tree types
+    if (kind === "tree" || kind === "leafballtree" || kind === "pine" || kind === "deadtree" || kind === "balloontree") s *= 2;
     const fp = (FLORA_FOOTPRINT[kind] ?? FLORA_FOOTPRINT_DEFAULT) * s;
     const placementBlockKinds = kind === "lavafissure" ? null : PLACEMENT_BLOCK_KINDS;
     if (blocksFloraPlacement(p.x, p.z, fp * 1.2, placementBlockKinds)) continue;
@@ -1123,6 +1125,23 @@ export function generateWorld(seed) {
   document.getElementById("seed").textContent = formatSeed(seed);
   document.getElementById("elevation").textContent =
     Math.round(state.maxElev * 120) + "m";
+
+  // Mobile help panel — mirror the same stats
+  const hBiome = document.getElementById("help-biome");
+  if (hBiome) hBiome.textContent = biome.name;
+  const hSeed = document.getElementById("help-seed");
+  if (hSeed) hSeed.textContent = formatSeed(seed);
+  const hCr = document.getElementById("help-creatures");
+  if (hCr) hCr.textContent = String(state.creatures.length + state.caterpillars.length).padStart(2, "0");
+  const hFl = document.getElementById("help-flora");
+  if (hFl) hFl.textContent = String(placed).padStart(2, "0");
+  const hBi = document.getElementById("help-birds");
+  if (hBi) hBi.textContent = String(totalBirds).padStart(2, "0");
+  const hEl = document.getElementById("help-elevation");
+  if (hEl) hEl.textContent = Math.round(state.maxElev * 120) + "m";
+
+  // Notify mobile UI that world is ready (triggers header auto-hide)
+  window.dispatchEvent(new CustomEvent("world-ready"));
 
   // restore the user's auto-rotate preference (regen shouldn't override it)
   if (_controls) _controls.autoRotate = state.userSettings.autoRotate;

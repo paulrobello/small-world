@@ -1637,6 +1637,28 @@ export function initUi({ camera, canvas, controls, renderer, scene }) {
   window.addEventListener("resize", handleResize);
   window.addEventListener("orientationchange", handleResize);
 
+  // On mobile, fade out the header 10 seconds after world loads.
+  // Touching the header area brings it back temporarily.
+  const _isTouchFirst =
+    "ontouchstart" in window &&
+    typeof window.matchMedia === "function" &&
+    window.matchMedia("(hover: none) and (pointer: coarse)").matches;
+  if (_isTouchFirst) {
+    const header = document.querySelector(".hud-top");
+    let _headerTimer = null;
+    function scheduleHeaderFade() {
+      clearTimeout(_headerTimer);
+      header.classList.remove("mobile-hidden");
+      _headerTimer = setTimeout(() => header.classList.add("mobile-hidden"), 10000);
+    }
+    window.addEventListener("world-ready", scheduleHeaderFade);
+    // Tap header area to temporarily reveal it
+    header.addEventListener("pointerdown", () => {
+      header.classList.remove("mobile-hidden");
+      scheduleHeaderFade();
+    });
+  }
+
   // Click-to-pick a creature. Selection mode pauses the sim and shows the
   // crosshair, but any creature hit now promotes to persistent follow so the
   // camera keeps tracking until the user releases it. Drags are distinguished

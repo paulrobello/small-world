@@ -206,7 +206,7 @@ body {
 }
 
 .regen {
-  background: transparent;
+  background: rgba(0, 0, 0, 0.5);
   border: 1px solid var(--ink-dim);
   color: var(--ink);
   font-family: "DM Mono", monospace;
@@ -378,6 +378,19 @@ body {
 /* Desktop: hide mobile help by default */
 .help-mobile { display: none; }
 
+/* Mobile header auto-hide */
+.hud-top.mobile-hidden {
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 1.5s ease;
+}
+.hud-top:not(.mobile-hidden) {
+  transition: opacity 0.5s ease;
+}
+@media (hover: hover) {
+  .hud-top.mobile-hidden { opacity: 1; pointer-events: auto; }
+}
+
 /* ─── Inline toggles (live in .controls-row, left of regenerate) ─────── */
 .controls-row {
   display: flex;
@@ -393,7 +406,7 @@ body {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  background: rgba(20, 20, 24, 0.35);
+  background: rgba(0, 0, 0, 0.5);
   border: 1px solid var(--ink-dim);
   color: var(--ink);
   font-family: "Major Mono Display", monospace;

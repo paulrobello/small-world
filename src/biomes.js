@@ -398,7 +398,7 @@ export const WILDFLOWER_PALETTES = {
 export const GRASS_DENSITY = {
   verdant: 300, desert:  0, frozen: 0,
   marsh:   500, ashen:    0, golden: 750,
-  mossy:   650, twilight: 540, coral: 0,
+  mossy:   650, twilight: 1620, coral: 0,
   cloud:     0, grove:   800, obsidian: 0,
 };
 // Per-biome grass height multiplier (1.0 = default). Applied as a Y-scale
@@ -448,4 +448,9 @@ export const PEBBLE_DENSITY = {
 
 export const BEACHCOMB_DENSITY = {
   coral: 95,
+};
+
+// Per-biome bloom radius multiplier (1.0 = user setting, 0.85 = 15% smaller).
+export const BLOOM_RADIUS_SCALE = {
+  twilight: 0.85,
 };
