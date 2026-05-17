@@ -96,13 +96,14 @@ assert(
 );
 assert(
   floraSource.includes('addLeafRing({ count: 6, phi: 0.07, shell: 0.54, scale: 0.72, matIndex: 2')
+    && floraSource.includes('pitchOffset: topMotionTuckAngle')
     && floraSource.includes('const topHighlightRows = 4;')
     && floraSource.includes('const matIndex = row < topHighlightRows ? 2 : row > 6 ? 0 : 1;'),
-  'leafballtree top cap and upper rows should use the same highlight leaf palette.'
+  'leafballtree top cap and upper rows should use the same highlight leaf palette and tuck angle.'
 );
 assert(
-  floraSource.includes('const topMotionTuckRows = 3;')
-    && floraSource.includes('const topMotionTuckAngle = 0.045;')
+  floraSource.includes('const topMotionTuckRows = 4;')
+    && floraSource.includes('const topMotionTuckAngle = 0.045 + THREE.MathUtils.degToRad(2);')
     && floraSource.includes('pitchOffset: row < topMotionTuckRows ? topMotionTuckAngle : 0,'),
-  'leafballtree top three rows should be tucked slightly farther over the rows beneath them.'
+  'leafballtree top four rows should be tucked an extra two degrees over the rows beneath them.'
 );
