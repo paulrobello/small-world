@@ -1325,7 +1325,7 @@ body.photo-mode .grain {
 .fps-counter {
   position: fixed;
   top: -2px;
-  right: -2px;
+  right: 23px;
   padding: 4px 10px;
   background: rgba(20, 20, 24, 0.55);
   border: 1px solid rgba(255, 255, 255, 0.08);
