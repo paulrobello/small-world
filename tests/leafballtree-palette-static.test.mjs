@@ -94,3 +94,8 @@ assert(
   worldSource.includes('if (kind === "berrybush") s *= 1 + Math.random() * 0.25;'),
   'berry bushes should keep the existing size as the minimum and vary up to 25% larger.'
 );
+assert(
+  floraSource.includes('addLeafRing({ count: 6, phi: 0.07, shell: 0.54, scale: 0.72, matIndex: 2')
+    && floraSource.includes('const matIndex = row <= 1 ? 2 : row > 5 ? 0 : 1;'),
+  'leafballtree top cap and first row under the cap should use the highlight leaf palette.'
+);
