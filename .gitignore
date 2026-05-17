@@ -81,3 +81,6 @@ docs/superpowers
 
 # local git worktrees
 .worktrees/
+
+# build output — CI deploys this
+dist/
