@@ -142,8 +142,9 @@ timer.connect(document);
 const _fpsEl = document.getElementById("fps-value");
 let _fpsEma = 60;
 let _fpsLastUpdate = 0;
-// Reused per-frame scratch vector for projecting the orbit target into NDC.
+// Reused per-frame scratch vectors for projecting the active focus point into NDC.
 const _focusProj = new THREE.Vector3();
+const _focusDir = new THREE.Vector3();
 function animate() {
   requestAnimationFrame(animate);
   timer.update();
@@ -337,18 +338,15 @@ function animate() {
     updateWaterReflection(state.waterReflection, renderer, camera, controls);
   }
 
-  // Update tilt-shift focus: project the orbit target to screen-Y for the
-  // sharp band, and measure camera→target distance for the depth focus.
+  // Update tilt-shift focus: project the active camera focus point to
+  // screen-Y for the sharp band, and measure camera→focus distance for the
+  // depth focus.
   if (postfx.isActive && postfx.isActive()) {
-    // In first-person modes, focus tilt-shift on a point 8 units ahead of camera
     let focusZ;
     if (isAnyFP()) {
       focusZ = 8;
-      _focusProj.set(
-        camera.position.x - Math.sin(camera.rotation.y) * 8,
-        camera.position.y - Math.sin(camera.rotation.x) * 8,
-        camera.position.z - Math.cos(camera.rotation.y) * 8,
-      ).project(camera);
+      camera.getWorldDirection(_focusDir);
+      _focusProj.copy(camera.position).addScaledVector(_focusDir, focusZ).project(camera);
     } else {
       _focusProj.copy(controls.target).project(camera);
       focusZ = camera.position.distanceTo(controls.target);

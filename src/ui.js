@@ -182,6 +182,7 @@ export function stepStroll(dt) {
   if (!_stroll && !_photoFP) return;
   const fp = _stroll || _photoFP;
   applyStrollVisualComfort(true);
+  if (fp.reviewOpen) return;
   const { camera: cam, keys } = fp;
   const fly = fp.fly === true;
   // Move speed scales with the world — at higher worldScale the island is
@@ -1175,6 +1176,12 @@ export function initUi({ camera, canvas, controls, renderer }) {
 
   let _photoSavedAutoRotate = controls.autoRotate;
   function capturePhoto() {
+    if (_photoReview || _photoFP?.reviewOpen) return;
+    if (_photoFP) {
+      _photoFP.reviewOpen = true;
+      for (const key of Object.keys(_photoFP.keys)) _photoFP.keys[key] = false;
+      if (document.pointerLockElement === canvas) document.exitPointerLock?.();
+    }
     const seedTag = formatSeed(state.currentSeed).replace(/^0x/, "");
     const biomeTag = (state.currentBiome?.id ?? "world").replace(/\s+/g, "-");
     const url = canvas.toDataURL("image/png");
@@ -1285,7 +1292,7 @@ export function initUi({ camera, canvas, controls, renderer }) {
     actions.querySelector(".photo-review-discard").addEventListener("click", closePhotoReview);
   }
 
-  function closePhotoReview() {
+  function closePhotoReview({ resumePhotoFp = true } = {}) {
     if (!_photoReview) return;
     const { group, mesh, borderMesh, tex, mat, borderMat, dim, actions } = _photoReview;
     mat.opacity = 0;
@@ -1304,6 +1311,10 @@ export function initUi({ camera, canvas, controls, renderer }) {
     setTimeout(() => dim.remove(), 300);
     actions.remove();
     _photoReview = null;
+    if (_photoFP) {
+      _photoFP.reviewOpen = false;
+      if (resumePhotoFp && document.body.classList.contains("photo-mode")) canvas.requestPointerLock?.();
+    }
   }
   const photoModeBtn = document.getElementById("setting-photo");
   const photoModeLabel = document.getElementById("setting-photo-label");
@@ -1350,6 +1361,7 @@ export function initUi({ camera, canvas, controls, renderer }) {
         keys: { w: false, a: false, s: false, d: false, shift: false, space: false, ctrl: false, e: false, q: false },
         handlers: {},
         _hadLock: false,
+        reviewOpen: false,
       };
       camera.fov = PHOTO_BASE_FOV;
       camera.updateProjectionMatrix();
@@ -1380,6 +1392,7 @@ export function initUi({ camera, canvas, controls, renderer }) {
       const onKey = (down) => (e) => {
         if (!_photoFP) return;
         const k = e.key.toLowerCase();
+        if (k === "s" && down) { capturePhoto(); e.preventDefault(); return; }
         if (k === "w") _photoFP.keys.w = down;
         else if (k === "a") _photoFP.keys.a = down;
         else if (k === "s") _photoFP.keys.s = down;
@@ -1394,7 +1407,8 @@ export function initUi({ camera, canvas, controls, renderer }) {
         if (!_photoFP) return;
         if (document.pointerLockElement === canvas) {
           _photoFP._hadLock = true;
-        } else if (_photoFP._hadLock) {
+        } else if (_photoFP.reviewOpen) return;
+        else if (_photoFP._hadLock) {
           setPhotoMode(false);
         }
       };
@@ -1414,7 +1428,7 @@ export function initUi({ camera, canvas, controls, renderer }) {
       applyStrollVisualComfort(true);
     } else {
       // Close any open photo review first
-      if (_photoReview) closePhotoReview();
+      if (_photoReview) closePhotoReview({ resumePhotoFp: false });
       if (!_photoFP) { syncPhotoModeButton(); return; }
       const { handlers, savedCam } = _photoFP;
       document.removeEventListener("mousemove", handlers.onMove);
@@ -1823,7 +1837,7 @@ export function initUi({ camera, canvas, controls, renderer }) {
     if (tag === "INPUT" || tag === "TEXTAREA") return;
     if (INSPECT) return;
     if (e.key === "Escape") {
-      if (_photoReview) { closePhotoReview(); setPhotoMode(false); }
+      if (_photoReview) { closePhotoReview({ resumePhotoFp: false }); setPhotoMode(false); }
       else if (_stroll) _exitStroll();
       else if (document.body.classList.contains("photo-mode")) setPhotoMode(false);
       else if (_locatorOpen) setLocatorOpen(false);
@@ -1833,7 +1847,7 @@ export function initUi({ camera, canvas, controls, renderer }) {
       else if (_settingsPanel.classList.contains("open")) setSettingsOpen(false);
     } else if (e.key === "p" || e.key === "P") {
       setPhotoMode(!document.body.classList.contains("photo-mode"));
-    } else if ((e.key === "s" || e.key === "S") && document.body.classList.contains("photo-mode") && !_photoFP) {
+    } else if ((e.key === "s" || e.key === "S") && document.body.classList.contains("photo-mode")) {
       e.preventDefault();
       capturePhoto();
     } else if (e.key === "f" || e.key === "F") {
