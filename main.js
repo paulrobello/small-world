@@ -30,12 +30,10 @@ import {
   loadSettings,
   getFollowTarget,
   setFollowTarget,
-  isStrolling,
   stepStroll,
   isAnyFP,
   isPhotoFP,
   getPhotoReviewGroup,
-  isPhotoMode,
   isSelectingCreature,
   isManualPaused,
 } from "./src/ui.js";

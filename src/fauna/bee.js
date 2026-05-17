@@ -1,6 +1,5 @@
 import * as THREE from "three";
-import { state } from "../state.js";
-import { WATER_AVOID_Y, pushOutOfObstacles, applyWaterFloorAndSteer } from "./shared.js";
+import { pushOutOfObstacles, applyWaterFloorAndSteer } from "./shared.js";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Bee swarms — small fast fliers that orbit a shared flower target.
@@ -16,7 +15,7 @@ export function makeSwarm() {
   };
 }
 
-export function makeBee(swarm, biome) {
+export function makeBee(swarm, _biome) {
   const group = new THREE.Group();
   // tiny dark body (slightly smaller than a butterfly)
   const body = new THREE.Mesh(

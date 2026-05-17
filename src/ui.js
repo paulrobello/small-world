@@ -1491,20 +1491,6 @@ export function initUi({ camera, canvas, controls, renderer }) {
     return e.group.position;
   }
 
-  function locatorFindNearest(entities, getPos) {
-    const tx = controls.target.x;
-    const tz = controls.target.z;
-    let best = null;
-    let bestI = 0;
-    let bestD = Infinity;
-    for (let i = 0; i < entities.length; i++) {
-      const p = getPos(entities[i]);
-      const d = (p.x - tx) ** 2 + (p.z - tz) ** 2;
-      if (d < bestD) { bestD = d; best = entities[i]; bestI = i; }
-    }
-    return { entity: best, index: bestI };
-  }
-
   function locatorSortByProximity(entities, getPos) {
     const tx = controls.target.x;
     const tz = controls.target.z;
@@ -1860,7 +1846,7 @@ export function initUi({ camera, canvas, controls, renderer }) {
       setLocatorOpen(!_locatorOpen);
     } else if (e.key === "Tab" && _locatorCycle) {
       e.preventDefault();
-      const { entities, getPos, isCreature } = _locatorCycle;
+      const { isCreature } = _locatorCycle;
       // Skip entities removed by regen (group no longer in the scene).
       while (_locatorCycle.entities.length > 0) {
         const e = _locatorCycle.entities[_locatorCycle.index];

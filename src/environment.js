@@ -219,7 +219,7 @@ export function makeParticles(biome) {
 
 export function stepParticles(points, dt, t) {
   if (!points) return;
-  const { kind, velocities, seeds, lifes, count } = points.userData;
+  const { kind, seeds, lifes, count } = points.userData;
   const pos = points.geometry.attributes.position.array;
 
   for (let i = 0; i < count; i++) {

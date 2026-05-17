@@ -950,7 +950,7 @@ function emitFlierLandingMarks(c, heightFn) {
 // Nudge `c.heading` toward the nearest same-color creature so kin pair up
 // into loose pairs/trios. Capped by `c.herdStrength` and a max distance so
 // it never overpowers the existing random wander.
-function herdInfluence(c, dt) {
+function herdInfluence(c) {
   const me = c.group.position;
   let best = null;
   let bestD = Infinity;
@@ -1426,7 +1426,7 @@ export function stepCreature(c, dt, t, heightFn) {
       // applied during the think event so it's cheap (O(creatures) per
       // creature ~once a second) and doesn't fight the natural wander.
       if (!c.flies || grounded) {
-        herdInfluence(c, dt);
+        herdInfluence(c);
       }
     }
     // While homing to a perch, intentionally skip the random heading
@@ -1660,7 +1660,6 @@ export function stepCreature(c, dt, t, heightFn) {
       waterClearanceY = WATER_AVOID_Y + 0.42 * c.bodyBaseY * c.scale + 0.08;
       floorY = waterClearanceY;
     }
-    const restH = 0.35 * c.scale;
     if (c.perchTarget) {
       const perchPoint = currentPerchPoint(c.perchTarget);
       const dxp = perchPoint.x - pos.x;

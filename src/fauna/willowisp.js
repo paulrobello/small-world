@@ -64,7 +64,7 @@ export function makeWillOWisp(homeX, homeY, homeZ, wanderRadius) {
   const seed = Math.random() * 1000;
   const speed = 0.25 + Math.random() * 0.2;
   const startY = homeY + 0.3 + Math.random() * 0.4;
-  const dartAngle = Math.random() * Math.PI * 2;
+  const initialDartAngle = Math.random() * Math.PI * 2;
 
   return {
     group,
@@ -93,9 +93,9 @@ export function makeWillOWisp(homeX, homeY, homeZ, wanderRadius) {
     dartTimer: 2 + Math.random() * 4, // countdown to next dart
     dartTime: 0,    // elapsed time in current dart
     dartDur: 0,     // duration of current dart
-    dartNx: 0,
+    dartNx: Math.cos(initialDartAngle),
     dartNy: 0,
-    dartNz: 0,
+    dartNz: Math.sin(initialDartAngle),
   };
 }
 

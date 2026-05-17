@@ -1,11 +1,10 @@
 import * as THREE from "three";
-import { state } from "../state.js";
-import { WATER_AVOID_Y, pushOutOfObstacles, applyWaterFloorAndSteer } from "./shared.js";
+import { pushOutOfObstacles, applyWaterFloorAndSteer } from "./shared.js";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Butterflies — small bright fliers that flutter between flowers
 // ─────────────────────────────────────────────────────────────────────────────
-export function makeButterfly(palette, biome) {
+export function makeButterfly(palette, _biome) {
   const group = new THREE.Group();
 
   const c1 = palette[Math.floor(Math.random() * palette.length)];

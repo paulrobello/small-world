@@ -2,7 +2,7 @@ import * as THREE from "three";
 import { state } from "./state.js";
 import { BIOMES } from "./biomes.js";
 import { WILDFLOWER_PALETTES } from "./biomes.js";
-import { makeCreature, makeCaterpillar, stepCreature, stepCaterpillar, makeRingTrail } from "./fauna.js";
+import { makeCreature, makeCaterpillar, stepCreature, makeRingTrail } from "./fauna.js";
 import { FLORA_BUILDERS, resetFloraPool } from "./flora.js";
 import { mulberry32 } from "./seed.js";
 import { jitterGeo, applyWindSway } from "./util.js";

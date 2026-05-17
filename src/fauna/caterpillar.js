@@ -4,7 +4,6 @@ import { jitterGeo } from "../util.js";
 import { pickGroundPoint, nearestCenter } from "../terrain.js";
 import { emitGroundMark } from "../environment.js";
 import { applyShellFur } from "../fur.js";
-import { BLOOM_LAYER } from "../postfx.js";
 import { WATER_AVOID_Y, avoidObstacles, sampleSlopes, addAntennae } from "./shared.js";
 
 // ─────────────────────────────────────────────────────────────────────────────

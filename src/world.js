@@ -10,7 +10,7 @@ import {
   DENSITY_BASE,
   disposeGroup,
 } from "./state.js";
-import { BIOMES, WILDFLOWER_PALETTES, FLOWER_DENSITY, BLOOM_RADIUS_SCALE } from "./biomes.js";
+import { BIOMES, WILDFLOWER_PALETTES, FLOWER_DENSITY } from "./biomes.js";
 import { mulberry32, formatSeed, writeSeedToUrl } from "./seed.js";
 import { randInt } from "./util.js";
 import {
@@ -52,7 +52,6 @@ import {
   makeAurora,
   makeCloudSwirl,
   makeIslandEdgeMist,
-  stepClouds,
   updateSkyColors,
 } from "./sky.js";
 import { makeWaterReflection, disposeWaterReflection } from "./reflection.js";
@@ -903,7 +902,6 @@ export function generateWorld(seed) {
   // so the actual headcount can be slightly higher than the configured range.
   const ncreatures = Math.max(1, Math.round(randInt(...biome.creatureCount) * densityScale));
   const allowGroundVariants = biome.creatureKind !== "fish";
-  let spawned = 0;
   let budget = ncreatures;
   // In water biomes, raise the minimum-Y threshold so ground creatures don't
   // spawn submerged. Fish are the exception: they spawn on underwater shelves
@@ -934,7 +932,6 @@ export function generateWorld(seed) {
     c.group.position.set(p.x, swimY, p.z);
     state.world.add(c.group);
     state.creatures.push(c);
-    spawned++;
     return true;
   }
   function placeOnGround(c) {
@@ -961,7 +958,6 @@ export function generateWorld(seed) {
     c.group.position.set(p.x, y + 0.4, p.z);
     state.world.add(c.group);
     state.creatures.push(c);
-    spawned++;
     return true;
   }
   let creatureAttempts = 0;
@@ -993,7 +989,6 @@ export function generateWorld(seed) {
           kid.group.position.set(nx, state.heightFn(nx, nz) + 0.4, nz);
           state.world.add(kid.group);
           state.creatures.push(kid);
-          spawned++;
           budget--;
           kidPlaced = true;
           break;
