@@ -126,7 +126,9 @@ export function updateDayNight(t) {
     revealMul;
 
   blendPalette(state.sunLight.color, dn.sun, dn.duskSun, dn.nightSun, liftedDay);
-  state.sunLight.intensity = 0.45 + dayFactor * 0.95 + ab * 1.6;
+  const sunBase = 0.45 + dayFactor * 0.95 + ab * 1.6;
+  const sunMul = state.currentBiome?.sunIntensity ?? 1;
+  state.sunLight.intensity = sunBase * sunMul;
   const sunAngle = phase + Math.PI;
   const sunR = 26;
   state.sunLight.position.set(
@@ -265,7 +267,7 @@ export function generateWorld(seed) {
   state.world.add(hemi);
   state.hemiLight = hemi;
 
-  const sun = new THREE.DirectionalLight(new THREE.Color(biome.sun), dark ? 2.0 : 1.25);
+  const sun = new THREE.DirectionalLight(new THREE.Color(biome.sun), (dark ? 2.0 : 1.25) * (biome.sunIntensity ?? 1));
   sun.position.set(18, 28, 12);
   sun.castShadow = true;
   sun.shadow.mapSize.set(2048, 2048);
