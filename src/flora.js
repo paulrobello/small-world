@@ -559,6 +559,7 @@ export const FLORA_BUILDERS = {
     const topHighlightRows = 4;
     const topMotionTuckRows = 4;
     const topMotionTuckAngle = -(0.045 + THREE.MathUtils.degToRad(2));
+    const firstTopRowBackoffAngle = THREE.MathUtils.degToRad(2);
     addLeafRing({ count: 6, phi: 0.07, shell: 0.54, scale: 0.72, matIndex: 2, phase: 0.18, lift: 0.32, yOffset: 0.40, pitchOffset: topMotionTuckAngle });
     let staggerPhase = 0;
     for (let row = 0; row < rowCounts.length; row++) {
@@ -574,7 +575,7 @@ export const FLORA_BUILDERS = {
         matIndex,
         phase: staggerPhase,
         lift: row === rowCounts.length - 2 ? 0.48 - t * 0.08 : row === rowCounts.length - 1 ? 0.35 - t * 0.08 : 0.22 - t * 0.10,
-        pitchOffset: row < topMotionTuckRows ? topMotionTuckAngle : 0,
+        pitchOffset: row === 0 ? topMotionTuckAngle + firstTopRowBackoffAngle : row < topMotionTuckRows ? topMotionTuckAngle : 0,
       });
       staggerPhase += Math.PI / rowCounts[row];
     }

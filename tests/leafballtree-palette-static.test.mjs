@@ -104,6 +104,7 @@ assert(
 assert(
   floraSource.includes('const topMotionTuckRows = 4;')
     && floraSource.includes('const topMotionTuckAngle = -(0.045 + THREE.MathUtils.degToRad(2));')
-    && floraSource.includes('pitchOffset: row < topMotionTuckRows ? topMotionTuckAngle : 0,'),
-  'leafballtree top four rows should be tucked an extra two degrees over the rows beneath them.'
+    && floraSource.includes('const firstTopRowBackoffAngle = THREE.MathUtils.degToRad(2);')
+    && floraSource.includes('pitchOffset: row === 0 ? topMotionTuckAngle + firstTopRowBackoffAngle : row < topMotionTuckRows ? topMotionTuckAngle : 0,'),
+  'leafballtree first top row should back off two degrees while the cap and next top rows keep the stronger tuck.'
 );
