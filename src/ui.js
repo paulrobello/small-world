@@ -7,6 +7,7 @@ import { wakeCreature, lookAtCreature } from "./fauna.js";
 import { BIOMES } from "./biomes.js";
 import { LOWFX } from "./lowfx.js";
 import { INSPECT } from "./inspect.js";
+import { APP_VERSION } from "./state.js";
 
 let followTarget = null;
 let selectingCreature = false;
@@ -281,6 +282,10 @@ function setSelectingCreature(on) {
 }
 
 export function initUi({ camera, canvas, controls, renderer, scene }) {
+  // Inject app version into header eyebrow
+  const versionEl = document.getElementById("app-version");
+  if (versionEl) versionEl.textContent = APP_VERSION;
+
   // Restore persisted settings before reading any defaults — UI inputs and
   // controls below sync themselves from state.userSettings.
   loadSettings();

@@ -30,9 +30,25 @@ make logs      # tail -f the log
 
 There are no tests, no linter, no build. Edits to `main.js` / `src/*.js` / `style.css` / `index.html` are picked up on browser reload — the server sends `Cache-Control: no-store` so a normal refresh is enough. No `package.json`, `pyproject.toml`, `Cargo.toml`, `justfile`, or `Taskfile.yml` is present.
 
+## Version
+
+The app version is defined in `src/state.js` as `APP_VERSION` (reads from `import.meta.env.VITE_APP_VERSION`, falls back to `"dev"` locally). It appears in the header eyebrow as "vol. X.Y.Z".
+
+**Always bump `APP_VERSION` in `src/state.js` before pushing.** Use semantic versioning (major.minor.patch):
+- **patch** — bug fixes, small tweaks
+- **minor** — new features, new biomes, new creatures
+- **major** — breaking changes, major reworks
+
+CI builds from source as-is, so the version string in `src/state.js` is the single source of truth.
+
 ## Release/deploy
 
-No release script or GitHub Actions workflow is present. README links the live site at `https://small-world.pardev.net/`; GitHub Pages should use the root `CNAME` file (`small-world.pardev.net`) for the custom domain. `ideas.md` says to commit and push completed enhancement work so it is live on GitHub Pages. Treat Pages publication from `main` as inferred from repository docs and verify repository Pages settings before changing deployment behavior.
+Pushing to `main` triggers the GitHub Actions workflow (`.github/workflows/deploy.yml`) which runs `npx vite build` and deploys the `dist/` output to GitHub Pages. The `CNAME` file (`small-world.pardev.net`) is copied into the build output for the custom domain. `dist/` is gitignored — only source files are tracked; the bundle is built fresh by CI on every push.
+
+Before pushing, always:
+1. Bump `APP_VERSION` in `src/state.js`
+2. Commit the version bump alongside (or just before) the changes
+3. Push to `main`
 
 ## Architecture
 
@@ -153,7 +169,7 @@ If a change would make something look scary, sharp, realistic, or twitchy, it's 
 
 ## Conventions worth keeping
 
-- **No build, no deps.** Keep it that way unless explicitly asked. New libraries go in the importmap; don't introduce npm/package.json/bundlers.
+- **Runtime deps via CDN importmap.** Three.js and simplex-noise load from jsDelivr in `index.html`'s `<script type="importmap">`. A `vite.config.js` exists for the CI production build only (externalizes CDN deps); there is no local package.json. Don't introduce npm packages or bundler config beyond what CI needs.
 - **Adding a biome:** append to `BIOMES`. If a new flora kind is needed, add it to `FLORA_BUILDERS` first; the biome's `flora` array references it by string. Also extend the per-biome `WILDFLOWER_PALETTES` / `GRASS_DENSITY` / `FLOWER_DENSITY` / `PEBBLE_DENSITY` tables (they fall back to defaults via `??` but tuned values look better).
 - **Adding a creature type:** follow the existing `makeX` + `stepX` split and push to the corresponding array inside `generateWorld`, then call its `stepX` from `animate()`.
 - **Cross-cutting per-biome behavior:** add a flag on the biome (see "Biome-flag pattern" above) and check it in the relevant builder, rather than branching on `biome.id`.

@@ -1,5 +1,8 @@
 import * as THREE from "three";
 
+// App version — bump before every push. CI passes this to the build.
+export const APP_VERSION = "1.0.0";
+
 export const ISLAND_SIZE_BASE = 50;
 export const ISLAND_RADIUS_BASE = ISLAND_SIZE_BASE * 0.462;
 // Density anchor for biome flora/creature counts. The biome tables in
@@ -130,7 +133,7 @@ export const state = {
     grassPanelOpen: false,
     terrainSmoothShading: true,
     foliageWindEnabled: true,
-    bloomRadius: 1.0,
+    bloomRadius: 0.15,
   },
   // Set by world.js after makeTerrain. Used by the smooth-shading toggle in
   // ui.js to flip mat.flatShading at runtime without rebuilding geometry.
