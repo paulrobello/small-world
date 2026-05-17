@@ -173,6 +173,7 @@ const INSPECT_SCENERY_BUILDERS = {
 
       // Stem — lean outward from cluster center.
       const stemLean = 0.4;
+      const stemH = 0.44;
       const stem = new THREE.Mesh(stemGeo, stemMat);
       stem.scale.setScalar(sc);
       stem.position.set(cx, 0, cz);

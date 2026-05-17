@@ -1014,7 +1014,7 @@ export function initUi({ camera, canvas, controls, renderer, scene }) {
   let _copyResetTimer = 0;
   copyBtn.addEventListener("click", async () => {
     const url = window.location.href;
-    let ok = false;
+    let ok = false; // eslint-disable-line no-useless-assignment
     try {
       if (navigator.clipboard?.writeText) {
         await navigator.clipboard.writeText(url);
@@ -1242,8 +1242,8 @@ export function initUi({ camera, canvas, controls, renderer, scene }) {
     const actions = document.createElement("div");
     actions.className = "photo-review-actions";
     actions.innerHTML = `
-      <button class="photo-action photo-review-save" type=\"button\">save</button>
-      <button class=\"photo-action photo-review-discard\" type=\"button\">discard</button>
+      <button class="photo-action photo-review-save" type="button">save</button>
+      <button class="photo-action photo-review-discard" type="button">discard</button>
     `;
     document.body.appendChild(actions);
 

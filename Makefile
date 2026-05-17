@@ -4,7 +4,7 @@ PID_FILE := .server.pid
 LOG_FILE := .server.log
 PYTHON := python3
 
-.PHONY: dev start stop restart status logs build preview clean
+.PHONY: dev start stop restart status logs build preview lint clean
 
 # Vite dev server with hot reload (port 1999)
 dev:
@@ -51,6 +51,10 @@ logs:
 # Production build (minified, tree-shaken, content-hashed assets)
 build:
 	npx vite build
+
+# Lint
+lint:
+	npx eslint main.js src/
 
 # Preview the production build locally
 preview:
