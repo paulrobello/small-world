@@ -392,6 +392,25 @@ body.mobile .help-desktop { display: none; }
 body.mobile .help-mobile { display: block; }
 body.mobile .controls .hint { display: none; }
 body.mobile .stats { display: none; }
+body.mobile .settings-panel {
+  bottom: auto;
+  top: 12px;
+  left: 12px;
+  right: 12px;
+  width: auto;
+  max-width: none;
+  max-height: 60vh;
+}
+body.mobile .help-panel,
+body.mobile .locator-panel {
+  bottom: auto;
+  top: 12px;
+  left: 12px;
+  right: 12px;
+  width: auto;
+  max-width: none;
+  max-height: 60vh;
+}
 
 /* ─── Inline toggles (live in .controls-row, left of regenerate) ─────── */
 .controls-row {
@@ -448,6 +467,7 @@ body.mobile .stats { display: none; }
   max-width: calc(100vw - 28px);
   max-height: calc(100vh - 220px);
   overflow-y: auto;
+  overflow-x: hidden;
   padding: 16px 18px 14px;
   background: rgba(14, 14, 18, 0.82);
   border: 1px solid var(--ink-dim);
@@ -518,6 +538,7 @@ body.photo-mode .help-panel {
   max-width: calc(100vw - 28px);
   max-height: calc(100vh - 220px);
   overflow-y: auto;
+  overflow-x: hidden;
   padding: 16px 18px 14px;
   background: rgba(14, 14, 18, 0.82);
   border: 1px solid var(--ink-dim);
