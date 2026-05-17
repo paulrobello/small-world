@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-A single-page Three.js "terrarium" that procedurally generates a small floating-island world (biome, terrain, flora, creatures, birds, particles) from a 16-bit seed. No build step, no package manager — Three.js and simplex-noise are loaded from CDN via the `<script type="importmap">` in `index.html`.
+A single-page Three.js "terrarium" that procedurally generates a small floating-island world (biome, terrain, flora, creatures, birds, particles) from a 16-bit seed. Vite provides the dev server (HMR) and optimized production builds. Three.js and simplex-noise are npm packages, bundled and tree-shaken.
 
 ## Navigation quick start
 
@@ -18,35 +18,43 @@ Source-of-truth docs/backlog:
 
 ## Running it
 
-The Makefile wraps `server.py` (a stdlib `http.server` that disables caching) as a backgrounded process on `0.0.0.0:1999`. PID is tracked in `.server.pid`, output goes to `.server.log`.
+`make dev` starts the Vite dev server with hot reload on `http://localhost:1999`. Edits to `main.js` / `src/*.js` / `style.css` / `index.html` are reflected instantly without a full reload when possible.
+
+`make build` produces an optimized production bundle in `dist/` (minified, tree-shaken, content-hashed assets). `make preview` serves the built output locally.
+
+The legacy Python server (`make start` / `make stop` / `make restart`) is still available for no-HMR static serving.
 
 ```
-make start     # start (idempotent — reports if already running)
-make stop      # stop via PID file, falls back to lsof on :1999 for stray procs
+make dev       # Vite dev server with HMR (recommended)
+make build     # production build → dist/
+make preview   # preview production build
+make start     # legacy Python static server (no HMR)
+make stop
 make restart
 make status
-make logs      # tail -f the log
+make logs      # tail -f the Python server log
+make clean     # rm -rf dist
 ```
 
-There are no tests, no linter, no build. Edits to `main.js` / `src/*.js` / `style.css` / `index.html` are picked up on browser reload — the server sends `Cache-Control: no-store` so a normal refresh is enough. No `package.json`, `pyproject.toml`, `Cargo.toml`, `justfile`, or `Taskfile.yml` is present.
+Runtime dependencies (three.js, simplex-noise) are installed via npm and bundled by Vite — they're no longer loaded from CDN. `node_modules/` is gitignored; run `npm install` before `make dev` or `make build`.
 
 ## Version
 
-The app version is defined in `src/state.js` as `APP_VERSION` (reads from `import.meta.env.VITE_APP_VERSION`, falls back to `"dev"` locally). It appears in the header eyebrow as "vol. X.Y.Z".
+The app version is defined in `package.json` (`"version"` field). It's injected into the app at build time via Vite's `define` config and appears in the header eyebrow as "vol. X.Y.Z".
 
-**Always bump `APP_VERSION` in `src/state.js` before pushing.** Use semantic versioning (major.minor.patch):
+**Always bump `version` in `package.json` before pushing.** Use semantic versioning (major.minor.patch):
 - **patch** — bug fixes, small tweaks
 - **minor** — new features, new biomes, new creatures
 - **major** — breaking changes, major reworks
 
-CI builds from source as-is, so the version string in `src/state.js` is the single source of truth.
+CI reads `package.json` and passes the version to the build, so the deployed site always shows the correct version.
 
 ## Release/deploy
 
-Pushing to `main` triggers the GitHub Actions workflow (`.github/workflows/deploy.yml`) which runs `npx vite build` and deploys the `dist/` output to GitHub Pages. The `CNAME` file (`small-world.pardev.net`) is copied into the build output for the custom domain. `dist/` is gitignored — only source files are tracked; the bundle is built fresh by CI on every push.
+Pushing to `main` triggers the GitHub Actions workflow (`.github/workflows/deploy.yml`) which runs `npm ci && npm run build` and deploys the `dist/` output to GitHub Pages. The `CNAME` file (`small-world.pardev.net`) is copied into the build output for the custom domain. `dist/` is gitignored — only source files are tracked; the bundle is built fresh by CI on every push.
 
 Before pushing, always:
-1. Bump `APP_VERSION` in `src/state.js`
+1. Bump `version` in `package.json`
 2. Commit the version bump alongside (or just before) the changes
 3. Push to `main`
 
@@ -169,7 +177,7 @@ If a change would make something look scary, sharp, realistic, or twitchy, it's 
 
 ## Conventions worth keeping
 
-- **Runtime deps via CDN importmap.** Three.js and simplex-noise load from jsDelivr in `index.html`'s `<script type="importmap">`. A `vite.config.js` exists for the CI production build only (externalizes CDN deps); there is no local package.json. Don't introduce npm packages or bundler config beyond what CI needs.
+- **Runtime deps via npm.** three.js and simplex-noise are installed locally (`package.json`) and bundled/tree-shaken by Vite at build time. No CDN importmap needed. The `vite.config.js` configures minification, content hashing, and the dev server.
 - **Adding a biome:** append to `BIOMES`. If a new flora kind is needed, add it to `FLORA_BUILDERS` first; the biome's `flora` array references it by string. Also extend the per-biome `WILDFLOWER_PALETTES` / `GRASS_DENSITY` / `FLOWER_DENSITY` / `PEBBLE_DENSITY` tables (they fall back to defaults via `??` but tuned values look better).
 - **Adding a creature type:** follow the existing `makeX` + `stepX` split and push to the corresponding array inside `generateWorld`, then call its `stepX` from `animate()`.
 - **Cross-cutting per-biome behavior:** add a flag on the biome (see "Biome-flag pattern" above) and check it in the relevant builder, rather than branching on `biome.id`.

@@ -84,3 +84,4 @@ docs/superpowers
 
 # build output — CI deploys this
 dist/
+.vite/

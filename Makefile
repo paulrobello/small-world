@@ -4,8 +4,13 @@ PID_FILE := .server.pid
 LOG_FILE := .server.log
 PYTHON := python3
 
-.PHONY: start stop restart status logs
+.PHONY: dev start stop restart status logs build preview clean
 
+# Vite dev server with hot reload (port 1999)
+dev:
+	npx vite --port $(PORT) --open
+
+# Legacy Python static server (no HMR, no build)
 start:
 	@if [ -f $(PID_FILE) ] && kill -0 `cat $(PID_FILE)` 2>/dev/null; then \
 		echo "already running (pid `cat $(PID_FILE)`) on $(HOST):$(PORT)"; \
@@ -42,3 +47,15 @@ status:
 
 logs:
 	@tail -f $(LOG_FILE)
+
+# Production build (minified, tree-shaken, content-hashed assets)
+build:
+	npx vite build
+
+# Preview the production build locally
+preview:
+	npx vite preview --port $(PORT) --open
+
+# Remove build output
+clean:
+	rm -rf dist

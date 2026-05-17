@@ -1,7 +1,8 @@
 import * as THREE from "three";
 
-// App version — bump before every push. CI passes this to the build.
-export const APP_VERSION = "1.0.0";
+// App version — injected by Vite at build time from package.json.
+// In dev mode, reads from the env var; in production, inlined by define.
+export const APP_VERSION = __APP_VERSION__;
 
 export const ISLAND_SIZE_BASE = 50;
 export const ISLAND_RADIUS_BASE = ISLAND_SIZE_BASE * 0.462;

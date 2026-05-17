@@ -26,9 +26,12 @@ jobs:
       - uses: actions/setup-node@v6
         with:
           node-version: 22
+          cache: npm
+
+      - run: npm ci
 
       - name: Build
-        run: npx vite build
+        run: npm run build
 
       - name: Copy CNAME into dist
         run: cp CNAME dist/CNAME

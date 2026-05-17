@@ -1,0 +1,36 @@
+{
+  "name": "small-world",
+  "version": "1.1.0",
+  "description": "A Three.js terrarium that grows a tiny floating-island world — biome, terrain, flora, creatures, birds, and weather — from a 16-bit seed. Cute and painterly by design.",
+  "main": "main.js",
+  "directories": {
+    "doc": "docs",
+    "test": "tests"
+  },
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "start": "python3 server.py"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/paulrobello/small-world.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "module",
+  "bugs": {
+    "url": "https://github.com/paulrobello/small-world/issues"
+  },
+  "homepage": "https://github.com/paulrobello/small-world#readme",
+  "dependencies": {
+    "simplex-noise": "^4.0.3",
+    "three": "^0.184.0"
+  },
+  "devDependencies": {
+    "esbuild": "^0.28.0",
+    "vite": "^8.0.13"
+  }
+}
