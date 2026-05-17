@@ -154,8 +154,13 @@ export const BIOMES = [
     fogDensity: 0.010,
     accent: "#606c38",
     sun: "#fff4d0",
-    flora: ["grass", "grass", "grass", "rock", "tree", "tree", "berrybush"],
+    flora: ["grass", "grass", "grass", "rock", "leafballtree", "leafballtree", "berrybush"],
     floraCount: 115,
+    leafballTreePalette: {
+      trunk: "#8a5a2c",
+      outline: "#3f3d16",
+      leaves: ["#9a6d24", "#c49a3d", "#f1c86b"],
+    },
     particle: "pollen",
     creatureColors: ["#283618", "#606c38", "#bc6c25", "#fefae0"],
     creatureCount: [10, 15],
@@ -413,6 +418,7 @@ export const GRASS_HEIGHT = {
 // raise it so the field reads patchy.
 export const BALD_THRESHOLD = {
   verdant: 0.10,
+  golden: 0.00,
   twilight: 0.18,
   ashen: 0.45,
   obsidian: 0.40,

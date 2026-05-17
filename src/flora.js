@@ -219,6 +219,22 @@ function makeInstancedLeafBatch(geometry, material, matrices) {
   return mesh;
 }
 
+function getLeafballTreePalette(biome) {
+  const override = biome.leafballTreePalette || {};
+  const fallbackLeaves = [
+    new THREE.Color(biome.ground[0]).lerp(new THREE.Color("#1d4f29"), 0.30),
+    new THREE.Color(biome.ground[1]).lerp(new THREE.Color("#69b85b"), 0.34),
+    new THREE.Color(biome.ground[1]).lerp(new THREE.Color("#64ad58"), 0.18),
+  ];
+  const leaves = fallbackLeaves.map((color, index) => override.leaves?.[index] || color);
+
+  return {
+    trunk: override.trunk || new THREE.Color(TRUNK).lerp(new THREE.Color("#c38b45"), 0.52),
+    outline: override.outline || "#102416",
+    leaves,
+  };
+}
+
 function addGroveMushroomFamily(group, biome, { radius = 0.44, count = 3, capY = 0.35 } = {}) {
   if (!biome.groveDetails?.mushroomFamilies) return;
   const stemGeo = pooled("grove.babyMushroom.stem.geo", () =>
@@ -324,9 +340,10 @@ export const FLORA_BUILDERS = {
 
   leafballtree(biome) {
     const g = new THREE.Group();
+    const palette = getLeafballTreePalette(biome);
     const trunkMat = pooled("leafballtree.trunk.mat", () =>
       new THREE.MeshStandardMaterial({
-        color: new THREE.Color(TRUNK).lerp(new THREE.Color("#c38b45"), 0.52),
+        color: palette.trunk,
         flatShading: true,
         roughness: 0.95,
         vertexColors: true,
@@ -369,7 +386,7 @@ export const FLORA_BUILDERS = {
         applyLeafPlateWind(
           applyLeafPlateGradient(
             new THREE.MeshStandardMaterial({
-              color: new THREE.Color(biome.ground[0]).lerp(new THREE.Color("#1d4f29"), 0.30),
+              color: palette.leaves[0],
               side: THREE.DoubleSide,
               flatShading: true,
               roughness: 0.82,
@@ -383,7 +400,7 @@ export const FLORA_BUILDERS = {
         applyLeafPlateWind(
           applyLeafPlateGradient(
             new THREE.MeshStandardMaterial({
-              color: new THREE.Color(biome.ground[1]).lerp(new THREE.Color("#69b85b"), 0.34),
+              color: palette.leaves[1],
               side: THREE.DoubleSide,
               flatShading: true,
               roughness: 0.78,
@@ -397,7 +414,7 @@ export const FLORA_BUILDERS = {
         applyLeafPlateWind(
           applyLeafPlateGradient(
             new THREE.MeshStandardMaterial({
-              color: new THREE.Color(biome.ground[1]).lerp(new THREE.Color("#64ad58"), 0.18),
+              color: palette.leaves[2],
               side: THREE.DoubleSide,
               flatShading: true,
               roughness: 0.82,
@@ -444,7 +461,7 @@ export const FLORA_BUILDERS = {
       applyLeafPlateWind(
         new THREE.MeshBasicMaterial({
           name: "leafballtree.leaf.outline.mat",
-          color: "#102416",
+          color: palette.outline,
           side: THREE.DoubleSide,
           polygonOffset: true,
           polygonOffsetFactor: 1,
@@ -536,10 +553,13 @@ export const FLORA_BUILDERS = {
 
     const branchGeo = pooled("leafballtree.branch.geo", () => new THREE.CylinderGeometry(0.045, 0.075, 1, 6));
     const yAxis = new THREE.Vector3(0, 1, 0);
+    const branchReach = 0.62;
+    const minLeafMotionGap = 0.20;
+    const branchTipRadius = Math.min(branchReach, canopyRadius.x - minLeafMotionGap);
     for (let i = 0; i < 5; i++) {
       const a = (i / 5) * Math.PI * 2 + 0.24;
       const start = new THREE.Vector3(0.03 * Math.cos(a), 1.10 + canopyYOffset + i * 0.025, 0.03 * Math.sin(a));
-      const end = new THREE.Vector3(Math.cos(a) * 0.46, 1.34 + canopyYOffset + (i % 2) * 0.10, Math.sin(a) * 0.46);
+      const end = new THREE.Vector3(Math.cos(a) * branchTipRadius, 1.34 + canopyYOffset + (i % 2) * 0.10, Math.sin(a) * branchTipRadius);
       const delta = end.clone().sub(start);
       const branch = new THREE.Mesh(branchGeo, trunkMat);
       branch.position.copy(start).add(end).multiplyScalar(0.5);

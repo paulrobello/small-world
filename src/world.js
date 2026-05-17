@@ -625,7 +625,7 @@ export function generateWorld(seed) {
     // sea level, while normal flora stays on dry/near-dry ground.
     const isReefCoral = biome.water && kind in REEF_CORAL_TOP_LOCAL;
     const isShallowWaterFlora = biome.water && SHALLOW_WATER_FLORA.has(kind);
-    const normalFloraRadius = biome.id === "golden" && kind === "tree" ? 0.98 : 0.88;
+    const normalFloraRadius = biome.id === "golden" && (kind === "tree" || kind === "leafballtree") ? 0.98 : 0.88;
     const p = pickGroundPoint(isReefCoral || isShallowWaterFlora ? 1.0 : normalFloraRadius);
     const y0 = state.heightFn(p.x, p.z);
     if (isReefCoral) {
