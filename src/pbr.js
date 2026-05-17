@@ -224,12 +224,20 @@ function buildStoneTextures() {
       const stoneCrack =
         Math.max(0, 1 - Math.abs(Math.sin((u * 3.2 + v * 4.6 + cellNoise) * Math.PI)) * 11) *
         (0.45 + hashNoise(px * 2, py, state.currentSeed + 1009) * 0.55);
+      const verticalScratch =
+        Math.max(0, 1 - Math.abs(Math.sin((u * 34.0 + cellNoise * 0.35) * Math.PI)) * 15) *
+        Math.max(0, 0.75 - hashNoise(px, Math.floor(py / 9), state.currentSeed + 1017)) *
+        0.95;
+      const hairlineScratch =
+        Math.max(0, 1 - Math.abs(Math.sin((u * 71.0 - v * 9.0) * Math.PI)) * 24) *
+        (0.28 + hashNoise(px * 5, py * 2, state.currentSeed + 1023) * 0.72);
       const pitted = Math.max(0, 0.62 - hashNoise(px * 3, py * 5, state.currentSeed + 1031)) * 0.34;
-      const nx = grain * 0.33 - stoneCrack * 0.30 + pitted * 0.12;
-      const ny = grain * -0.22 + stoneCrack * 0.22 - pitted * 0.18;
+      const deepStoneCut = stoneCrack + verticalScratch * 0.72 + hairlineScratch * 0.36;
+      const nx = grain * 0.36 - stoneCrack * 0.42 - verticalScratch * 0.34 + pitted * 0.12;
+      const ny = grain * -0.24 + stoneCrack * 0.30 - hairlineScratch * 0.20 - pitted * 0.18;
       const nz = Math.sqrt(Math.max(0.08, 1 - nx * nx - ny * ny));
-      const roughness = 0.82 + pitted * 0.30 + stoneCrack * 0.12;
-      const specular = 0.08 + Math.max(0, grain) * 0.08 - stoneCrack * 0.03;
+      const roughness = 0.82 + pitted * 0.30 + deepStoneCut * 0.12;
+      const specular = 0.08 + Math.max(0, grain) * 0.08 - deepStoneCut * 0.04;
       const index = (py * size + px) * 4;
 
       normalImage.data[index + 0] = Math.round((nx * 0.5 + 0.5) * 255);
@@ -375,7 +383,7 @@ export function makeStonePBRMaterial(params) {
     specularColor: new THREE.Color(params.color).lerp(new THREE.Color(0xffffff), 0.20),
   });
   const { normalTexture, materialTexture } = buildStoneTextures();
-  material.normalScale.set(0.48, 0.48);
+  material.normalScale.set(0.74, 0.74);
   return applyDetailMaps(material, normalTexture, materialTexture);
 }
 

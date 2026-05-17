@@ -58,6 +58,19 @@ export const BIOMES = [
     // Butterflies read as out-of-place over the dunes — the desert gets fly
     // swarms over skulls instead, set up during flora placement.
     noButterflies: true,
+    edgeAura: {
+      pattern: "mist",
+      colors: ["#9c3a3a", "#d97757", "#f1c890"],
+      alpha: 0.92,
+      innerSoft: 0.24,
+      outerSoft: 10.5,
+      inwardOverlap: 0.23,
+      outwardFadeStart: 0.18,
+      y: 0.02,
+      noiseScale: 0.14,
+      streakScale: 34.0,
+      windStrength: 0.85,
+    },
     groundMarks: { color: "#5f2424", opacity: 0.34, life: 7.0, softness: 1.1, poof: "sand" },
     dusk: { sky: "#e07a4c", fog: "#b85a3a", sun: "#ff8050", ground: "#5e2828" },
     night: { sky: "#160a18", fog: "#0d0716", sun: "#7068a8", ground: "#1a0a0e" },
@@ -140,7 +153,7 @@ export const BIOMES = [
     sun: "#ff8866",
     flora: [
       "lavafissure", "lavafissure", "lavafissure", "lavafissure",
-      "leafballtree", "rock", "skull", "crystal",
+      "deadtree", "rock", "skull", "crystal",
     ],
     floraCount: 58,
     leafballTreePalette: {
@@ -151,6 +164,19 @@ export const BIOMES = [
     creatureColors: ["#e63946", "#f77f00", "#fcbf49", "#ffd166"],
     creatureCount: [6, 10],
     darkBiome: true,
+    edgeAura: {
+      pattern: "mist",
+      colors: ["#303030", "#303030", "#303030"],
+      alpha: 1.0,
+      innerSoft: 0.24,
+      outerSoft: 10.5,
+      inwardOverlap: 0.23,
+      outwardFadeStart: 0.18,
+      y: 0.02,
+      noiseScale: 0.14,
+      streakScale: 34.0,
+      windStrength: 0.85,
+    },
     dusk: { sky: "#2a1820", fog: "#3a2028", sun: "#ff6840", ground: "#2a1820" },
     night: { sky: "#080610", fog: "#050308", sun: "#a04030", ground: "#050308" },
   },
@@ -166,7 +192,7 @@ export const BIOMES = [
     fogDensity: 0.010,
     accent: "#606c38",
     sun: "#fff4d0",
-    flora: ["grass", "grass", "grass", "rock", "leafballtree", "leafballtree", "berrybush"],
+    flora: ["rock", "leafballtree", "leafballtree", "berrybush"],
     floraCount: 115,
     leafballTreePalette: {
       trunk: "#8a5a2c",
@@ -231,7 +257,7 @@ export const BIOMES = [
     fogDensity: 0.013,
     accent: "#ffd97a",
     sun: "#ffb070",
-    flora: ["grass", "grass", "leafballtree", "fern", "rock", "berrybush"],
+    flora: ["leafballtree", "fern", "rock", "berrybush"],
     floraCount: 95,
     leafballTreePalette: {
       trunk: "#3b3158",
@@ -338,7 +364,7 @@ export const BIOMES = [
     fogDensity: 0.016,
     accent: "#ff90c0",
     sun: "#ffe0f0",
-    flora: ["bigmushroom", "bigmushroom", "mushroom", "mushroom", "mushroom", "fern", "fern", "grass", "rock"],
+    flora: ["bigmushroom", "bigmushroom", "mushroom", "mushroom", "mushroom", "fern", "fern", "rock"],
     floraCount: 95,
     particle: "pollen",
     creatureColors: ["#ff90c0", "#c7a0c8", "#9c84d4", "#ffd1a3"],
@@ -406,7 +432,6 @@ export const WILDFLOWER_PALETTES = {
   coral:   ["#ff7a8c", "#ffb88a", "#fff2b3", "#7ad6e0"],
 
   // Tighter biome palettes — stay close to the local material range.
-  desert:  ["#e63946", "#f4a261", "#fefae0"],
   frozen:  ["#cad2ff", "#f1faee", "#e0c3fc"],
   ashen:   ["#e63946", "#f77f00", "#fcbf49"],
   golden:  ["#fefae0", "#f1c890", "#dda15e", "#bc8a45"],
@@ -416,18 +441,13 @@ export const WILDFLOWER_PALETTES = {
   obsidian:["#ff7a2a", "#ffb060", "#fcbf49"],
 };
 
-// 0 = no grass field (burnt/volcanic biomes and bare atolls read wrong with grass blades).
-export const GRASS_DENSITY = {
-  verdant: 300, desert:  0, frozen: 0,
-  marsh:   500, ashen:    0, golden: 1500,
-  mossy:   650, twilight: 1620, coral: 0,
-  cloud:     0, grove:   800, obsidian: 0,
-};
-// Per-biome grass height multiplier (1.0 = default). Applied as a Y-scale
-// factor to each blade instance so biome tuning doesn't require a regen.
-export const GRASS_HEIGHT = {
-  grove: 0.75,
-};
+// Optional per-biome grass density overrides. When empty, every biome uses
+// grass.js's shared stock density; set a biome id to 0 here to disable its
+// grass field, or to a positive count to retune only that biome.
+export const GRASS_DENSITY = { ashen: 0, desert: 0 };
+// Optional per-biome grass height multipliers. When empty, every biome uses
+// the shared grass height; add a biome id here for future biome-specific tuning.
+export const GRASS_HEIGHT = {};
 
 // Per-biome rejection threshold for the grass density noise. Blades whose
 // underlying noise sample at world XZ falls below this threshold are not
@@ -442,7 +462,7 @@ export const BALD_THRESHOLD = {
   obsidian: 0.40,
 };
 export const FLOWER_DENSITY = {
-  verdant: 180, desert: 60, frozen: 90,
+  verdant: 180, desert: 0, frozen: 90,
   marsh:   220, ashen:  50, golden: 200,
   mossy:   140, twilight: 240, coral: 110,
   cloud:   80,  grove:   170, obsidian: 60,

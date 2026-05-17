@@ -69,12 +69,12 @@ class VerdantGroveCustomDomainTest(unittest.TestCase):
         self.assertIn("setting-grass-edge-discs", html)
         self.assertIn("if (isGrassAura && (LOWFX || state.userSettings.grassEdgeDiscs === false)) return null;", sky)
 
-    def test_verdant_grove_grass_density_is_doubled_again(self) -> None:
+    def test_only_bare_biome_grass_density_overrides_are_present(self) -> None:
         biomes = (ROOT / "src" / "biomes.js").read_text()
-        self.assertIn("verdant: 300", biomes)
-        self.assertNotIn("verdant: 75", biomes)
-        self.assertNotIn("verdant: 150", biomes)
-        self.assertNotIn("verdant: 600", biomes)
+        self.assertIn("export const GRASS_DENSITY = { ashen: 0, desert: 0 };", biomes)
+        self.assertIn("export const GRASS_HEIGHT = {};", biomes)
+        self.assertNotIn("verdant: 300", biomes)
+        self.assertNotIn("grove: 0.75", biomes)
 
     def test_settings_panel_has_reset_to_defaults_button(self) -> None:
         html = (ROOT / "index.html").read_text()

@@ -720,8 +720,8 @@ export function initUi({ camera, canvas, controls, renderer }) {
   // — only the slider display is rescaled. Conversion:
   //   sliderValue = internalValue / BASE * 100
   //   internalValue = sliderValue / 100 * BASE
-  const DENSITY_BASE = 2.0;
-  const HEIGHT_BASE = 1.2;
+  const DENSITY_BASE = 12.5;
+  const HEIGHT_BASE = 0.96;
   grassDetailsEl.open = !!state.userSettings.grassPanelOpen;
   grassEnabledEl.checked = state.userSettings.grassEnabled !== false;
   if (state.userSettings.grassEdgeDiscs === undefined) state.userSettings.grassEdgeDiscs = !LOWFX;
@@ -1264,6 +1264,7 @@ export function initUi({ camera, canvas, controls, renderer }) {
     `;
     document.body.appendChild(actions);
 
+    photoHudEl.setAttribute("aria-hidden", "true");
     _photoReview = { group, mesh, borderMesh, tex, mat, borderMat, dim, actions, biomeTag, seedTag, dataUrl, screenScale };
 
     // Animate photo in
@@ -1313,7 +1314,10 @@ export function initUi({ camera, canvas, controls, renderer }) {
     _photoReview = null;
     if (_photoFP) {
       _photoFP.reviewOpen = false;
-      if (resumePhotoFp && document.body.classList.contains("photo-mode")) canvas.requestPointerLock?.();
+      if (resumePhotoFp && document.body.classList.contains("photo-mode")) {
+        photoHudEl.setAttribute("aria-hidden", "false");
+        canvas.requestPointerLock?.();
+      }
     }
   }
   const photoModeBtn = document.getElementById("setting-photo");

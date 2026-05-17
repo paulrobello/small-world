@@ -15,13 +15,16 @@ assert(
   pbrSource.includes('buildStoneTextures')
     && pbrSource.includes('buildMushroomCapTextures')
     && pbrSource.includes('stoneCrack')
+    && pbrSource.includes('verticalScratch')
+    && pbrSource.includes('deepStoneCut')
     && pbrSource.includes('capRidges'),
   'Stone and mushroom cap PBR helpers should generate procedural crack, pore, and cap-ridge maps.'
 );
 
 assert(
   floraSource.includes('makeStonePBRMaterial')
-    && floraSource.includes('makeMushroomCapPBRMaterial'),
+    && floraSource.includes('makeMushroomCapPBRMaterial')
+    && floraSource.includes('addPillarSurfaceMarks'),
   'Flora builders should wire stone and mushroom caps through the PBR helpers.'
 );
 

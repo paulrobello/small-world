@@ -1115,6 +1115,7 @@ body.photo-mode .locator-panel {
   transition: opacity 0.4s ease;
 }
 body.photo-mode .photo-hud { opacity: 1; }
+body.photo-mode .photo-hud[aria-hidden="true"] { opacity: 0; }
 body:not(.photo-mode) .photo-hud { display: none; }
 
 .photo-reticle {

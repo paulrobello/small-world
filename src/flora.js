@@ -334,6 +334,44 @@ function addGroveMushroomFamily(group, biome, { radius = 0.44, count = 3, capY =
   }
 }
 
+function addPillarSurfaceMarks(drum, radius, height, baseColor) {
+  const points = [];
+  const markCount = 9 + Math.floor(Math.random() * 5);
+  const scratchColor = baseColor.clone().offsetHSL(0, -0.10, -0.34);
+
+  for (let i = 0; i < markCount; i++) {
+    const vertical = Math.random() < 0.58;
+    let angle = Math.random() * Math.PI * 2;
+    let y = (Math.random() - 0.5) * height * 0.72;
+    const steps = vertical ? 3 + Math.floor(Math.random() * 3) : 2 + Math.floor(Math.random() * 3);
+    const yStep = height * (vertical ? 0.12 : 0.07);
+    const angleStep = (Math.random() - 0.5) * (vertical ? 0.08 : 0.22);
+    let prev = null;
+
+    for (let j = 0; j <= steps; j++) {
+      angle += angleStep + (Math.random() - 0.5) * 0.06;
+      y += (vertical ? -1 : Math.random() < 0.5 ? -1 : 1) * yStep * (0.55 + Math.random() * 0.55);
+      y = Math.max(-height * 0.43, Math.min(height * 0.43, y));
+      const r = radius + 0.006;
+      const next = new THREE.Vector3(Math.cos(angle) * r, y, Math.sin(angle) * r);
+      if (prev) points.push(prev.x, prev.y, prev.z, next.x, next.y, next.z);
+      prev = next;
+    }
+  }
+
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute("position", new THREE.Float32BufferAttribute(points, 3));
+  const material = new THREE.LineBasicMaterial({
+    color: scratchColor,
+    transparent: true,
+    opacity: 0.88,
+    depthWrite: false,
+  });
+  const marks = new THREE.LineSegments(geometry, material);
+  marks.renderOrder = 1;
+  drum.add(marks);
+}
+
 export const FLORA_BUILDERS = {
   tree(biome) {
     const g = new THREE.Group();
@@ -1144,6 +1182,7 @@ export const FLORA_BUILDERS = {
       drum.rotation.y = Math.random() * Math.PI * 2;
       drum.rotation.z = (Math.random() - 0.5) * 0.08;
       drum.castShadow = true;
+      addPillarSurfaceMarks(drum, r, h, useLichen ? lichenCol : stoneCol);
       g.add(drum);
       y += h - 0.02;
     }

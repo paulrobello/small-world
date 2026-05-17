@@ -1,11 +1,10 @@
 import assert from 'node:assert/strict';
 import { BIOMES } from '../src/biomes.js';
 
-const generatedTreeKinds = new Set(['tree', 'pine', 'snowpine', 'deadtree', 'balloontree']);
+const generatedTreeKinds = new Set(['tree', 'pine', 'snowpine', 'balloontree']);
 const biomeTreeSlots = new Map([
   ['verdant', 2],
   ['frozen', 3],
-  ['ashen', 1],
   ['golden', 2],
   ['mossy', 1],
   ['twilight', 1],
@@ -28,7 +27,7 @@ for (const [biomeId, leafballCount] of biomeTreeSlots) {
   assert.equal(
     biome.flora.filter((kind) => kind === 'leafballtree').length,
     leafballCount,
-    `${biomeId} should preserve its tree slot count with leafballtree entries.`
+    `${biomeId} should preserve its living tree slot count with leafballtree entries.`
   );
   assert.equal(
     typeof biome.leafballTreePalette?.trunk,
