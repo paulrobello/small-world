@@ -1642,24 +1642,35 @@ export function initUi({ camera, canvas, controls, renderer, scene }) {
   window.addEventListener("resize", handleResize);
   window.addEventListener("orientationchange", handleResize);
 
-  // On mobile, fade out the header 10 seconds after world loads.
+  // On mobile/touch devices, fade out the header 5 seconds after world loads.
   // Touching the header area brings it back temporarily.
-  const _isTouchFirst =
-    "ontouchstart" in window &&
-    typeof window.matchMedia === "function" &&
-    window.matchMedia("(hover: none) and (pointer: coarse)").matches;
-  if (_isTouchFirst) {
+  // Override: ?mobile=1 forces mobile mode for local testing.
+  const _isMobile =
+    new URLSearchParams(window.location.search).get("mobile") === "1" ||
+    (typeof window.matchMedia === "function" &&
+     window.matchMedia("(hover: none) and (pointer: coarse)").matches);
+  if (_isMobile) {
+    document.body.classList.add("mobile");
     const header = document.querySelector(".hud-top");
+    header.classList.add("mobile");
     let _headerTimer = null;
     function scheduleHeaderFade() {
       clearTimeout(_headerTimer);
-      header.classList.remove("mobile-hidden");
-      _headerTimer = setTimeout(() => header.classList.add("mobile-hidden"), 10000);
+      header.style.animation = 'none'; // release hudIn fill hold
+      header.style.transition = '';
+      header.style.opacity = '1';
+      header.style.pointerEvents = 'auto';
+      _headerTimer = setTimeout(() => {
+        header.style.transition = 'opacity 1.5s ease';
+        header.style.opacity = '0';
+        header.style.pointerEvents = 'none';
+      }, 5000);
     }
     window.addEventListener("world-ready", scheduleHeaderFade);
+    // If the world is already loaded (e.g. late registration), start now
+    if (state.currentBiome) scheduleHeaderFade();
     // Tap header area to temporarily reveal it
     header.addEventListener("pointerdown", () => {
-      header.classList.remove("mobile-hidden");
       scheduleHeaderFade();
     });
   }

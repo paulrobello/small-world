@@ -370,26 +370,28 @@ body {
   .regen:hover::before,
   .regen:hover::after { border-color: var(--ink-dim); }
   .regen:hover .regen-glyph { transform: none; }
-  /* Show mobile help, hide desktop help on touch-first devices */
-  .help-desktop { display: none; }
-  .help-mobile { display: block; }
 }
 
 /* Desktop: hide mobile help by default */
 .help-mobile { display: none; }
 
-/* Mobile header auto-hide */
-.hud-top.mobile-hidden {
-  opacity: 0;
-  pointer-events: none;
-  transition: opacity 1.5s ease;
+/* Mobile header auto-hide + backdrop */
+@media (hover: none) {
+  .hud-top {
+    background: rgba(0, 0, 0, 0.5);
+    backdrop-filter: blur(4px);
+  }
+  .help-desktop { display: none; }
+  .help-mobile { display: block; }
 }
-.hud-top:not(.mobile-hidden) {
-  transition: opacity 0.5s ease;
+.hud-top.mobile {
+  background: rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(4px);
 }
-@media (hover: hover) {
-  .hud-top.mobile-hidden { opacity: 1; pointer-events: auto; }
-}
+body.mobile .help-desktop { display: none; }
+body.mobile .help-mobile { display: block; }
+body.mobile .controls .hint { display: none; }
+body.mobile .stats { display: none; }
 
 /* ─── Inline toggles (live in .controls-row, left of regenerate) ─────── */
 .controls-row {
