@@ -5,6 +5,8 @@ import { LOWFX } from "./lowfx.js";
 const TERRAIN_PBR_TEX_SIZE = 384;
 const LEAFBALL_BARK_TEX_SIZE = 256;
 const LEAFBALL_LEAF_TEX_SIZE = 128;
+const STONE_PBR_TEX_SIZE = 128;
+const MUSHROOM_CAP_TEX_SIZE = 128;
 
 function clamp01(value) {
   return Math.max(0, Math.min(1, value));
@@ -202,6 +204,99 @@ function buildLeafballLeafTextures() {
   };
 }
 
+function buildStoneTextures() {
+  const size = STONE_PBR_TEX_SIZE;
+  const stoneNormalCanvas = makeCanvas(size);
+  const stoneMaterialCanvas = makeCanvas(size);
+  const normalCtx = stoneNormalCanvas.getContext("2d");
+  const materialCtx = stoneMaterialCanvas.getContext("2d");
+  const normalImage = normalCtx.createImageData(size, size);
+  const materialImage = materialCtx.createImageData(size, size);
+  for (let py = 0; py < size; py++) {
+    const v = py / (size - 1);
+    for (let px = 0; px < size; px++) {
+      const u = px / (size - 1);
+      const cellNoise = hashNoise(Math.floor(px / 8), Math.floor(py / 8), state.currentSeed + 947);
+      const grain =
+        Math.sin((u * 17.0 + v * 5.0) * Math.PI + cellNoise * 2.1) * 0.20 +
+        Math.sin((u * 41.0 - v * 19.0) * Math.PI) * 0.10 +
+        (hashNoise(px, py, state.currentSeed + 991) - 0.5) * 0.24;
+      const stoneCrack =
+        Math.max(0, 1 - Math.abs(Math.sin((u * 3.2 + v * 4.6 + cellNoise) * Math.PI)) * 11) *
+        (0.45 + hashNoise(px * 2, py, state.currentSeed + 1009) * 0.55);
+      const pitted = Math.max(0, 0.62 - hashNoise(px * 3, py * 5, state.currentSeed + 1031)) * 0.34;
+      const nx = grain * 0.33 - stoneCrack * 0.30 + pitted * 0.12;
+      const ny = grain * -0.22 + stoneCrack * 0.22 - pitted * 0.18;
+      const nz = Math.sqrt(Math.max(0.08, 1 - nx * nx - ny * ny));
+      const roughness = 0.82 + pitted * 0.30 + stoneCrack * 0.12;
+      const specular = 0.08 + Math.max(0, grain) * 0.08 - stoneCrack * 0.03;
+      const index = (py * size + px) * 4;
+
+      normalImage.data[index + 0] = Math.round((nx * 0.5 + 0.5) * 255);
+      normalImage.data[index + 1] = Math.round((ny * 0.5 + 0.5) * 255);
+      normalImage.data[index + 2] = Math.round(nz * 255);
+      normalImage.data[index + 3] = 255;
+
+      materialImage.data[index + 0] = Math.round(clamp01(roughness) * 255);
+      materialImage.data[index + 1] = Math.round(clamp01(roughness) * 255);
+      materialImage.data[index + 2] = 0;
+      materialImage.data[index + 3] = Math.round(clamp01(specular) * 255);
+    }
+  }
+  normalCtx.putImageData(normalImage, 0, 0);
+  materialCtx.putImageData(materialImage, 0, 0);
+  return {
+    normalTexture: configurePBRTexture(new THREE.CanvasTexture(stoneNormalCanvas)),
+    materialTexture: configurePBRTexture(new THREE.CanvasTexture(stoneMaterialCanvas)),
+  };
+}
+
+function buildMushroomCapTextures() {
+  const size = MUSHROOM_CAP_TEX_SIZE;
+  const capNormalCanvas = makeCanvas(size);
+  const capMaterialCanvas = makeCanvas(size);
+  const normalCtx = capNormalCanvas.getContext("2d");
+  const materialCtx = capMaterialCanvas.getContext("2d");
+  const normalImage = normalCtx.createImageData(size, size);
+  const materialImage = materialCtx.createImageData(size, size);
+  for (let py = 0; py < size; py++) {
+    const v = py / (size - 1);
+    for (let px = 0; px < size; px++) {
+      const u = px / (size - 1);
+      const dx = u - 0.5;
+      const dy = v - 0.5;
+      const radius = Math.sqrt(dx * dx + dy * dy) * 2;
+      const angle = Math.atan2(dy, dx);
+      const capBody = clamp01(1 - radius);
+      const capRidges = Math.max(0, Math.sin(angle * 18 + radius * 8.0)) * capBody;
+      const pores = Math.max(0, 0.58 - hashNoise(px * 4, py * 4, state.currentSeed + 1171)) * capBody;
+      const dampSpeckle = hashNoise(px, py, state.currentSeed + 1193) * capBody;
+      const nx = Math.cos(angle) * (capRidges * 0.12 + pores * 0.10) + (dampSpeckle - 0.5) * 0.045;
+      const ny = Math.sin(angle) * (capRidges * 0.12 + pores * 0.10) + (dampSpeckle - 0.5) * 0.045;
+      const nz = Math.sqrt(Math.max(0.10, 1 - nx * nx - ny * ny));
+      const roughness = 0.58 + pores * 0.18 + radius * 0.10 - dampSpeckle * 0.08;
+      const specular = 0.14 + dampSpeckle * 0.20 + capRidges * 0.08;
+      const index = (py * size + px) * 4;
+
+      normalImage.data[index + 0] = Math.round((nx * 0.5 + 0.5) * 255);
+      normalImage.data[index + 1] = Math.round((ny * 0.5 + 0.5) * 255);
+      normalImage.data[index + 2] = Math.round(nz * 255);
+      normalImage.data[index + 3] = 255;
+
+      materialImage.data[index + 0] = Math.round(clamp01(roughness) * 255);
+      materialImage.data[index + 1] = Math.round(clamp01(roughness) * 255);
+      materialImage.data[index + 2] = 0;
+      materialImage.data[index + 3] = Math.round(clamp01(specular) * 255);
+    }
+  }
+  normalCtx.putImageData(normalImage, 0, 0);
+  materialCtx.putImageData(materialImage, 0, 0);
+  return {
+    normalTexture: configurePBRTexture(new THREE.CanvasTexture(capNormalCanvas)),
+    materialTexture: configurePBRTexture(new THREE.CanvasTexture(capMaterialCanvas)),
+  };
+}
+
 function applyDetailMaps(material, normalTexture, materialTexture) {
   material.normalMap = normalTexture;
   material.roughnessMap = materialTexture;
@@ -266,5 +361,35 @@ export function makeLeafballTreeLeafPBRMaterial(params) {
   });
   const { normalTexture, materialTexture } = buildLeafballLeafTextures();
   material.normalScale.set(0.72, 0.72);
+  return applyDetailMaps(material, normalTexture, materialTexture);
+}
+
+export function makeStonePBRMaterial(params) {
+  if (LOWFX || state.userSettings.pbrDetails === false) {
+    return new THREE.MeshStandardMaterial(params);
+  }
+  const material = new THREE.MeshPhysicalMaterial({
+    ...params,
+    reflectivity: 0.14,
+    specularIntensity: 0.30,
+    specularColor: new THREE.Color(params.color).lerp(new THREE.Color(0xffffff), 0.20),
+  });
+  const { normalTexture, materialTexture } = buildStoneTextures();
+  material.normalScale.set(0.48, 0.48);
+  return applyDetailMaps(material, normalTexture, materialTexture);
+}
+
+export function makeMushroomCapPBRMaterial(params) {
+  if (LOWFX || state.userSettings.pbrDetails === false) {
+    return new THREE.MeshStandardMaterial(params);
+  }
+  const material = new THREE.MeshPhysicalMaterial({
+    ...params,
+    reflectivity: 0.22,
+    specularIntensity: 0.50,
+    specularColor: new THREE.Color(params.color).lerp(new THREE.Color(0xffffff), 0.36),
+  });
+  const { normalTexture, materialTexture } = buildMushroomCapTextures();
+  material.normalScale.set(0.52, 0.52);
   return applyDetailMaps(material, normalTexture, materialTexture);
 }

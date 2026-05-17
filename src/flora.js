@@ -6,6 +6,8 @@ import { makePool } from "./pool.js";
 import {
   makeLeafballTreeLeafPBRMaterial,
   makeLeafballTreeTrunkPBRMaterial,
+  makeMushroomCapPBRMaterial,
+  makeStonePBRMaterial,
 } from "./pbr.js";
 
 // Cactus needles. Each spine is a real little cone mesh sitting on the
@@ -815,7 +817,7 @@ export const FLORA_BUILDERS = {
       (Math.random() - 0.5) * 0.10
     );
     const capMat = applyWindSway(
-      new THREE.MeshStandardMaterial({ color: capColor, roughness: 0.6 }),
+      makeMushroomCapPBRMaterial({ color: capColor, roughness: 0.6 }),
       MUSH_WIND
     );
     const cap = new THREE.Mesh(capGeo, capMat);
@@ -869,7 +871,7 @@ export const FLORA_BUILDERS = {
 
   rock(biome) {
     const r = 0.18 + Math.random() * 0.35;
-    const geo = jitterGeo(new THREE.IcosahedronGeometry(r, 0), r * 0.3);
+    const geo = jitterGeo(new THREE.IcosahedronGeometry(r, 0), r * 0.3, { sphericalUvs: true });
     const baseCol = new THREE.Color(biome.cliff).offsetHSL(
       0,
       0,
@@ -877,7 +879,7 @@ export const FLORA_BUILDERS = {
     );
     const mesh = new THREE.Mesh(
       geo,
-      new THREE.MeshStandardMaterial({
+      makeStonePBRMaterial({
         color: baseCol,
         flatShading: true,
         roughness: 1,
@@ -891,13 +893,13 @@ export const FLORA_BUILDERS = {
   limestonerock(biome) {
     const g = new THREE.Group();
     const r = 0.2 + Math.random() * 0.32;
-    const geo = jitterGeo(new THREE.IcosahedronGeometry(r, 0), r * 0.25);
+    const geo = jitterGeo(new THREE.IcosahedronGeometry(r, 0), r * 0.25, { sphericalUvs: true });
     const baseCol = new THREE.Color(biome.ground[0])
       .lerp(new THREE.Color("#fff4dc"), 0.45)
       .offsetHSL(0.02, -0.08, Math.random() * 0.08);
     const mesh = new THREE.Mesh(
       geo,
-      new THREE.MeshStandardMaterial({
+      makeStonePBRMaterial({
         color: baseCol,
         flatShading: true,
         roughness: 1,
@@ -1112,12 +1114,12 @@ export const FLORA_BUILDERS = {
       0.12 + Math.random() * 0.08
     );
     const lichenCol = new THREE.Color(biome.ground[0]).offsetHSL(0, 0.05, 0.1);
-    const stoneMat = new THREE.MeshStandardMaterial({
+    const stoneMat = makeStonePBRMaterial({
       color: stoneCol,
       flatShading: true,
       roughness: 1,
     });
-    const lichenMat = new THREE.MeshStandardMaterial({
+    const lichenMat = makeStonePBRMaterial({
       color: lichenCol,
       flatShading: true,
       roughness: 1,
@@ -1143,7 +1145,7 @@ export const FLORA_BUILDERS = {
     // broken cap — jittered chunk
     if (Math.random() < 0.7) {
       const cap = new THREE.Mesh(
-        jitterGeo(new THREE.IcosahedronGeometry(0.22, 0), 0.08),
+        jitterGeo(new THREE.IcosahedronGeometry(0.22, 0), 0.08, { sphericalUvs: true }),
         stoneMat
       );
       cap.position.y = y + 0.1;
@@ -1162,7 +1164,7 @@ export const FLORA_BUILDERS = {
       -0.1,
       0.12 + Math.random() * 0.06
     );
-    const mat = new THREE.MeshStandardMaterial({
+    const mat = makeStonePBRMaterial({
       color: stoneCol,
       flatShading: true,
       roughness: 1,
@@ -1191,7 +1193,7 @@ export const FLORA_BUILDERS = {
     // crumbled keystone or missing chunk — break the arch occasionally
     if (Math.random() < 0.5) {
       const fragment = new THREE.Mesh(
-        jitterGeo(new THREE.IcosahedronGeometry(0.18, 0), 0.06),
+        jitterGeo(new THREE.IcosahedronGeometry(0.18, 0), 0.06, { sphericalUvs: true }),
         mat
       );
       fragment.position.set(
@@ -1276,7 +1278,7 @@ export const FLORA_BUILDERS = {
       (Math.random() - 0.5) * 0.10
     );
     const capMat = applyWindSway(
-      new THREE.MeshStandardMaterial({ color: capColor, roughness: 0.55 }),
+      makeMushroomCapPBRMaterial({ color: capColor, roughness: 0.55 }),
       BIG_WIND
     );
     const cap = new THREE.Mesh(capGeo, capMat);

@@ -4,7 +4,7 @@ import { state } from "./state.js";
 
 export const TRUNK = new THREE.Color("#3a2818");
 
-export function jitterGeo(geo, amount = 0.05) {
+export function jitterGeo(geo, amount = 0.05, { sphericalUvs = false } = {}) {
   // IcosahedronGeometry stores 3 different UVs and normals per face-corner
   // even when positions coincide. mergeVertices hashes all attributes, so
   // those per-face UVs prevent welding. Strip them so the merge is by
@@ -18,6 +18,16 @@ export function jitterGeo(geo, amount = 0.05) {
     p.setX(i, p.getX(i) + (Math.random() - 0.5) * amount);
     p.setY(i, p.getY(i) + (Math.random() - 0.5) * amount);
     p.setZ(i, p.getZ(i) + (Math.random() - 0.5) * amount);
+  }
+  if (sphericalUvs) {
+    const uvs = new Float32Array(p.count * 2);
+    const vtx = new THREE.Vector3();
+    for (let i = 0; i < p.count; i++) {
+      vtx.fromBufferAttribute(p, i).normalize();
+      uvs[i * 2] = 0.5 + Math.atan2(vtx.z, vtx.x) / (Math.PI * 2);
+      uvs[i * 2 + 1] = 0.5 - Math.asin(Math.max(-1, Math.min(1, vtx.y))) / Math.PI;
+    }
+    welded.setAttribute("uv", new THREE.Float32BufferAttribute(uvs, 2));
   }
   welded.computeVertexNormals();
   return welded;
