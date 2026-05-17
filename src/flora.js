@@ -557,12 +557,13 @@ export const FLORA_BUILDERS = {
     };
 
     addLeafRing({ count: 6, phi: 0.07, shell: 0.54, scale: 0.72, matIndex: 2, phase: 0.18, lift: 0.32, yOffset: 0.40 });
+    const topHighlightRows = 4;
     let staggerPhase = 0;
     for (let row = 0; row < rowCounts.length; row++) {
       const t = row / (rowCounts.length - 1);
       const phi = 0.18 + t * 2.50;
       const rowScale = 0.76 + Math.sin((1 - t) * Math.PI * 0.5) * 0.16;
-      const matIndex = row <= 1 ? 2 : row > 5 ? 0 : 1;
+      const matIndex = row < topHighlightRows ? 2 : row > 6 ? 0 : 1;
       addLeafRing({
         count: rowCounts[row],
         phi,
