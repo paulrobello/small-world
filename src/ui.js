@@ -1645,18 +1645,15 @@ export function initUi({ camera, canvas, controls, renderer, scene }) {
   // On mobile/touch devices, fade out the header 5 seconds after world loads.
   // Touching the header area brings it back temporarily.
   // Override: ?mobile=1 forces mobile, ?mobile=0 forces desktop.
-  // Auto-detect: touch-only device OR small screen.
+  // Auto-detect: touch input + small viewport or physical screen.
   const _mobileParam = new URLSearchParams(window.location.search).get("mobile");
-  const _touchOnly =
-    "ontouchstart" in window &&
-    typeof window.matchMedia === "function" &&
-    window.matchMedia("(hover: none)").matches;
-  const _shortSide = Math.min(window.innerWidth, window.innerHeight);
-  const _smallScreen = _shortSide > 0 && _shortSide < 768;
-  const _isMobile =
-    _mobileParam === "1" ? true :
-    _mobileParam === "0" ? false :
-    _touchOnly || _smallScreen;
+  let _isMobile = _mobileParam === "1";
+  if (!_isMobile && _mobileParam !== "0") {
+    const _hasTouch = "ontouchstart" in window || navigator.maxTouchPoints > 0;
+    const _shortViewport = Math.min(window.innerWidth, window.innerHeight);
+    const _shortScreen = Math.min(screen.width || 9999, screen.height || 9999);
+    _isMobile = _hasTouch && (_shortViewport < 768 || _shortScreen < 768);
+  }
   if (_isMobile) {
     document.body.classList.add("mobile");
     const header = document.querySelector(".hud-top");
