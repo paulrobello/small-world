@@ -929,6 +929,18 @@ body.photo-mode .help-panel {
   line-height: 1.4;
 }
 
+.lowfx-badge {
+  font-size: 10px;
+  color: var(--ink);
+  background: rgba(245, 240, 230, 0.1);
+  border: 1px solid var(--ink-dim);
+  padding: 8px 12px;
+  letter-spacing: 0.12em;
+  text-transform: lowercase;
+  line-height: 1.4;
+  text-align: center;
+}
+
 .follow-banner {
   position: fixed;
   top: 16px;
