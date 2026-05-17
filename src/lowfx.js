@@ -4,26 +4,24 @@
 // Three ways in:
 //   ?lowfx=1   force on
 //   ?lowfx=0   force off (overrides auto-detect)
-//   neither    auto-detect from touch / small-screen / low-DPR signals
+//   neither    auto-detect from genuinely weak signals only
 //
-// Auto-detect heuristics: any of (a) a real touch device with no hover, (b)
-// short side under 768 CSS px, (c) device pixel ratio < 1.0. These match the
-// common "phone/tablet that can't sustain 60fps with the full pipeline"
-// category without false-positiving high-DPR laptops or hybrid pen devices.
+// Auto-detect heuristics: low device pixel ratio (< 1.5) combined with
+// a small screen (< 480px short side). Modern phones (DPR 2–3) are
+// powerful enough for the full pipeline even at small viewport sizes,
+// so small screen alone is no longer a reliable weakness signal.
 // Read once at import time so every module sees the same flag without
 // parsing the URL or re-querying media queries repeatedly.
 const _params = new URLSearchParams(window.location.search);
 const _forceLowfx = _params.get("lowfx");
 function _autoLowfx() {
   if (typeof window === "undefined") return false;
-  const touchOnly =
-    "ontouchstart" in window &&
-    typeof window.matchMedia === "function" &&
-    window.matchMedia("(hover: none) and (pointer: coarse)").matches;
+  const dpr = window.devicePixelRatio || 1;
   const shortSide = Math.min(window.innerWidth, window.innerHeight);
-  const smallScreen = shortSide > 0 && shortSide < 768;
-  const lowDPR = (window.devicePixelRatio || 1) < 1.0;
-  return touchOnly || smallScreen || lowDPR;
+  // Low DPR on a small screen = genuinely weak device (budget tablets,
+  // old phones, embedded screens). High-DPR devices are assumed capable.
+  const weakHardware = dpr < 1.5 && shortSide > 0 && shortSide < 768;
+  return weakHardware;
 }
 export const LOWFX =
   _forceLowfx === "1" ? true :
