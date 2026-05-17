@@ -40,6 +40,13 @@ export function islandFalloff(center, x, z) {
   return smoothstep(r, r * 0.45, d);
 }
 
+// Edge rim height — the terrain perimeter converges to this Y so that the
+// grass-ring aura (flat RingGeometry at a fixed Y) always sits flush.
+const EDGE_RIM_Y = 0.0;
+// Falloff threshold below which terrain starts blending toward EDGE_RIM_Y.
+// Below this the noise amplitude fades and height converges to a flat rim.
+const RIM_LEVEL_START = 0.35;
+
 export function makeHeightFn(noise2D, layout, amp = 3.0) {
   return (x, z) => {
     let falloff = 0;
@@ -54,6 +61,13 @@ export function makeHeightFn(noise2D, layout, amp = 3.0) {
     // Smooth falloff at the edges — terrain tapers to base-plane level (~0)
     // along the island boundary rather than plunging into the void.
     h *= falloff;
+    // Rim leveling: as falloff drops below the threshold, blend toward a
+    // uniform edge height so the perimeter is flat and the grass ring
+    // (fixed-Y RingGeometry) always sits flush with the terrain edge.
+    if (falloff < RIM_LEVEL_START) {
+      const t = smoothstep(0, RIM_LEVEL_START, falloff);
+      h = EDGE_RIM_Y + (h - EDGE_RIM_Y) * t;
+    }
     return h;
   };
 }
@@ -64,16 +78,39 @@ export function makeHeightFn(noise2D, layout, amp = 3.0) {
 export function pickGroundPoint(maxRadiusFrac = 0.88, opts = {}) {
   const centers = state.currentLayout.centers;
   const radiusFor = (c) => opts.visualRadius ? (c.visualRadius ?? c.radius) : c.radius;
+  const areaWeight = (c) => {
+    const shape = c.shape ?? { kind: "round" };
+    const stretch = shape.kind === "oblong" ? (shape.stretch ?? 1) : 1;
+    return radiusFor(c) * radiusFor(c) * stretch;
+  };
+
   let sum = 0;
-  for (const c of centers) sum += radiusFor(c) * radiusFor(c);
+  for (const c of centers) sum += areaWeight(c);
   let r = Math.random() * sum;
   let chosen = centers[0];
   for (const c of centers) {
-    r -= radiusFor(c) * radiusFor(c);
+    r -= areaWeight(c);
     if (r <= 0) { chosen = c; break; }
   }
+
+  const shape = chosen.shape ?? { kind: "round" };
   const ang = Math.random() * Math.PI * 2;
   const rad = Math.sqrt(Math.random()) * radiusFor(chosen) * maxRadiusFrac;
+
+  if (shape.kind === "oblong") {
+    // Sample in the same stretched local frame used by islandFalloff().
+    // Without this, grass/flora placement stays circular while the visible
+    // island edge is elliptical, leaving bare margins at the stretched ends.
+    const stretch = shape.stretch ?? 1;
+    const lx = Math.cos(ang) * rad * stretch;
+    const lz = Math.sin(ang) * rad;
+    const co = Math.cos(shape.orient), si = Math.sin(shape.orient);
+    return {
+      x: chosen.cx + co * lx - si * lz,
+      z: chosen.cz + si * lx + co * lz,
+    };
+  }
+
   return {
     x: chosen.cx + Math.cos(ang) * rad,
     z: chosen.cz + Math.sin(ang) * rad,
@@ -105,25 +142,8 @@ export function pickLayout() {
   const sizeRoll = Math.random();
   const sizeMult = sizeRoll < 0.27 ? 0.78 : sizeRoll < 0.78 ? 1.0 : 1.15;
   const radius = ISLAND_RADIUS_BASE * sizeMult;
-  const shapeRoll = Math.random();
-  let shape;
-  if (shapeRoll < 0.5) {
-    shape = { kind: "round" };
-  } else if (shapeRoll < 0.82) {
-    shape = {
-      kind: "oblong",
-      orient: Math.random() * Math.PI,
-      stretch: 1.22 + Math.random() * 0.28,
-    };
-  } else {
-    shape = {
-      kind: "kidney",
-      orient: Math.random() * Math.PI * 2,
-      strength: 0.55 + Math.random() * 0.2,
-    };
-  }
-  const visualRadius =
-    shape.kind === "round" ? radius + Math.max(3.0, radius * 0.18) : radius;
+  const shape = { kind: "round" };
+  const visualRadius = radius + Math.max(3.0, radius * 0.18);
   return {
     centers: [{ cx: 0, cz: 0, radius, visualRadius, shape }],
     planeSize: Math.max(ISLAND_SIZE_BASE, visualRadius * 2.4),
@@ -135,15 +155,19 @@ export function pickLayout() {
 // ─────────────────────────────────────────────────────────────────────────────
 // Terrain mesh
 // ─────────────────────────────────────────────────────────────────────────────
-export function roundClipCenter() {
+export function clipCenter() {
   const centers = state.currentLayout?.centers ?? [];
   return centers.find((c) => (c.shape?.kind ?? "round") === "round") ?? centers[0] ?? null;
 }
 
-function patchRoundTerrainClipShader(shader, center) {
+function patchTerrainClipShader(shader, center) {
   const clipRadius = center.visualRadius ?? center.radius;
+  const shape = center.shape ?? { kind: "round" };
   shader.uniforms.uClipCenter = { value: new THREE.Vector2(center.cx, center.cz) };
   shader.uniforms.uClipRadius = { value: clipRadius };
+  shader.uniforms.uClipShapeKind = { value: shape.kind === "oblong" ? 1 : 0 };
+  shader.uniforms.uClipOrient = { value: shape.orient ?? 0 };
+  shader.uniforms.uClipStretch = { value: shape.stretch ?? 1 };
   shader.vertexShader = shader.vertexShader
     .replace(
       "#include <common>",
@@ -156,29 +180,44 @@ function patchRoundTerrainClipShader(shader, center) {
   shader.fragmentShader = shader.fragmentShader
     .replace(
       "#include <common>",
-      "#include <common>\nuniform vec2 uClipCenter;\nuniform float uClipRadius;\nvarying vec2 vClipXZ;"
+      `#include <common>
+      uniform vec2 uClipCenter;
+      uniform float uClipRadius;
+      uniform int uClipShapeKind;
+      uniform float uClipOrient;
+      uniform float uClipStretch;
+      varying vec2 vClipXZ;
+      float terrainClipDistance(vec2 p) {
+        vec2 d = p - uClipCenter;
+        if (uClipShapeKind == 1) {
+          float co = cos(uClipOrient), si = sin(uClipOrient);
+          vec2 l = vec2(co * d.x + si * d.y, -si * d.x + co * d.y);
+          return sqrt((l.x / uClipStretch) * (l.x / uClipStretch) + l.y * l.y);
+        }
+        return length(d);
+      }`
     )
     .replace(
       "#include <clipping_planes_fragment>",
-      "#include <clipping_planes_fragment>\nif (distance(vClipXZ, uClipCenter) > uClipRadius) discard;"
+      "#include <clipping_planes_fragment>\nif (terrainClipDistance(vClipXZ) > uClipRadius) discard;"
     );
 }
 
-export function applyRoundPlaneClip(mat, center) {
+export function applyTerrainClip(mat, center) {
   if (!center) return;
   const prev = mat.onBeforeCompile;
   mat.onBeforeCompile = (shader) => {
     if (prev) prev(shader);
-    patchRoundTerrainClipShader(shader, center);
+    patchTerrainClipShader(shader, center);
   };
 }
 
-function makeRoundTerrainDepthMaterial(center) {
+function makeTerrainDepthMaterial(center) {
   if (!center) return null;
   const mat = new THREE.MeshDepthMaterial({
     depthPacking: THREE.RGBADepthPacking,
   });
-  mat.onBeforeCompile = (shader) => patchRoundTerrainClipShader(shader, center);
+  mat.onBeforeCompile = (shader) => patchTerrainClipShader(shader, center);
   return mat;
 }
 
@@ -262,13 +301,13 @@ export function makeTerrain(biome, heightFn) {
     emissiveIntensity: cloudlike ? 0.08 : 0,
   });
 
-  const clipCenter = roundClipCenter();
-  applyRoundPlaneClip(mat, clipCenter);
+  const terrainClipCenter = clipCenter();
+  applyTerrainClip(mat, terrainClipCenter);
 
   const mesh = new THREE.Mesh(geo, mat);
   mesh.receiveShadow = true;
   mesh.castShadow = true;
-  const terrainDepthMat = makeRoundTerrainDepthMaterial(clipCenter);
+  const terrainDepthMat = makeTerrainDepthMaterial(terrainClipCenter);
   if (terrainDepthMat) mesh.customDepthMaterial = terrainDepthMat;
   return mesh;
 }

@@ -275,7 +275,7 @@ export function makeGrassField(biome, heightFn, excludedCircles = []) {
   const candidateAttempts = Math.floor(count * 5);
   while (placed < count && attempts < candidateAttempts) {
     attempts++;
-    const p = pickGroundPoint(0.98, { visualRadius: true });
+    const p = pickGroundPoint(1.0, { visualRadius: true });
     const x = p.x;
     const z = p.z;
     const y = heightFn(x, z);

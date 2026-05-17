@@ -515,6 +515,17 @@ export function generateWorld(seed) {
       child.position.y = (state.heightFn(wx, wz) - group.position.y) / scale + lift;
     }
   }
+  function alignGroupUpToTerrainNormal(group, normal, yaw) {
+    const align = new THREE.Quaternion().setFromUnitVectors(
+      new THREE.Vector3(0, 1, 0),
+      normal
+    );
+    const spin = new THREE.Quaternion().setFromAxisAngle(
+      new THREE.Vector3(0, 1, 0),
+      yaw
+    );
+    group.quaternion.copy(align.multiply(spin));
+  }
   // Water-plane surface Y — matches makeWaterPlane in environment.js. Used to
   // separate underwater coral spawns from above-water flora in water biomes.
   const WATER_SURFACE_Y = -0.12;
@@ -614,7 +625,8 @@ export function generateWorld(seed) {
     // sea level, while normal flora stays on dry/near-dry ground.
     const isReefCoral = biome.water && kind in REEF_CORAL_TOP_LOCAL;
     const isShallowWaterFlora = biome.water && SHALLOW_WATER_FLORA.has(kind);
-    const p = pickGroundPoint(isReefCoral || isShallowWaterFlora ? 1.0 : 0.88);
+    const normalFloraRadius = biome.id === "golden" && kind === "tree" ? 0.98 : 0.88;
+    const p = pickGroundPoint(isReefCoral || isShallowWaterFlora ? 1.0 : normalFloraRadius);
     const y0 = state.heightFn(p.x, p.z);
     if (isReefCoral) {
       if (y0 > WATER_SURFACE_Y - 0.05) continue; // not submerged enough
@@ -644,13 +656,11 @@ export function generateWorld(seed) {
     if (CANOPY_SPACING_KINDS.has(kind) && blocksFloraPlacement(p.x, p.z, fp * CANOPY_SPACING_PAD, CANOPY_SPACING_KINDS)) continue;
     const f = FLORA_BUILDERS[kind](biome);
     f.userData.inspect = { category: "flora", variant: kind };
-    const y = Math.min(
-      y0,
-      state.heightFn(p.x + fp, p.z),
-      state.heightFn(p.x - fp, p.z),
-      state.heightFn(p.x, p.z + fp),
-      state.heightFn(p.x, p.z - fp)
-    ) - FLORA_BURY;
+    const hXp = state.heightFn(p.x + fp, p.z);
+    const hXm = state.heightFn(p.x - fp, p.z);
+    const hZp = state.heightFn(p.x, p.z + fp);
+    const hZm = state.heightFn(p.x, p.z - fp);
+    const y = Math.min(y0, hXp, hXm, hZp, hZm) - FLORA_BURY;
     if (isReefCoral) {
       // Clamp scale so the tallest tip stays below the water surface.
       const maxScale = (WATER_SURFACE_Y - CORAL_SUBMERGE_MARGIN - y) / REEF_CORAL_TOP_LOCAL[kind];
@@ -658,7 +668,13 @@ export function generateWorld(seed) {
       s = Math.min(s, maxScale);
     }
     f.position.set(p.x, y, p.z);
-    f.rotation.y = Math.random() * Math.PI * 2;
+    const yaw = Math.random() * Math.PI * 2;
+    if (kind === "berrybush") {
+      const normal = new THREE.Vector3(hXm - hXp, 2 * fp, hZm - hZp).normalize();
+      alignGroupUpToTerrainNormal(f, normal, yaw);
+    } else {
+      f.rotation.y = yaw;
+    }
     f.scale.setScalar(s);
     // Mushroom grove gets one giant bigmushroom (4× scale)
     if (kind === "bigmushroom" && biome.id === "grove" && !groveGiantPlaced) {

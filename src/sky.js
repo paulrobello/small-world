@@ -548,18 +548,70 @@ export function makeCloudSwirl(biome) {
   return mesh;
 }
 
-function makeGrassAuraLineSegments(radius, innerRadius, outerRadius, aura, colors) {
+function edgeRadiusAtAngle(center, angle) {
+  const radius = center.visualRadius ?? center.radius;
+  const shape = center.shape ?? { kind: "round" };
+  if (shape.kind === "oblong") {
+    const dx = Math.cos(angle), dz = Math.sin(angle);
+    const co = Math.cos(shape.orient), si = Math.sin(shape.orient);
+    const lx = co * dx + si * dz;
+    const lz = -si * dx + co * dz;
+    const stretch = shape.stretch ?? 1;
+    return radius / Math.max(1e-6, Math.sqrt((lx / stretch) ** 2 + lz * lz));
+  }
+  return radius;
+}
+
+function makeEdgeAuraGeometry(center, inwardOverlap, outerSoft, radialSegments, angleSegments) {
+  const radialSpan = inwardOverlap + outerSoft;
+  const positions = [];
+  const edgeRadials = [];
+  const indices = [];
+
+  for (let i = 0; i <= angleSegments; i++) {
+    const angle = (i / angleSegments) * Math.PI * 2;
+    const edgeR = edgeRadiusAtAngle(center, angle);
+    const ca = Math.cos(angle), sa = Math.sin(angle);
+    for (let j = 0; j <= radialSegments; j++) {
+      const radial = -inwardOverlap + (j / radialSegments) * radialSpan;
+      const r = Math.max(0.1, edgeR + radial);
+      positions.push(ca * r, sa * r, 0);
+      edgeRadials.push(radial);
+    }
+  }
+
+  const stride = radialSegments + 1;
+  for (let i = 0; i < angleSegments; i++) {
+    for (let j = 0; j < radialSegments; j++) {
+      const a = i * stride + j;
+      const b = (i + 1) * stride + j;
+      const c = b + 1;
+      const d = a + 1;
+      indices.push(a, b, d, b, c, d);
+    }
+  }
+
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
+  geo.setAttribute("aEdgeRadial", new THREE.Float32BufferAttribute(edgeRadials, 1));
+  geo.setIndex(indices);
+  geo.computeVertexNormals();
+  return geo;
+}
+
+function makeGrassAuraLineSegments(center, inwardOverlap, outerSoft, aura, colors) {
   const lineDensity = Math.max(0, aura.lineDensity ?? 1);
   const count = Math.round((LOWFX ? 1100 : 3200) * 1000 * lineDensity);
   const positions = new Float32Array(count * 2 * 3);
   const tipFactors = new Float32Array(count * 2);
   const seeds = new Float32Array(count * 2);
-  const y = (aura.y ?? 0.26) + 0.06;
-  const span = Math.max(0.1, outerRadius - innerRadius);
+  const y = (aura.y ?? 0.02) + 0.06;
+  const span = Math.max(0.1, inwardOverlap + outerSoft);
 
   for (let i = 0; i < count; i++) {
     const angle = Math.random() * Math.PI * 2;
-    const r = innerRadius + Math.pow(Math.random(), 0.72) * span;
+    const radial = -inwardOverlap + Math.pow(Math.random(), 0.72) * span;
+    const r = Math.max(0.1, edgeRadiusAtAngle(center, angle) + radial);
     const x = Math.cos(angle) * r;
     const z = Math.sin(angle) * r;
     const tangent = angle + Math.PI / 2;
@@ -596,9 +648,9 @@ function makeGrassAuraLineSegments(radius, innerRadius, outerRadius, aura, color
     uniforms: {
       uTime: state.windUniforms.uTime,
       uWindStrength: { value: aura.windStrength ?? 0.85 },
-      uColRoot: { value: colors.root.clone().multiplyScalar(0.46) },
-      uColTip: { value: colors.tip.clone().multiplyScalar(0.78) },
-      uColLight: { value: colors.light.clone().multiplyScalar(0.88) },
+      uColRoot: { value: colors.root.clone().multiplyScalar(0.50) },
+      uColTip: { value: colors.tip.clone().multiplyScalar(0.70) },
+      uColLight: { value: colors.light.clone().multiplyScalar(0.76) },
     },
     vertexShader: `
       precision highp float;
@@ -642,9 +694,9 @@ function makeGrassAuraLineSegments(radius, innerRadius, outerRadius, aura, color
   return lines;
 }
 
-// Low perimeter aura. By default this preserves the soft round-island mist;
-// grass variants can also fall back to the active island center so seeded
-// oblong/kidney layouts still get their external grass disc.
+// Low perimeter aura. The aura band is generated from the active layout shape
+// instead of a plain circular RingGeometry, so oblong island edges and their
+// grass/mist rings share the same perimeter.
 export function makeIslandEdgeMist(biome) {
   const centers = state.currentLayout?.centers ?? [];
   const aura = biome.edgeAura ?? {};
@@ -660,25 +712,36 @@ export function makeIslandEdgeMist(biome) {
   const innerSoft = aura.innerSoft ?? Math.max(1.0, radius * 0.04);
   const outerSoft = aura.outerSoft ?? Math.max(24.0, center.radius * 1.36);
   const inwardOverlap = aura.inwardOverlap ?? innerSoft;
-  const innerRadius = Math.max(0.1, radius - inwardOverlap);
-  const outerRadius = radius + outerSoft;
-  const geo = new THREE.RingGeometry(
-    innerRadius,
-    outerRadius,
-    LOWFX ? 96 : 160,
-    LOWFX ? 4 : 7
+  const geo = makeEdgeAuraGeometry(
+    center,
+    inwardOverlap,
+    outerSoft,
+    LOWFX ? 4 : 7,
+    LOWFX ? 96 : 160
   );
 
   const colors = aura.colors ?? [];
-  const colA = colors[0]
+  let colA = colors[0]
     ? new THREE.Color(colors[0])
     : new THREE.Color("#8f8f9a").lerp(new THREE.Color(biome.fog), 0.25);
-  const colB = colors[1]
+  let colB = colors[1]
     ? new THREE.Color(colors[1])
     : new THREE.Color("#d4d0c2").lerp(new THREE.Color(biome.fog), 0.18);
-  const colC = colors[2]
+  let colC = colors[2]
     ? new THREE.Color(colors[2])
     : new THREE.Color(biome.accent ?? biome.sun ?? "#ffffff");
+
+  if (isGrassAura) {
+    // The edge aura is unlit ShaderMaterial, while the real grass is a lit
+    // MeshStandardMaterial in contact shadow. Use the darker ground ramp and
+    // pre-darken it so the ring matches the perceived grass color instead of
+    // blooming toward the bright sky/fog palette.
+    const low = new THREE.Color(biome.ground?.[0] ?? colors[0] ?? "#5d3a1f");
+    const mid = new THREE.Color(biome.ground?.[1] ?? colors[1] ?? "#8a5a2c");
+    colA = low.clone().lerp(mid, 0.18).offsetHSL(0, 0.10, -0.14);
+    colB = low.clone().lerp(mid, 0.36).offsetHSL(0, 0.04, -0.10);
+    colC = colB.clone().offsetHSL(0, -0.04, 0.02);
+  }
 
   const mat = new THREE.ShaderMaterial({
     transparent: !isGrassAura,
@@ -702,9 +765,12 @@ export function makeIslandEdgeMist(biome) {
       uWindStrength: { value: aura.windStrength ?? 0.65 },
     },
     vertexShader: `
+      attribute float aEdgeRadial;
       varying vec2 vLocalXZ;
+      varying float vRadial;
       void main() {
         vLocalXZ = position.xy;
+        vRadial = aEdgeRadial;
         gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
       }
     `,
@@ -724,6 +790,7 @@ export function makeIslandEdgeMist(biome) {
       uniform float uStreakScale;
       uniform float uWindStrength;
       varying vec2 vLocalXZ;
+      varying float vRadial;
 
       float hash(vec2 p) {
         return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453);
@@ -742,11 +809,11 @@ export function makeIslandEdgeMist(biome) {
       }
 
       void main() {
-        float d = length(vLocalXZ);
-        float inward = smoothstep(uRadius - uInnerSoft, uRadius + 0.25, d);
-        float outward = 1.0 - smoothstep(uRadius + uOuterSoft * uOutwardFadeStart, uRadius + uOuterSoft, d);
+        float radial = vRadial;
+        float inward = smoothstep(-uInnerSoft, 0.25, radial);
+        float outward = 1.0 - smoothstep(uOuterSoft * uOutwardFadeStart, uOuterSoft, radial);
         float edge = inward * outward;
-        float seam = 1.0 - smoothstep(0.0, uInnerSoft * 0.55, abs(d - uRadius));
+        float seam = 1.0 - smoothstep(0.0, uInnerSoft * 0.55, abs(radial));
         vec2 base = vLocalXZ * uNoiseScale;
         vec2 driftA = vec2(uTime * 0.032, -uTime * 0.021) * uWindStrength;
         vec2 driftB = vec2(-uTime * 0.018, uTime * 0.027) * uWindStrength;
@@ -762,14 +829,13 @@ export function makeIslandEdgeMist(biome) {
 
         if (uPattern > 0.5) {
           float angle = atan(vLocalXZ.y, vLocalXZ.x);
-          float radial = d - uRadius;
           float innerFade = smoothstep(-uInnerSoft, -0.05, radial);
           float outerFade = 1.0 - smoothstep(uOuterSoft * 0.86, uOuterSoft, radial);
           float grassBand = innerFade * outerFade;
           float fieldDensity = smoothstep(0.12, 0.82, fbm(vec2(angle * 9.0, radial * 0.45) + driftA));
-          vec3 fieldCol = uColA;
-          fieldCol *= mix(0.62, 0.78, fieldDensity);
-          fieldCol *= mix(0.84, 0.94, grassBand);
+          vec3 fieldCol = mix(uColA, uColB, fieldDensity * 0.55);
+          fieldCol *= mix(0.50, 0.66, fieldDensity);
+          fieldCol *= mix(0.78, 0.90, grassBand);
           gl_FragColor = vec4(fieldCol, 1.0);
           return;
         }
@@ -796,9 +862,9 @@ export function makeIslandEdgeMist(biome) {
     group.name = "island-edge-grass-aura";
     group.userData.inspect = { category: "atmosphere", variant: group.name };
     group.position.set(center.cx, 0, center.cz);
-    mesh.position.y = aura.y ?? 0.26;
+    mesh.position.y = aura.y ?? 0.02;
     if (aura.ground !== false) group.add(mesh);
-    group.add(makeGrassAuraLineSegments(radius, innerRadius, outerRadius, aura, {
+    group.add(makeGrassAuraLineSegments(center, inwardOverlap, outerSoft, aura, {
       root: colA,
       tip: colB,
       light: colC,
