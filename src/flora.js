@@ -3,6 +3,10 @@ import { state } from "./state.js";
 import { jitterGeo, applyWindSway, TRUNK, buildLeafGeo } from "./util.js";
 import { BLOOM_LAYER } from "./postfx.js";
 import { makePool } from "./pool.js";
+import {
+  makeLeafballTreeLeafPBRMaterial,
+  makeLeafballTreeTrunkPBRMaterial,
+} from "./pbr.js";
 
 // Cactus needles. Each spine is a real little cone mesh sitting on the
 // capsule's surface, oriented along the outward normal — the shell-fur
@@ -129,7 +133,7 @@ function applyLeafPlateWind(material, strength = 0.16) {
 
 function applyLeafPlateGradient(
   material,
-  { tipLift = 0.10, baseShade = 0.10, veinShade = 0.08, sideShade = 0.10 } = {}
+  { tipLift = 0.10, baseShade = 0.10, veinShade = 0.08, sideShade = 0.10, ribShade = 0.11 } = {}
 ) {
   const prev = material.onBeforeCompile;
   material.onBeforeCompile = (shader) => {
@@ -138,20 +142,24 @@ function applyLeafPlateGradient(
     shader.uniforms.uLeafBaseShade = { value: baseShade };
     shader.uniforms.uLeafVeinShade = { value: veinShade };
     shader.uniforms.uLeafSideShade = { value: sideShade };
+    shader.uniforms.uLeafRibShade = { value: ribShade };
+    shader.uniforms.uLeafRibHighlight = { value: ribShade * 0.80 };
     shader.vertexShader = shader.vertexShader
       .replace(
         "#include <common>",
         `#include <common>
         varying float vLeafPlateGradient;
         varying float vLeafPlateVein;
-        varying float vLeafPlateSide;`
+        varying float vLeafPlateSide;
+        varying vec2 vLeafPlateUv;`
       )
       .replace(
         "#include <begin_vertex>",
         `#include <begin_vertex>
         vLeafPlateGradient = smoothstep(-0.42, 0.0, position.y);
         vLeafPlateVein = 1.0 - smoothstep(0.0, 0.035, abs(position.x));
-        vLeafPlateSide = smoothstep(-0.16, 0.16, position.x);`
+        vLeafPlateSide = smoothstep(-0.16, 0.16, position.x);
+        vLeafPlateUv = vec2(clamp(position.x / 0.34 + 0.5, 0.0, 1.0), clamp(-position.y / 0.42, 0.0, 1.0));`
       );
     shader.fragmentShader = shader.fragmentShader
       .replace(
@@ -161,18 +169,35 @@ function applyLeafPlateGradient(
         uniform float uLeafBaseShade;
         uniform float uLeafVeinShade;
         uniform float uLeafSideShade;
+        uniform float uLeafRibShade;
+        uniform float uLeafRibHighlight;
         varying float vLeafPlateGradient;
         varying float vLeafPlateVein;
-        varying float vLeafPlateSide;`
+        varying float vLeafPlateSide;
+        varying vec2 vLeafPlateUv;
+        float leafRibMask(vec2 leafUv) {
+          float side = abs(leafUv.x - 0.5) * 2.0;
+          float body = smoothstep(0.04, 0.16, leafUv.y) * (1.0 - smoothstep(0.88, 1.0, leafUv.y));
+          float ribs = 1.0 - smoothstep(0.0, 0.14, abs(fract(leafUv.y * 7.0 + side * 1.10) - 0.5));
+          return ribs * smoothstep(0.10, 0.30, side) * (1.0 - smoothstep(0.82, 1.0, side)) * body;
+        }`
       )
       .replace(
         "#include <color_fragment>",
         `#include <color_fragment>
+        float leafRibs = leafRibMask(vLeafPlateUv);
         diffuseColor.rgb *= 1.0 - uLeafBaseShade * (1.0 - vLeafPlateGradient);
         diffuseColor.rgb += diffuseColor.rgb * uLeafTipLift * vLeafPlateGradient;
         diffuseColor.rgb *= 1.0 - uLeafSideShade * (1.0 - vLeafPlateSide);
         diffuseColor.rgb += diffuseColor.rgb * uLeafSideShade * 0.45 * vLeafPlateSide;
-        diffuseColor.rgb *= 1.0 - uLeafVeinShade * vLeafPlateVein;`
+        diffuseColor.rgb *= 1.0 - uLeafVeinShade * 1.45 * vLeafPlateVein;
+        diffuseColor.rgb *= 1.0 - uLeafRibShade * leafRibs;
+        diffuseColor.rgb += diffuseColor.rgb * uLeafRibHighlight * (leafRibs + vLeafPlateVein * 0.35) * vLeafPlateSide;`
+      )
+      .replace(
+        "#include <roughnessmap_fragment>",
+        `#include <roughnessmap_fragment>
+        roughnessFactor = clamp(roughnessFactor - uLeafRibHighlight * leafRibMask(vLeafPlateUv) * 0.26, 0.16, 1.0);`
       );
   };
   material.needsUpdate = true;
@@ -227,12 +252,19 @@ function getLeafballTreePalette(biome) {
     new THREE.Color(biome.ground[1]).lerp(new THREE.Color("#64ad58"), 0.18),
   ];
   const leaves = fallbackLeaves.map((color, index) => override.leaves?.[index] || color);
+  const trunk = override.trunk || new THREE.Color(TRUNK).lerp(new THREE.Color("#c38b45"), 0.52);
 
   return {
-    trunk: override.trunk || new THREE.Color(TRUNK).lerp(new THREE.Color("#c38b45"), 0.52),
-    outline: override.outline || "#102416",
+    trunk,
+    outline: getLeafballOutlineColor(leaves, trunk),
     leaves,
   };
+}
+
+function getLeafballOutlineColor(leaves, trunk) {
+  return new THREE.Color(leaves[0])
+    .lerp(new THREE.Color(trunk), 0.34)
+    .offsetHSL(0.0, -0.05, -0.18);
 }
 
 function addGroveMushroomFamily(group, biome, { radius = 0.44, count = 3, capY = 0.35 } = {}) {
@@ -342,9 +374,9 @@ export const FLORA_BUILDERS = {
     const g = new THREE.Group();
     const palette = getLeafballTreePalette(biome);
     const trunkMat = pooled("leafballtree.trunk.mat", () =>
-      new THREE.MeshStandardMaterial({
+      makeLeafballTreeTrunkPBRMaterial({
         color: palette.trunk,
-        flatShading: true,
+        flatShading: false,
         roughness: 0.95,
         vertexColors: true,
       })
@@ -385,13 +417,13 @@ export const FLORA_BUILDERS = {
       pooled("leafballtree.leaf.mat.shadow", () =>
         applyLeafPlateWind(
           applyLeafPlateGradient(
-            new THREE.MeshStandardMaterial({
+            makeLeafballTreeLeafPBRMaterial({
               color: palette.leaves[0],
               side: THREE.DoubleSide,
-              flatShading: true,
+              flatShading: false,
               roughness: 0.82,
             }),
-            { tipLift: 0.08, baseShade: 0.12, veinShade: 0.06, sideShade: 0.11 }
+            { tipLift: 0.08, baseShade: 0.12, veinShade: 0.18, sideShade: 0.11, ribShade: 0.26 }
           ),
           0.10
         )
@@ -399,13 +431,13 @@ export const FLORA_BUILDERS = {
       pooled("leafballtree.leaf.mat.mid", () =>
         applyLeafPlateWind(
           applyLeafPlateGradient(
-            new THREE.MeshStandardMaterial({
+            makeLeafballTreeLeafPBRMaterial({
               color: palette.leaves[1],
               side: THREE.DoubleSide,
-              flatShading: true,
+              flatShading: false,
               roughness: 0.78,
             }),
-            { tipLift: 0.10, baseShade: 0.10, veinShade: 0.07, sideShade: 0.12 }
+            { tipLift: 0.10, baseShade: 0.10, veinShade: 0.20, sideShade: 0.12, ribShade: 0.28 }
           ),
           0.13
         )
@@ -413,13 +445,13 @@ export const FLORA_BUILDERS = {
       pooled("leafballtree.leaf.mat.light", () =>
         applyLeafPlateWind(
           applyLeafPlateGradient(
-            new THREE.MeshStandardMaterial({
+            makeLeafballTreeLeafPBRMaterial({
               color: palette.leaves[2],
               side: THREE.DoubleSide,
-              flatShading: true,
+              flatShading: false,
               roughness: 0.82,
             }),
-            { tipLift: 0.045, baseShade: 0.08, veinShade: 0.055, sideShade: 0.10 }
+            { tipLift: 0.045, baseShade: 0.08, veinShade: 0.16, sideShade: 0.10, ribShade: 0.24 }
           ),
           0.12
         )
@@ -430,18 +462,21 @@ export const FLORA_BUILDERS = {
     // front of lower-row bases like overlapping shingles.
     const leafGeo = pooled("leafballtree.leaf.geo", () =>
       buildLeafGeo({
-        lengthSegs: 7,
-        widthSegs: 4,
+        lengthSegs: 14,
+        widthSegs: 8,
         length: 0.42,
         maxWidth: 0.165,
         minWidth: 0.006,
         profileExp: 0.72,
         taperEnd: 0.16,
-        centerLift: 0.010,
+        centerLift: 0.012,
         centerLiftFade: 0.35,
         tipCurlStrength: 0.060,
         tipCurlExp: 1.45,
         edgeCurlStrength: 0.010,
+        centerRibLift: 0.030,
+        secondaryRibLift: 0.018,
+        secondaryRibFrequency: 8.5,
       })
     );
     const leafOutlineGeo = pooled("leafballtree.leaf.outline.geo", () => {
@@ -2098,4 +2133,3 @@ export const FLORA_BUILDERS = {
     return g;
   },
 };
-

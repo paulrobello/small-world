@@ -135,6 +135,7 @@ export const state = {
     terrainSmoothShading: true,
     foliageWindEnabled: true,
     bloomRadius: 0.15,
+    pbrDetails: true,
   },
   // Set by world.js after makeTerrain. Used by the smooth-shading toggle in
   // ui.js to flip mat.flatShading at runtime without rebuilding geometry.
@@ -150,12 +151,55 @@ export const NIGHT_SUN = new THREE.Color("#7a89b8");
 export const NIGHT_HEMI_GROUND = new THREE.Color("#06070d");
 export const DAY_NIGHT_PERIOD_S = 120;
 
+const MATERIAL_TEXTURE_KEYS = [
+  "map",
+  "normalMap",
+  "roughnessMap",
+  "metalnessMap",
+  "specularIntensityMap",
+  "specularColorMap",
+  "aoMap",
+  "emissiveMap",
+  "alphaMap",
+  "bumpMap",
+  "displacementMap",
+  "envMap",
+  "clearcoatMap",
+  "clearcoatNormalMap",
+  "clearcoatRoughnessMap",
+];
+
+function disposeMaterial(material, disposedMaterials, disposedTextures) {
+  if (!material || disposedMaterials.has(material)) return;
+  disposedMaterials.add(material);
+  for (const key of MATERIAL_TEXTURE_KEYS) {
+    const texture = material[key];
+    if (texture && texture.dispose && !disposedTextures.has(texture)) {
+      disposedTextures.add(texture);
+      texture.dispose();
+    }
+  }
+  const extraTextures = material.userData?.pbrDetailTextures ?? [];
+  for (const texture of extraTextures) {
+    if (texture && texture.dispose && !disposedTextures.has(texture)) {
+      disposedTextures.add(texture);
+      texture.dispose();
+    }
+  }
+  material.dispose();
+}
+
 export function disposeGroup(g) {
+  const disposedMaterials = new Set();
+  const disposedTextures = new Set();
   g.traverse((o) => {
     if (o.geometry) o.geometry.dispose();
     if (o.material) {
-      if (Array.isArray(o.material)) o.material.forEach((m) => m.dispose());
-      else o.material.dispose();
+      if (Array.isArray(o.material)) {
+        o.material.forEach((m) => disposeMaterial(m, disposedMaterials, disposedTextures));
+      } else {
+        disposeMaterial(o.material, disposedMaterials, disposedTextures);
+      }
     }
   });
 }

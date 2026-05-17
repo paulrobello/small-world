@@ -1,6 +1,6 @@
 import * as THREE from "three";
 import { state, ISLAND_SIZE_BASE, ISLAND_RADIUS_BASE } from "./state.js";
-import { jitterGeo } from "./util.js";
+import { makeTerrainPBRMaterial } from "./pbr.js";
 
 // Terrain height function — one or more shaped islands with smoothstep falloff
 
@@ -255,8 +255,6 @@ export function makeTerrain(biome, heightFn) {
     const x = pos.getX(i);
     const y = pos.getY(i);
     const z = pos.getZ(i);
-    const nx = geo.attributes.normal.getX(i);
-    const nz = geo.attributes.normal.getZ(i);
     const slope = 1 - Math.abs(geo.attributes.normal.getY(i));
 
     // height-banded colour
@@ -292,14 +290,7 @@ export function makeTerrain(biome, heightFn) {
 
   geo.setAttribute("color", new THREE.BufferAttribute(colors, 3));
 
-  const mat = new THREE.MeshStandardMaterial({
-    vertexColors: true,
-    flatShading: !cloudlike,
-    roughness: cloudlike ? 0.78 : 0.92,
-    metalness: 0,
-    emissive: cloudlike ? new THREE.Color(biome.fog).lerp(cloudGlow, 0.35) : 0x000000,
-    emissiveIntensity: cloudlike ? 0.08 : 0,
-  });
+  const mat = makeTerrainPBRMaterial(biome, heightFn);
 
   const terrainClipCenter = clipCenter();
   applyTerrainClip(mat, terrainClipCenter);
@@ -311,4 +302,3 @@ export function makeTerrain(biome, heightFn) {
   if (terrainDepthMat) mesh.customDepthMaterial = terrainDepthMat;
   return mesh;
 }
-

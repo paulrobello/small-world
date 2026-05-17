@@ -96,6 +96,9 @@ export function randInt(lo, hi) {
  * @param {number} opts.tipCurlStrength - Amount of forward curl at the tip
  * @param {number} opts.tipCurlExp - Exponent for tip curl falloff
  * @param {number} opts.edgeCurlStrength - Amount of edge curl inward
+ * @param {number} [opts.centerRibLift] - Raised central vein height
+ * @param {number} [opts.secondaryRibLift] - Raised side-rib height
+ * @param {number} [opts.secondaryRibFrequency] - Side-rib count along leaf length
  */
 export function buildLeafGeo({
   lengthSegs = 7,
@@ -110,6 +113,9 @@ export function buildLeafGeo({
   tipCurlStrength = 0.060,
   tipCurlExp = 1.45,
   edgeCurlStrength = 0.010,
+  centerRibLift = 0,
+  secondaryRibLift = 0,
+  secondaryRibFrequency = 9.5,
 } = {}) {
   const positions = [];
   const uvs = [];
@@ -125,7 +131,15 @@ export function buildLeafGeo({
       const cl = (1 - Math.abs(side)) * centerLift * (1 - v * centerLiftFade);
       const tc = tipCurlStrength * v ** tipCurlExp;
       const ec = -Math.abs(side) * edgeCurlStrength * Math.sin(Math.PI * v);
-      positions.push(side * halfWidth, -v * length, tc + cl + ec);
+      const leafBody = Math.sin(Math.PI * v);
+      const centerRib = Math.max(0, 1 - Math.abs(side) * 5.2) * centerRibLift * leafBody;
+      const sideRib =
+        Math.max(0, Math.sin((v * secondaryRibFrequency + Math.abs(side) * 2.35) * Math.PI)) *
+        Math.min(1, Math.abs(side) * 3.4) *
+        Math.max(0, 1 - Math.abs(side) * 1.12) *
+        secondaryRibLift *
+        leafBody;
+      positions.push(side * halfWidth, -v * length, tc + cl + ec + centerRib + sideRib);
       uvs.push(u, v);
     }
   }

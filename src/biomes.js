@@ -158,7 +158,6 @@ export const BIOMES = [
     floraCount: 115,
     leafballTreePalette: {
       trunk: "#8a5a2c",
-      outline: "#3f3d16",
       leaves: ["#9a6d24", "#c49a3d", "#f1c86b"],
     },
     particle: "pollen",
