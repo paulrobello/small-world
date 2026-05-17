@@ -532,7 +532,7 @@ export const FLORA_BUILDERS = {
     };
 
     const rowCounts = [9, 14, 18, 22, 26, 26, 24, 20, 17, 13, 10];
-    const addLeafRing = ({ count, phi, shell = 1, scale = 0.8, matIndex = 1, phase = 0, lift = 0.12, yOffset = 0 }) => {
+    const addLeafRing = ({ count, phi, shell = 1, scale = 0.8, matIndex = 1, phase = 0, lift = 0.12, yOffset = 0, pitchOffset = 0 }) => {
       for (let i = 0; i < count; i++) {
         const a = (i / count) * Math.PI * 2 + phase + (Math.random() - 0.5) * 0.04;
         const normal = new THREE.Vector3(
@@ -547,7 +547,7 @@ export const FLORA_BUILDERS = {
           canopyCenter.z + normal.z * canopyRadius.z * shell
         );
         orientLeaf(leaf, normal, lift);
-        leaf.rotateX(0.02 + lift * 0.18);
+        leaf.rotateX(0.02 + lift * 0.18 + pitchOffset);
         leaf.rotateZ((Math.random() - 0.5) * 0.08);
         const s = scale * (0.92 + Math.random() * 0.16);
         scaleVec.set(s * 0.94, s * 1.18, s);
@@ -558,6 +558,8 @@ export const FLORA_BUILDERS = {
 
     addLeafRing({ count: 6, phi: 0.07, shell: 0.54, scale: 0.72, matIndex: 2, phase: 0.18, lift: 0.32, yOffset: 0.40 });
     const topHighlightRows = 4;
+    const topMotionTuckRows = 3;
+    const topMotionTuckAngle = 0.045;
     let staggerPhase = 0;
     for (let row = 0; row < rowCounts.length; row++) {
       const t = row / (rowCounts.length - 1);
@@ -572,6 +574,7 @@ export const FLORA_BUILDERS = {
         matIndex,
         phase: staggerPhase,
         lift: row === rowCounts.length - 2 ? 0.48 - t * 0.08 : row === rowCounts.length - 1 ? 0.35 - t * 0.08 : 0.22 - t * 0.10,
+        pitchOffset: row < topMotionTuckRows ? topMotionTuckAngle : 0,
       });
       staggerPhase += Math.PI / rowCounts[row];
     }
