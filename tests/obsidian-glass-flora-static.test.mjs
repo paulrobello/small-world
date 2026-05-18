@@ -28,12 +28,14 @@ assert(
 );
 assert(
   floraSource.includes('obsidianglass(biome)')
+    && floraSource.includes('new THREE.ConeGeometry(0.22, 1, 5, 1)')
     && floraSource.includes('new THREE.MeshPhysicalMaterial')
     && floraSource.includes('roughness: 0.035')
-    && floraSource.includes('metalness: 0.72')
+    && floraSource.includes('metalness: 0.82')
     && floraSource.includes('clearcoat: 1.0')
+    && floraSource.includes('specularIntensity: 1.0')
     && floraSource.includes('reflectivity: 1.0'),
-  'obsidian glass flora should use a high-shine physical material.'
+  'obsidian glass flora should use pointed shards and a high-shine physical material.'
 );
 assert(
   worldSource.includes('obsidianglass: 0.34')

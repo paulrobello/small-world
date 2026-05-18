@@ -2203,24 +2203,26 @@ export const FLORA_BUILDERS = {
     const g = new THREE.Group();
     const ember = new THREE.Color(biome.accent);
     const glassGeo = pooled("obsidianglass.fin.geo", () => {
-      const geo = new THREE.CylinderGeometry(0.16, 0.24, 1, 5, 1);
-      geo.scale(0.78, 1, 0.18);
+      const geo = new THREE.ConeGeometry(0.22, 1, 5, 1);
+      geo.scale(0.74, 1, 0.14);
       geo.translate(0, 0.5, 0);
       return geo;
     });
     const glassMat = pooled("obsidianglass.glass.mat", () =>
       new THREE.MeshPhysicalMaterial({
         color: new THREE.Color("#09070d"),
-        emissive: ember.clone().multiplyScalar(0.08),
+        emissive: ember.clone().multiplyScalar(0.035),
         flatShading: true,
         roughness: 0.035,
-        metalness: 0.72,
+        metalness: 0.82,
         clearcoat: 1.0,
         clearcoatRoughness: 0.02,
+        specularIntensity: 1.0,
+        specularColor: new THREE.Color("#ffd08a"),
         reflectivity: 1.0,
       })
     );
-    const glintGeo = pooled("obsidianglass.glint.geo", () => new THREE.PlaneGeometry(0.035, 0.22));
+    const glintGeo = pooled("obsidianglass.glint.geo", () => new THREE.PlaneGeometry(0.026, 0.18));
     const glintMat = pooled("obsidianglass.glint.mat", () =>
       new THREE.MeshBasicMaterial({
         color: "#ffd08a",
@@ -2231,26 +2233,26 @@ export const FLORA_BUILDERS = {
         side: THREE.DoubleSide,
       })
     );
-    const fins = 4 + Math.floor(Math.random() * 3);
+    const fins = 5 + Math.floor(Math.random() * 3);
     for (let i = 0; i < fins; i++) {
-      const a = (i / fins) * Math.PI * 2 + Math.random() * 0.28;
-      const height = 0.72 + Math.random() * 0.72;
-      const off = Math.random() * 0.16;
+      const a = (i / fins) * Math.PI * 2 + Math.random() * 0.34;
+      const height = 0.42 + Math.random() * 0.78;
+      const off = 0.03 + Math.random() * 0.22;
       const fin = new THREE.Mesh(glassGeo, glassMat);
       fin.position.set(Math.cos(a) * off, 0.015, Math.sin(a) * off);
-      fin.scale.set(0.72 + Math.random() * 0.36, height, 0.78 + Math.random() * 0.24);
+      fin.scale.set(0.55 + Math.random() * 0.34, height, 0.72 + Math.random() * 0.28);
       fin.rotation.order = "YXZ";
       fin.rotation.y = a + Math.PI * 0.5;
-      fin.rotation.x = (Math.random() - 0.5) * 0.18;
-      fin.rotation.z = (Math.random() - 0.5) * 0.18;
+      fin.rotation.x = -Math.sin(a) * (0.18 + Math.random() * 0.24);
+      fin.rotation.z = Math.cos(a) * (0.18 + Math.random() * 0.28);
       fin.castShadow = true;
       g.add(fin);
 
-      if (i < 3) {
+      if (i < 4) {
         const glint = new THREE.Mesh(glintGeo, glintMat);
         glint.position.set(
           fin.position.x + Math.cos(a) * 0.035,
-          height * (0.46 + Math.random() * 0.22),
+          height * (0.42 + Math.random() * 0.30),
           fin.position.z + Math.sin(a) * 0.035
         );
         glint.rotation.order = "YXZ";
