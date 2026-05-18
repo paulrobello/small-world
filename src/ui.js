@@ -878,7 +878,8 @@ export function initUi({ camera, canvas, controls, renderer }) {
     // shader recompile). Only live particle systems need the update.
     const p = state.particles;
     if (p && p.material.uniforms.uSoftParticles && state.depthTexture) {
-      p.material.uniforms.uSoftParticles.value = softParticlesEl.checked ? 1.0 : 0.0;
+      p.material.uniforms.uSoftParticles.value =
+        softParticlesEl.checked && p.userData.softParticlesSupported ? 1.0 : 0.0;
     }
     saveSettings();
   });

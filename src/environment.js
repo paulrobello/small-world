@@ -28,6 +28,11 @@ const PARTICLE_KIND_ID = {
   sand: 11, cinder: 12,
 };
 
+const SOFT_PARTICLE_KINDS = new Set([
+  "pollen", "dust", "snow", "firefly", "ember",
+  "lichenmote", "feather", "bubble", "spark", "rain", "cinder",
+]);
+
 function cinderFissureLiftAt(x, z) {
   let lift = 0;
   for (const obstacle of state.obstacles) {
@@ -244,7 +249,7 @@ export function makeParticles(biome) {
   const camera = state.camera;
   // Soft particles require the depth pre-pass — null under LOWFX, in which
   // case uSoftParticles stays 0 and the shader skips the depth-fade branch.
-  const softOn = kind !== "sand" && !!(state.depthTexture && state.userSettings.softParticles);
+  const softOn = SOFT_PARTICLE_KINDS.has(kind) && !!(state.depthTexture && state.userSettings.softParticles);
   const cinderBloomBoost = kind === "cinder" ? 3.2 : 1.0;
 
   const mat = new THREE.ShaderMaterial({
@@ -271,7 +276,14 @@ export function makeParticles(biome) {
   });
 
   const points = new THREE.Points(geo, mat);
-  points.userData = { kind, velocities, seeds, lifes, count };
+  points.userData = {
+    kind,
+    velocities,
+    seeds,
+    lifes,
+    count,
+    softParticlesSupported: SOFT_PARTICLE_KINDS.has(kind),
+  };
   if (kind === "cinder") points.layers.enable(BLOOM_LAYER);
   return points;
 }

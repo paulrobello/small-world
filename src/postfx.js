@@ -652,6 +652,10 @@ export function initPostFX(renderer, scene, camera) {
       depthFXPass.uniforms.uFogStrength.value > 0.001;
   }
 
+  function particlesUseSoftDepth() {
+    return (state.particles?.material?.uniforms?.uSoftParticles?.value ?? 0) > 0.001;
+  }
+
   return {
     composer,
     tiltShiftPass,
@@ -663,7 +667,7 @@ export function initPostFX(renderer, scene, camera) {
       state.userSettings.bloom ||
       tiltShiftPass.enabled ||
       depthFXPass.enabled ||
-      state.userSettings.softParticles,
+      particlesUseSoftDepth(),
     render: (s, cam) => {
       // Render depthRT first so bloom, depth FX, and particles have a fresh
       // depthTexture. Particle soft-depth sampling is disabled only for this
