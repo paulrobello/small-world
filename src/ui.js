@@ -795,7 +795,7 @@ export function initUi({ camera, canvas, controls, renderer }) {
   // radius at 1.0 (the no-gap zone for the 5-tap kernel) and adds more
   // pairs — convolving N narrow kernels gives effective σ ≈ √N × σ_base
   // with no pointillist sample-grid at any slider value.
-  const bloomRadius = state.userSettings.bloomRadius ?? 1.0;
+  const bloomRadius = state.userSettings.bloomRadius ?? 0.5;
   bloomRadiusEl.value = String(Math.round(bloomRadius * 100));
   bloomRadiusValueEl.textContent = bloomRadiusEl.value + "%";
   tiltEl.checked = state.userSettings.tiltShift;

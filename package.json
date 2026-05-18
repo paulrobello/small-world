@@ -1,6 +1,6 @@
 {
   "name": "small-world",
-  "version": "1.2.16",
+  "version": "1.2.17",
   "description": "A Three.js terrarium that grows a tiny floating-island world — biome, terrain, flora, creatures, birds, and weather — from a 16-bit seed. Cute and painterly by design.",
   "main": "main.js",
   "directories": {

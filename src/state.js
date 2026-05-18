@@ -133,7 +133,7 @@ export const state = {
     groundMarkLifeScale: 2.0,
     grassPanelOpen: false,
     foliageWindEnabled: true,
-    bloomRadius: 1.0,
+    bloomRadius: 0.5,
     pbrDetails: true,
     musicEnabled: false,
     musicVolume: 0.5,

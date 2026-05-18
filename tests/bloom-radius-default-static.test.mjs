@@ -5,12 +5,12 @@ const stateSource = readFileSync(new URL('../src/state.js', import.meta.url), 'u
 const htmlSource = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
 
 assert(
-  htmlSource.includes('id="setting-bloom-radius" min="0" max="110" step="1" value="100"')
-    && htmlSource.includes('id="setting-bloom-radius-value">100%</span>'),
-  'Bloom radius control should present 100% as the default UI value.'
+  htmlSource.includes('id="setting-bloom-radius" min="0" max="110" step="1" value="50"')
+    && htmlSource.includes('id="setting-bloom-radius-value">50%</span>'),
+  'Bloom radius control should present 50% as the default UI value.'
 );
 
 assert(
-  stateSource.includes('bloomRadius: 1.0'),
-  'Default persisted bloom radius should start at 100%, not a muted 15%.'
+  stateSource.includes('bloomRadius: 0.5'),
+  'Default persisted bloom radius should start at 50%.'
 );
