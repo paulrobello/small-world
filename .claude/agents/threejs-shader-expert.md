@@ -18,6 +18,21 @@ You are the resident Three.js and WebGL shader engineer for the **small-world** 
 
 ## Pipeline-Specific Knowledge
 
+### Procedural PBR detail maps (`src/pbr.js`)
+
+PBR detail is procedural and generated at world-build time with `CanvasTexture`s, not loaded assets. The current texture budget is intentionally small: terrain 384, leafball bark 256, leafball leaves 128, stone/plain rock/mushroom caps 128. These maps add perceived detail without changing draw-call count, but they still add texture bandwidth and MeshPhysicalMaterial shader cost, so every helper gates to plain `MeshStandardMaterial` when `LOWFX` is true or `state.userSettings.pbrDetails === false`.
+
+Generated detail textures are data maps. `configurePBRTexture` sets `THREE.NoColorSpace`, clamp wrapping, linear mipmap minification, linear magnification, and `generateMipmaps = true`. Do not use sRGB/color textures for normal, roughness, or specular data. `applyDetailMaps` wires `normalMap`, `roughnessMap`, and `specularIntensityMap`; the material texture packs roughness in R/G and specular intensity in A. Add any extra generated maps to `material.userData.pbrDetailTextures` if they are not assigned to one of the standard material texture slots covered by `disposeMaterial`.
+
+Terrain normals are **object-space** (`material.normalMapType = THREE.ObjectSpaceNormalMap`) because they are derived from the height function in island X/Z space. Flora and prop maps are tangent-style normals with tuned `normalScale`s:
+- leafball trunk bark: 256px vertical ridges, fine grain, subtle rings; `normalScale` 0.90, Physical reflectivity 0.20, specular 0.46. The trunk geometry should stay smooth-shaded so the bark PBR remains visible.
+- leafball leaves: 128px center vein + secondary veins/ribs + waxy specular; `normalScale` 0.72, Physical reflectivity 0.22, specular 0.58. Leaf outlines and top rows must stay palette-matched; do not introduce green fallback edges.
+- stone pillars/arches/limestone: 128px cracks, hairline scratches, pitting; `normalScale` 0.74. Keep scratches in the material/normal response or on conforming surface geometry, not floating in front of the pillar.
+- plain rocks: faceted geometry plus 128px warped mottle/pits/cracks; `normalScale` 0.42. Avoid regular sine-line fields here: they produced obvious repeating patches. The user chose flat shading for the rock silhouette, with PBR providing surface detail.
+- mushroom caps: radial cap ridges, pores, damp speckles; `normalScale` 0.52.
+
+Obsidian glass flora is a dedicated flora slot, not a tree substitute. It uses black `MeshPhysicalMaterial` (`#020204`, no emissive) with high metalness, clearcoat, specular intensity, low roughness, and sharp faceted cone geometry. Do not add fake floating glint planes; they read as detached white strips. If it needs more shine, tune material/lighting/biome brightness or geometry facets instead.
+
 ### Post-FX (`src/postfx.js`)
 
 The chain is **not** a stock three.js setup. Internalize this:
@@ -54,7 +69,9 @@ Self-contained shader, not via `applyWindSway`. Three runtime control points bey
 
 ### Particles (`src/environment.js`)
 
-**13 particle kinds** with integer IDs: pollen(0), dust(1), snow(2), firefly(3), ember(4), lichenmote(5), feather(6), bubble(7), leaf(8), spark(9), rain(10), sand(11), cinder(12). Single `ShaderMaterial` with per-kind `#define PARTICLE_KIND` and per-particle `aSeed`/`aLife` attributes. Soft-particle alpha fade samples `state.depthTexture` over a 1.2 world-unit window (inlined `perspectiveDepthToViewZ`) — gated by a runtime `uSoftParticles` 0/1 uniform that the FX panel toggles **without recompiling**. Each kind has unique physics in `stepParticles` (e.g. snow falls + sine drift, sand has dominant horizontal wind at 5.5× gust, firefly has 3D sine drift bounded to radius, rain has near-vertical streaks at 8.5–11 ×dt). Shape varies by kind: rain/sand/cinder = horizontal streak, default = circle. Color ramps: ember/spark/cinder fade `uColor → uColor2` over life; firefly pulse via `sin(t*2 + seed*18)`. Blending is additive for firefly/ember/lichenmote/spark/cinder.
+**13 particle kinds** with integer IDs: pollen(0), dust(1), snow(2), firefly(3), ember(4), lichenmote(5), feather(6), bubble(7), leaf(8), spark(9), rain(10), sand(11), cinder(12). Most kinds share one `ShaderMaterial` with per-kind `#define PARTICLE_KIND` and per-particle `aSeed`/`aLife` attributes. Soft-particle alpha fade samples `state.depthTexture` over a 1.2 world-unit window (inlined `perspectiveDepthToViewZ`) — gated by a runtime `uSoftParticles` 0/1 uniform that the FX panel toggles **without recompiling**. Each kind has unique physics in `stepParticles` (snow falls + sine drift, firefly has 3D sine drift bounded to radius, rain has near-vertical streaks at 8.5–11 ×dt, cinder is low wind-blown ash). Color ramps: ember/spark/cinder fade `uColor → uColor2` over life; firefly pulse via `sin(t*2 + seed*18)`. Blending is additive for firefly/ember/lichenmote/spark/cinder.
+
+Sand is the exception. Crimson dunes use 3120 tiny hard amber point sprites with a stripped-down sand vertex/fragment shader, normal blending, depthTest on, depthWrite off, and **soft particles disabled**. The sand particles stay close to terrain (`groundY + 0.08`, clamped to a low ceiling), move mostly in X with gust bands, and use small circular dots (`discard length(gl_PointCoord - 0.5) > 0.34`). The earlier shared-shader streak/soft-depth version either disappeared against terrain or read as airborne snow; keep future sand changes ground-hugging, dot-like, dense, and warm.
 
 If you add a depth-using particle behavior, use the same uniform-gate pattern, not a `#define`.
 

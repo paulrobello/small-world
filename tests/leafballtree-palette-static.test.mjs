@@ -68,7 +68,11 @@ assert(
   'golden steppe grass blade bald/spot percentage should be 0.'
 );
 assert(
-  !goldenBlock.includes('edgeAura:') && !goldenBlock.includes('pattern: "grass"'),
+  goldenBlock.includes('edgeAura:') && goldenBlock.includes('pattern: "mist"'),
+  'golden steppe should have a mist edge aura.'
+);
+assert(
+  !goldenBlock.includes('pattern: "grass"'),
   'golden steppe should not render the grass edge/ring aura.'
 );
 assert(

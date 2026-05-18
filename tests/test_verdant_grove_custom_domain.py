@@ -24,10 +24,11 @@ class VerdantGroveCustomDomainTest(unittest.TestCase):
         self.assertIn("mushroomFamilies", verdant_block)
         self.assertIn("fairyRing", verdant_block)
 
-    def test_verdant_grove_has_no_grass_edge_disc(self) -> None:
+    def test_verdant_grove_has_mist_edge_disc(self) -> None:
         source = (ROOT / "src" / "biomes.js").read_text()
         verdant_block = source[source.index('id: "verdant"') : source.index('id: "desert"')]
-        self.assertNotIn("edgeAura", verdant_block)
+        self.assertIn("edgeAura", verdant_block)
+        self.assertIn('pattern: "mist"', verdant_block)
         self.assertNotIn('pattern: "grass"', verdant_block)
 
     def test_world_places_verdant_detail_layers(self) -> None:
