@@ -1424,7 +1424,6 @@ export function initUi({ camera, canvas, controls, renderer }) {
       const onKey = (down) => (e) => {
         if (!_photoFP) return;
         const k = e.key.toLowerCase();
-        if (k === "s" && down) { capturePhoto(); e.preventDefault(); return; }
         if (k === "w") _photoFP.keys.w = down;
         else if (k === "a") _photoFP.keys.a = down;
         else if (k === "s") _photoFP.keys.s = down;
@@ -1870,9 +1869,6 @@ export function initUi({ camera, canvas, controls, renderer }) {
       else if (_settingsPanel.classList.contains("open")) setSettingsOpen(false);
     } else if (e.key === "p" || e.key === "P") {
       setPhotoMode(!document.body.classList.contains("photo-mode"));
-    } else if ((e.key === "s" || e.key === "S") && document.body.classList.contains("photo-mode")) {
-      e.preventDefault();
-      capturePhoto();
     } else if (e.key === "f" || e.key === "F") {
       e.preventDefault();
       if (_stroll) exitStroll();

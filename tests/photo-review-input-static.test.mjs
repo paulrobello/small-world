@@ -20,10 +20,14 @@ assert(
   'Pointer-lock changes caused by photo review should not exit photo mode.'
 );
 assert(
-  uiSource.includes('if (k === "s" && down) { capturePhoto(); e.preventDefault(); return; }'),
-  'S key should trigger photo capture in first-person photo mode instead of being consumed as backward movement.'
+  uiSource.includes('else if (k === "s") _photoFP.keys.s = down;'),
+  'S key should remain backward movement in first-person photo mode.'
 );
 assert(
-  !uiSource.includes('document.body.classList.contains("photo-mode") && !_photoFP'),
-  'Global S-key capture should not be gated off while first-person photo mode is active.'
+  !uiSource.includes('if (k === "s" && down) { capturePhoto(); e.preventDefault(); return; }'),
+  'First-person photo mode should not capture when pressing S.'
+);
+assert(
+  !uiSource.includes('&& document.body.classList.contains("photo-mode")) {\n      e.preventDefault();\n      capturePhoto();'),
+  'Global S-key handling should not capture photos while photo mode uses WASD movement.'
 );
