@@ -500,6 +500,7 @@ export async function generateWorld(seed) {
   const CANOPY_SPACING_KINDS = new Set(["tree", "leafballtree", "pine", "deadtree", "bigmushroom", "fairyring"]);
   const CANOPY_SPACING_PAD = 2.8;
   const PLACEMENT_BLOCK_KINDS = new Set(["lavafissure"]);
+  const GROUND_CREATURE_BLOCK_KINDS = new Set(["lavafissure", "fairyring"]);
   const floraPlacementBlocks = [];
   // Track fairy-ring flatten zones so heightFn can be patched afterward.
   const fairyFlat = []; // { cx, cz, r, flatY }
@@ -1013,7 +1014,7 @@ export async function generateWorld(seed) {
     for (let tries = 0; tries < 40; tries++) {
       p = pickGroundPoint(0.65);
       y = state.heightFn(p.x, p.z);
-      if (y >= groundMinY && !blocksPlacement(p.x, p.z, 0.35)) {
+      if (y >= groundMinY && !blocksPlacement(p.x, p.z, 0.35, GROUND_CREATURE_BLOCK_KINDS)) {
         found = true;
         break;
       }
@@ -1053,7 +1054,7 @@ export async function generateWorld(seed) {
           const off = 1.0 + Math.random() * 0.8;
           const nx = pp.x + Math.cos(ang) * off;
           const nz = pp.z + Math.sin(ang) * off;
-          if (blocksPlacement(nx, nz, 0.3)) continue;
+          if (blocksPlacement(nx, nz, 0.3, GROUND_CREATURE_BLOCK_KINDS)) continue;
           kid.group.position.set(nx, state.heightFn(nx, nz) + 0.4, nz);
           state.world.add(kid.group);
           state.creatures.push(kid);

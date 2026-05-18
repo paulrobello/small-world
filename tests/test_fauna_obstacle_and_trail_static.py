@@ -55,6 +55,14 @@ class FaunaObstacleAndTrailStaticTest(unittest.TestCase):
         self.assertIn('staticResponse = opts?.staticResponse ?? "slide"', shared_source)
         self.assertIn('staticResponse === "turn"', shared_source)
 
+    def test_ground_creatures_do_not_spawn_inside_fairy_rings(self) -> None:
+        source = WORLD_JS.read_text()
+        creature_block_kinds = extract_const_block(source, "GROUND_CREATURE_BLOCK_KINDS")
+
+        self.assertIn('"fairyring"', creature_block_kinds)
+        self.assertIn('blocksPlacement(p.x, p.z, 0.35, GROUND_CREATURE_BLOCK_KINDS)', source)
+        self.assertIn('blocksPlacement(nx, nz, 0.3, GROUND_CREATURE_BLOCK_KINDS)', source)
+
     def test_crawler_body_segments_yaw_along_the_trail_tangent(self) -> None:
         source = CATERPILLAR_JS.read_text()
 
