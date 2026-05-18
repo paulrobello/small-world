@@ -403,8 +403,8 @@ export const BIOMES = [
     sunIntensity: 8.0,
     edgeAura: {
       pattern: "mist",
-      colors: ["#2A0505", "#2A0505", "#2A0505"],
-      alpha: 1.0,
+      colors: ["#0a0204", "#8b1a1a", "#ff4020"],
+      alpha: 0.95,
       innerSoft: 0.24,
       outerSoft: 10.5,
       inwardOverlap: 0.23,
