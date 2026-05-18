@@ -164,8 +164,8 @@ export const BIOMES = [
     darkBiome: true,
     edgeAura: {
       pattern: "mist",
-      colors: ["#303030", "#303030", "#303030"],
-      alpha: 1.0,
+      colors: ["#0c0a12", "#5a3a4a", "#e63946"],
+      alpha: 0.95,
       innerSoft: 0.24,
       outerSoft: 10.5,
       inwardOverlap: 0.23,
@@ -336,8 +336,8 @@ export const BIOMES = [
     furProbability: 0.50,
     edgeAura: {
       pattern: "mist",
-      colors: ["#eef1f7", "#ffffff", "#e3eaff"],
-      alpha: 0.92,
+      colors: ["#b8c8e8", "#ffffff", "#fff5e8"],
+      alpha: 0.94,
       innerSoft: 0.24,
       outerSoft: 10.5,
       inwardOverlap: 0.23,
