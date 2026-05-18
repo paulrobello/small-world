@@ -1012,17 +1012,14 @@ export const FLORA_BUILDERS = {
 
   snowpine(biome) {
     const g = new THREE.Group();
-    // Snow-covered pine — frosted branch edges via vertex colors baked into
-    // each cone geometry before its Y translation. Vertex colors blend from
-    // deep green at the apex to icy white at the base edge. Icicles hang
-    // below each tier's branch edge.
+    // Snow-covered pine — stacked low-poly bough skirts with scalloped snow
+    // rims, closer to the chunky frozen-forest reference than simple cones.
     const PINE_WIND = 0.18;
-    const coneGreen = new THREE.Color(biome.accent).lerp(new THREE.Color("#0a2518"), 0.40);
-    const frostWhite = new THREE.Color("#dce6f0");
+    const boughSegments = 28;
+    const coneGreen = new THREE.Color(biome.accent).lerp(new THREE.Color("#0d3342"), 0.38);
 
-    // Frost-tinted trunk — wood cooled toward blue-grey
     const trunkGeo = pooled("snowpine.trunk.geo", () =>
-      new THREE.CylinderGeometry(0.08, 0.12, 0.4, 6).translate(0, 0.2, 0)
+      new THREE.CylinderGeometry(0.075, 0.13, 0.62, 6).translate(0, 0.31, 0)
     );
     const trunkMat = pooled("snowpine.trunk.mat", () =>
       applyWindSway(
@@ -1037,77 +1034,128 @@ export const FLORA_BUILDERS = {
     trunk.castShadow = true;
     g.add(trunk);
 
-    // Cone material with vertex colors enabled — actual green/frost coloring
-    // comes from per-vertex colors baked into each tier's geometry.
-    const coneMat = pooled("snowpine.cone.mat", () =>
-      applyWindSway(
-        new THREE.MeshStandardMaterial({
-          color: "#ffffff",
-          flatShading: true,
-          vertexColors: true,
-        }),
-        PINE_WIND
-      )
-    );
-
-    // Snow material for icicles — white with a faint blue undertone
-    const snowMat = pooled("snowpine.snow.mat", () =>
-      applyWindSway(
-        new THREE.MeshStandardMaterial({
-          color: "#e8eef4",
-          flatShading: true,
-          roughness: 0.85,
-        }),
-        PINE_WIND
-      )
-    );
-
-    const tiers = 3 + Math.floor(Math.random() * 2);
-    for (let i = 0; i < tiers; i++) {
-      const tierRadius = 0.65 - i * 0.13;
-      const tierY = 0.45 + i * 0.42;
-
-      // Cone with vertex colors for frost baked in before Y translation.
-      // ConeGeometry: tip at +height/2 (+0.325), base at -height/2 (-0.325).
-      // Only vertices near the base get frosted white.
-      const coneGeo = pooled("snowpine.cone.geo." + i, () => {
-        const geo = new THREE.ConeGeometry(tierRadius, 0.65, 6, 4);
-        const p = geo.attributes.position;
-        const colors = new Float32Array(p.count * 3);
-        for (let vi = 0; vi < p.count; vi++) {
-          const t = (p.getY(vi) + 0.325) / 0.65; // 0=base, 1=tip
-          const frost = (t < 0.12 || t > 0.88) ? 1.0 : 0.0;
-          const c = frost ? frostWhite : coneGreen;
-          colors[vi * 3] = c.r;
-          colors[vi * 3 + 1] = c.g;
-          colors[vi * 3 + 2] = c.b;
-        }
-        geo.setAttribute("color", new THREE.Float32BufferAttribute(colors, 3));
-        geo.translate(0, tierY, 0);
-        return geo;
-      });
-      const cone = new THREE.Mesh(coneGeo, coneMat);
-      cone.castShadow = true;
-      g.add(cone);
-
-      // Icicles — tiny downward cones hanging from the underside of each
-      // tier's branch edge (near the cone base, just below the green needles).
-      const icicleGeo = pooled("snowpine.icicle.geo", () =>
-        new THREE.ConeGeometry(0.01, 0.08, 4).rotateX(Math.PI).translate(0, -0.04, 0)
-      );
-      const icicleCount = 2 + Math.floor(Math.random() * 3);
-      for (let k = 0; k < icicleCount; k++) {
-        const angle = (k / icicleCount) * Math.PI * 2 + Math.random() * 0.5;
-        const icicle = new THREE.Mesh(icicleGeo, snowMat);
-        icicle.position.set(
-          Math.cos(angle) * tierRadius * 0.85,
-          tierY - 0.34,
-          Math.sin(angle) * tierRadius * 0.85
-        );
-        g.add(icicle);
-      }
+    function applySnowMaskShader(material) {
+      material.userData.snowpineSnowShader = true;
+      material.onBeforeCompile = (shader) => {
+        shader.uniforms.uSnowColor = { value: new THREE.Color("#e4edf7") };
+        shader.vertexShader = shader.vertexShader
+          .replace(
+            "#include <common>",
+            "#include <common>\nattribute float aSnow;\nvarying float vSnow;"
+          )
+          .replace(
+            "#include <begin_vertex>",
+            "#include <begin_vertex>\nvSnow = aSnow;"
+          );
+        shader.fragmentShader = shader.fragmentShader
+          .replace(
+            "#include <common>",
+            "#include <common>\nuniform vec3 uSnowColor;\nvarying float vSnow;"
+          )
+          .replace(
+            "#include <color_fragment>",
+            `#include <color_fragment>
+            float snowMask = smoothstep(0.46, 0.52, vSnow);
+            diffuseColor.rgb = mix(diffuseColor.rgb, uSnowColor, snowMask);`
+          );
+      };
+      return material;
     }
 
+    const boughMat = pooled("snowpine.bough.mat", () =>
+      applyWindSway(
+        applySnowMaskShader(
+          new THREE.MeshStandardMaterial({
+            color: coneGreen,
+            flatShading: false,
+            roughness: 0.82,
+            vertexColors: true,
+          })
+        ),
+        PINE_WIND
+      )
+    );
+
+    function makeBoughGeometry(radius, height, tierY) {
+      const topY = tierY + height * 0.52;
+      const skirtY = tierY - height * 0.32;
+      const vertices = [];
+      const snowMask = [];
+      const colors = [];
+      const innerRing = [];
+      const outerRing = [];
+      const undersideRing = [];
+      function pushVertex(x, y, z, snow) {
+        const index = vertices.length / 3;
+        vertices.push(x, y, z);
+        snowMask.push(snow);
+        const color = snow > 0.5 ? new THREE.Color("#e4edf7") : coneGreen;
+        colors.push(color.r, color.g, color.b);
+        return index;
+      }
+      const apex = pushVertex(0, topY, 0, 0);
+      const undersideCenter = pushVertex(0, skirtY + height * 0.02, 0, 0);
+      for (let j = 0; j < boughSegments; j++) {
+        const a = (j / boughSegments) * Math.PI * 2;
+        const point = j % 2 === 0;
+        const innerR = radius * (point ? 0.86 : 0.78);
+        const outerR = radius * (point ? 1.08 : 0.96);
+        const innerY = skirtY + height * 0.035;
+        const outerY = skirtY - (point ? height * 0.04 : height * 0.14);
+        const ox = Math.cos(a) * outerR;
+        const oz = Math.sin(a) * outerR;
+        innerRing.push(pushVertex(Math.cos(a) * innerR, innerY, Math.sin(a) * innerR, 0));
+        outerRing.push(pushVertex(ox, outerY, oz, 1));
+        undersideRing.push(pushVertex(ox, outerY, oz, 0));
+      }
+      const indices = [];
+      for (let j = 0; j < boughSegments; j++) {
+        const next = (j + 1) % boughSegments;
+        const innerA = innerRing[j];
+        const innerB = innerRing[next];
+        const outerA = outerRing[j];
+        const outerB = outerRing[next];
+        indices.push(
+          apex, innerB, innerA,
+          innerA, innerB, outerB,
+          innerA, outerB, outerA
+        );
+      }
+      for (let j = 0; j < boughSegments; j++) {
+        const next = (j + 1) % boughSegments;
+        const underA = undersideRing[j];
+        const underB = undersideRing[next];
+        indices.push(undersideCenter, underA, underB);
+      }
+      const geo = new THREE.BufferGeometry();
+      geo.setAttribute("position", new THREE.Float32BufferAttribute(vertices, 3));
+      geo.setAttribute("aSnow", new THREE.Float32BufferAttribute(snowMask, 1));
+      geo.setAttribute("color", new THREE.Float32BufferAttribute(colors, 3));
+      geo.setIndex(indices);
+      geo.userData.snowpineUpperFaceCount = boughSegments * 3;
+      geo.computeVertexNormals();
+      return geo;
+    }
+
+    const tiers = 4;
+    for (let i = 0; i < tiers; i++) {
+      const tierRadius = 0.82 - i * 0.095;
+      const tierHeight = 0.62 - i * 0.03;
+      const tierY = 0.48 + i * 0.36;
+
+      const boughGeo = pooled("snowpine.bough.geo." + i, () =>
+        makeBoughGeometry(tierRadius, tierHeight, tierY)
+      );
+      const bough = new THREE.Mesh(boughGeo, boughMat);
+      bough.castShadow = true;
+      bough.userData.snowpinePart = "bough";
+      bough.userData.tierRadius = tierRadius;
+      bough.userData.tierY = tierY;
+      bough.userData.zigZagPoints = boughSegments;
+      g.add(bough);
+    }
+
+    g.userData.obstacleTopY = 1.95;
     return g;
   },
 

@@ -169,7 +169,7 @@ void main() {
 export function makeParticles(biome) {
   const kind = biome.particle;
   const baseCount = {
-    pollen: 240, dust: 320, snow: 500, firefly: 90, ember: 180,
+    pollen: 240, dust: 320, snow: 900, firefly: 90, ember: 180,
     lichenmote: 140, feather: 120, bubble: 140, leaf: 120, spark: 240, rain: 520,
     sand: 3120, cinder: 260,
   }[kind] || 200;
@@ -224,7 +224,7 @@ export function makeParticles(biome) {
   };
   const sizeMap = {
     firefly: 0.16,
-    snow: 0.1,
+    snow: 0.16,
     lichenmote: 0.12,
     feather: 0.18,
     bubble: 0.13,

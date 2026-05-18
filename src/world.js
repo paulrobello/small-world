@@ -463,7 +463,7 @@ export async function generateWorld(seed) {
     // Footprints describe the root/base contact patch for slope planting.
     // Broad crowns are spaced separately by CANOPY_SPACING_KINDS; using the
     // canopy width here samples far downhill and can bury the trunk center.
-    tree: 0.28, leafballtree: 0.32, pine: 0.28, deadtree: 0.22, mushroom: 0.18,
+    tree: 0.28, leafballtree: 0.32, pine: 0.28, snowpine: 0.28, deadtree: 0.22, mushroom: 0.18,
     bigmushroom: 0.45, fairyring: 1.15, lantern: 0.18, pillar: 0.30, archstone: 0.55,
     balloontree: 0.22, crystal: 0.30, obsidianshard: 0.28, obsidianglass: 0.34, skull: 0.22,
     berrybush: 0.30, coral: 0.25, braincoral: 0.26, cupcoral: 0.22,
@@ -477,7 +477,7 @@ export async function generateWorld(seed) {
   // coral, reeds) are skipped — creatures can step over them visually and
   // adding collision there reads as fussy.
   const OBSTACLE_KINDS = new Set([
-    "tree", "leafballtree", "pine", "deadtree", "mushroom", "bigmushroom",
+    "tree", "leafballtree", "pine", "snowpine", "deadtree", "mushroom", "bigmushroom",
     "fairyring", "cactus", "pillar", "archstone", "balloontree", "crystal",
     "lantern", "obsidianshard", "obsidianglass", "skull", "lavafissure", "berrybush",
   ]);
@@ -485,7 +485,7 @@ export async function generateWorld(seed) {
   // scale=1). Fliers below ground + top * scale must route around the
   // trunk; fliers above that altitude can pass over freely.
   const OBSTACLE_TOP = {
-    tree: 2.3, leafballtree: 2.25, pine: 2.2, deadtree: 1.8, mushroom: 1.1,
+    tree: 2.3, leafballtree: 2.25, pine: 2.2, snowpine: 1.95, deadtree: 1.8, mushroom: 1.1,
     bigmushroom: 2.6, fairyring: 0.9, cactus: 1.2, pillar: 2.8, archstone: 2.6, balloontree: 3.2,
     crystal: 1.6, lantern: 1.7, obsidianshard: 2.2, obsidianglass: 1.6, skull: 1.5,
     lavafissure: 0.16, berrybush: 0.58,
@@ -497,7 +497,7 @@ export async function generateWorld(seed) {
   // Visual canopy spacing is wider than root/footprint spacing. Trees, bushes,
   // and big mushrooms can have small bases but broad crowns/caps, so they need
   // a separate placement radius to prevent silhouettes from intersecting.
-  const CANOPY_SPACING_KINDS = new Set(["tree", "leafballtree", "pine", "deadtree", "bigmushroom", "fairyring", "berrybush"]);
+  const CANOPY_SPACING_KINDS = new Set(["tree", "leafballtree", "pine", "snowpine", "deadtree", "bigmushroom", "fairyring", "berrybush"]);
   const CANOPY_SPACING_PAD = 2.8;
   const GRASS_SHORTEN_PAD = 2.6;
   const GRASS_SHORTEN_MIN_RADIUS = 0.42;
@@ -713,7 +713,7 @@ export async function generateWorld(seed) {
     // applied below so a 1.4× tree gets a wider sample than a 0.7× one).
     let s = 0.7 + Math.random() * 0.7;
     // Double the scale for tree types
-    if (kind === "tree" || kind === "leafballtree" || kind === "pine" || kind === "deadtree" || kind === "balloontree") s *= 2;
+    if (kind === "tree" || kind === "leafballtree" || kind === "pine" || kind === "snowpine" || kind === "deadtree" || kind === "balloontree") s *= 2;
     if (kind === "berrybush") s *= 1 + Math.random() * 0.25;
     const fp = (FLORA_FOOTPRINT[kind] ?? FLORA_FOOTPRINT_DEFAULT) * s;
     const grassShortenRadius = Math.min(

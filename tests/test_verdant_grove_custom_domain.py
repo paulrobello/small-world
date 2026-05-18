@@ -46,7 +46,7 @@ class VerdantGroveCustomDomainTest(unittest.TestCase):
     def test_tree_and_large_mushroom_canopies_block_each_other(self) -> None:
         world = (ROOT / "src" / "world.js").read_text()
         self.assertIn("CANOPY_SPACING_KINDS", world)
-        self.assertIn('"tree", "leafballtree", "pine", "deadtree", "bigmushroom"', world)
+        self.assertIn('"tree", "leafballtree", "pine", "snowpine", "deadtree", "bigmushroom"', world)
         self.assertIn("CANOPY_SPACING_PAD", world)
         self.assertIn("CANOPY_SPACING_KINDS.has(kind)", world)
         self.assertIn("blocksFloraPlacement(p.x, p.z, fp * CANOPY_SPACING_PAD, CANOPY_SPACING_KINDS)", world)

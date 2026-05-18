@@ -101,12 +101,8 @@ export const BIOMES = [
     fogDensity: 0.015,
     accent: "#457b9d",
     sun: "#e0eaff",
-    flora: ["leafballtree", "leafballtree", "leafballtree", "rock", "rock", "crystal"],
+    flora: ["snowpine", "snowpine", "snowpine", "rock", "rock", "crystal"],
     floraCount: 70,
-    leafballTreePalette: {
-      trunk: "#6f7b86",
-      leaves: ["#dfe8ef", "#aebfc8", "#f4f8fb"],
-    },
     particle: "snow",
     creatureColors: ["#1d3557", "#457b9d", "#a8dadc", "#f1faee"],
     creatureCount: [8, 13],
