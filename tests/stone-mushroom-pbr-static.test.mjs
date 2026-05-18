@@ -17,7 +17,8 @@ assert(
   pbrSource.includes('export function makeStonePBRMaterial')
     && pbrSource.includes('export function makePlainRockPBRMaterial')
     && pbrSource.includes('export function makeMushroomCapPBRMaterial')
-    && pbrSource.includes('export function makeMushroomUndersideMaterial'),
+    && pbrSource.includes('export function makeMushroomUndersideMaterial')
+    && pbrSource.includes('export function resetPBRTextureCache'),
   'PBR helpers should expose stone, plain-rock, and mushroom-cap material builders.'
 );
 
@@ -32,6 +33,16 @@ assert(
     && pbrSource.includes('deepStoneCut')
     && pbrSource.includes('capRidges'),
   'Stone and mushroom cap PBR helpers should generate procedural crack, pore, and cap-ridge maps.'
+);
+
+assert(
+  pbrSource.includes('const _detailTextureCache = new Map()')
+    && pbrSource.includes('function cachedDetailTextures')
+    && pbrSource.includes('cachedDetailTextures("mushroom-cap", buildMushroomCapTextures)')
+    && pbrSource.includes('cachedDetailTextures(\n    "mushroom-underside",')
+    && pbrSource.includes('cachedDetailTextures("stone", buildStoneTextures)')
+    && pbrSource.includes('cachedDetailTextures("plain-rock", buildPlainRockTextures)'),
+  'Repeated PBR material calls in one world should reuse procedural texture sets instead of rebuilding canvases.'
 );
 
 assert(

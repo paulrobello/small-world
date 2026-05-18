@@ -13,6 +13,20 @@ const MUSHROOM_CAP_DETAIL_BOOST = 1.28;
 const UNDERSIDE_GILL_BANDS = 38;
 const UNDERSIDE_GILL_LINE_WIDTH = 0.026;
 const UNDERSIDE_GILL_CONTRAST = 2.1;
+const _detailTextureCache = new Map();
+
+export function resetPBRTextureCache() {
+  _detailTextureCache.clear();
+}
+
+function cachedDetailTextures(key, build) {
+  let textures = _detailTextureCache.get(key);
+  if (!textures) {
+    textures = build();
+    _detailTextureCache.set(key, textures);
+  }
+  return textures;
+}
 
 function clamp01(value) {
   return Math.max(0, Math.min(1, value));
@@ -607,7 +621,7 @@ export function makeLeafballTreeTrunkPBRMaterial(params) {
     specularIntensity: 0.46,
     specularColor: new THREE.Color(params.color).lerp(new THREE.Color(0xffffff), 0.38),
   });
-  const { normalTexture, materialTexture } = buildLeafballBarkTextures();
+  const { normalTexture, materialTexture } = cachedDetailTextures("leafball-bark", buildLeafballBarkTextures);
   material.normalScale.set(0.90, 0.90);
   return applyDetailMaps(material, normalTexture, materialTexture);
 }
@@ -622,7 +636,7 @@ export function makeLeafballTreeLeafPBRMaterial(params) {
     specularIntensity: 0.58,
     specularColor: new THREE.Color(params.color).lerp(new THREE.Color(0xffffff), 0.38),
   });
-  const { normalTexture, materialTexture } = buildLeafballLeafTextures();
+  const { normalTexture, materialTexture } = cachedDetailTextures("leafball-leaf", buildLeafballLeafTextures);
   material.normalScale.set(0.72, 0.72);
   return applyDetailMaps(material, normalTexture, materialTexture);
 }
@@ -637,7 +651,7 @@ export function makeStonePBRMaterial(params) {
     specularIntensity: 0.30,
     specularColor: new THREE.Color(params.color).lerp(new THREE.Color(0xffffff), 0.20),
   });
-  const { normalTexture, materialTexture } = buildStoneTextures();
+  const { normalTexture, materialTexture } = cachedDetailTextures("stone", buildStoneTextures);
   material.normalScale.set(0.74, 0.74);
   return applyDetailMaps(material, normalTexture, materialTexture);
 }
@@ -652,7 +666,7 @@ export function makePlainRockPBRMaterial(params) {
     specularIntensity: 0.24,
     specularColor: new THREE.Color(params.color).lerp(new THREE.Color(0xffffff), 0.18),
   });
-  const { normalTexture, materialTexture } = buildPlainRockTextures();
+  const { normalTexture, materialTexture } = cachedDetailTextures("plain-rock", buildPlainRockTextures);
   material.normalScale.set(0.42, 0.42);
   return applyDetailMaps(material, normalTexture, materialTexture);
 }
@@ -667,7 +681,7 @@ export function makeMushroomCapPBRMaterial(params) {
     specularIntensity: 0.70,
     specularColor: new THREE.Color(params.color).lerp(new THREE.Color(0xffffff), 0.36),
   });
-  const { colorTexture, normalTexture, materialTexture } = buildMushroomCapTextures();
+  const { colorTexture, normalTexture, materialTexture } = cachedDetailTextures("mushroom-cap", buildMushroomCapTextures);
   material.normalScale.set(1.22, 1.22);
   return applyDetailMaps(material, normalTexture, materialTexture, colorTexture);
 }
@@ -690,7 +704,10 @@ export function makeMushroomUndersideMaterial(params = {}) {
     specularIntensity: 0.16,
     specularColor: new THREE.Color(baseParams.color).lerp(new THREE.Color(0xffffff), 0.16),
   });
-  const { colorTexture, normalTexture, materialTexture } = buildMushroomUndersideTextures();
+  const { colorTexture, normalTexture, materialTexture } = cachedDetailTextures(
+    "mushroom-underside",
+    buildMushroomUndersideTextures
+  );
   material.normalScale.set(1.72, 1.72);
   material.emissiveMap = colorTexture;
   addProceduralMushroomGillTint(material);

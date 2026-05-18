@@ -57,6 +57,7 @@ import {
 } from "./sky.js";
 import { makeWaterReflection, disposeWaterReflection } from "./reflection.js";
 import { LOWFX, LOWFX_DENSITY } from "./lowfx.js";
+import { resetPBRTextureCache } from "./pbr.js";
 
 let _scene = null;
 let _controls = null;
@@ -277,6 +278,7 @@ export async function generateWorld(seed) {
   // reuse them
   resetFloraPool();
   resetCreaturePool();
+  resetPBRTextureCache();
 
   state.currentBiome = biome;
   state.currentSeed = seed;
