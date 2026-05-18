@@ -80,6 +80,7 @@ export function addAntennae(parent, biome, bodyColor, opts = {}) {
     baseY = 0.36,
     baseZ = 0.1,
     tiltAngle = 0.25,
+    forwardTiltAngle = 0,
     tipRadius = 0.04,
     colorDarken = 0.2,
     emissiveStrength = 0.35,
@@ -94,6 +95,7 @@ export function addAntennae(parent, biome, bodyColor, opts = {}) {
       antMat
     );
     stalk.position.set(sign * offsetX, baseY, baseZ);
+    stalk.rotation.x = forwardTiltAngle;
     stalk.rotation.z = sign * -tiltAngle;
     parent.add(stalk);
     const tip = new THREE.Mesh(

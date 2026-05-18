@@ -456,6 +456,7 @@ export function makeCreature(biome, opts = {}) {
       isFish ? 0.12 : 0.17,
       isFish ? 0.24 : 0.4
     );
+    if (isBumblebee) eye.scale.setScalar(1.1);
     if (isFish) eye.scale.setScalar(0.92);
     group.add(eye);
     eyeParts.push(eye);
@@ -465,6 +466,7 @@ export function makeCreature(biome, opts = {}) {
       isFish ? 0.12 : 0.17,
       isFish ? 0.27 : 0.48
     );
+    if (isBumblebee) pupil.scale.setScalar(1.1);
     if (isFish) pupil.scale.setScalar(0.86);
     if (biome.glowEyes) pupil.layers.enable(BLOOM_LAYER);
     group.add(pupil);
@@ -475,11 +477,12 @@ export function makeCreature(biome, opts = {}) {
   let antennae = [];
   if (!isFish && (isBumblebee || Math.random() > 0.55)) {
     antennae = addAntennae(group, biome, bodyCol, {
-      stalkHeight: 0.32,
+      stalkHeight: isBumblebee ? 0.4608 : 0.32,
       offsetX: 0.1,
       baseY: 0.36,
-      baseZ: 0.1,
+      baseZ: isBumblebee ? 0.22 : 0.1,
       tiltAngle: 0.25,
+      forwardTiltAngle: isBumblebee ? THREE.MathUtils.degToRad(20) : 0,
       tipRadius: 0.04,
       colorDarken: 0.2,
       emissiveStrength: 0.35,
@@ -627,8 +630,8 @@ export function makeCreature(biome, opts = {}) {
       }
       // Stinger — thin black cone at the rear
       if (isBumblebee) {
-        const stingerGeo = new THREE.ConeGeometry(0.03, 0.30, 5);
-        stingerGeo.rotateX(Math.PI / 2);
+        const stingerGeo = new THREE.ConeGeometry(0.045, 0.45, 5);
+        stingerGeo.rotateX(-Math.PI / 2);
         stingerGeo.translate(0, 0, -0.55);
         const stinger = new THREE.Mesh(stingerGeo, new THREE.MeshStandardMaterial({
           color: 0x0a0a0a,
