@@ -8,6 +8,7 @@ import { BIOMES } from "./biomes.js";
 import { LOWFX } from "./lowfx.js";
 import { INSPECT } from "./inspect.js";
 import { APP_VERSION } from "./state.js";
+import { setMusicEnabled, tryResumeOnGesture } from "./music.js";
 
 let followTarget = null;
 let selectingCreature = false;
@@ -54,6 +55,7 @@ const PERSISTED_KEYS = [
   "grassEdgeDiscs",
   "grassPanelOpen",
   "terrainSmoothShading",
+  "musicEnabled",
 ];
 const BOOKMARKS_KEY = "smallworld:bookmarks:v1";
 const BIOME_FILTER_KEY = "smallworld:biomefilter:v1";
@@ -848,6 +850,25 @@ export function initUi({ camera, canvas, controls, renderer }) {
     if (state.postfx) state.postfx.setTiltShift(tiltEl.checked);
     saveSettings();
   });
+
+  // ── Music toggle (button in controls row, not a settings checkbox) ──────
+  const musicBtn = document.getElementById("music-toggle");
+  function updateMusicButton() {
+    musicBtn.classList.toggle("active", !!state.userSettings.musicEnabled);
+  }
+  updateMusicButton();
+  musicBtn.addEventListener("click", () => {
+    state.userSettings.musicEnabled = !state.userSettings.musicEnabled;
+    setMusicEnabled(state.userSettings.musicEnabled);
+    updateMusicButton();
+    saveSettings();
+  });
+  // Resume audio on first user gesture (autoplay policy).
+  document.addEventListener(
+    "click",
+    () => tryResumeOnGesture(),
+    { once: true },
+  );
   softParticlesEl.addEventListener("change", () => {
     state.userSettings.softParticles = softParticlesEl.checked;
     // Particle material's uSoftParticles is a runtime float toggle (no

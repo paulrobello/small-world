@@ -338,7 +338,8 @@ body {
     min-height: 44px;
   }
   .settings-toggle,
-  .help-toggle {
+  .help-toggle,
+  .music-toggle {
     flex: 0 0 auto;
     width: 44px;
     min-height: 44px;
@@ -460,6 +461,36 @@ body.mobile .locator-panel {
   transform: translateY(-1px);
 }
 .settings-toggle:hover .settings-glyph { transform: rotate(72deg); }
+
+.music-toggle {
+  z-index: 11;
+  width: 40px;
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.5);
+  border: 1px solid var(--ink-dim);
+  color: var(--ink-dim);
+  font-family: "DM Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 16px;
+  cursor: pointer;
+  backdrop-filter: blur(4px);
+  transition: border-color 0.4s ease, background 0.4s ease, color 0.4s ease;
+}
+.music-toggle.active {
+  color: var(--ink);
+}
+.music-toggle:hover {
+  border-color: var(--ink);
+  background: rgba(245, 240, 230, 0.1);
+}
+.music-glyph {
+  display: inline-block;
+  line-height: 1;
+  font-size: 17px;
+  transform: translateY(-1px);
+}
 
 .help-panel {
   position: fixed;

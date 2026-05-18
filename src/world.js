@@ -11,6 +11,7 @@ import {
   disposeGroup,
 } from "./state.js";
 import { BIOMES, WILDFLOWER_PALETTES, FLOWER_DENSITY } from "./biomes.js";
+import { switchMusic } from "./music.js";
 import { mulberry32, formatSeed, writeSeedToUrl } from "./seed.js";
 import { randInt } from "./util.js";
 import {
@@ -236,6 +237,9 @@ export function generateWorld(seed) {
 
   state.currentBiome = biome;
   state.currentSeed = seed;
+
+  // Switch background music to match the biome (streams on demand).
+  switchMusic(biome);
 
   // Bloom is purely additive in the custom composite (base + bloom*uStrength,
   // see _bloomCompositeShader). It can only brighten the frame, so darkBiomes
