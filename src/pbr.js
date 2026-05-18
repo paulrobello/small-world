@@ -8,9 +8,19 @@ const LEAFBALL_LEAF_TEX_SIZE = 128;
 const STONE_PBR_TEX_SIZE = 128;
 const PLAIN_ROCK_PBR_TEX_SIZE = 128;
 const MUSHROOM_CAP_TEX_SIZE = 256;
+const MUSHROOM_UNDERSIDE_TEX_SIZE = 256;
+const MUSHROOM_CAP_DETAIL_BOOST = 1.28;
+const UNDERSIDE_GILL_BANDS = 38;
+const UNDERSIDE_GILL_LINE_WIDTH = 0.026;
+const UNDERSIDE_GILL_CONTRAST = 2.1;
 
 function clamp01(value) {
   return Math.max(0, Math.min(1, value));
+}
+
+function smoothstep(edge0, edge1, value) {
+  const t = clamp01((value - edge0) / (edge1 - edge0));
+  return t * t * (3 - 2 * t);
 }
 
 function makeCanvas(size) {
@@ -55,6 +65,17 @@ function sampleDetailHeight(heightFn, biome, x, z) {
 
 function configurePBRTexture(texture) {
   texture.colorSpace = THREE.NoColorSpace;
+  texture.wrapS = THREE.ClampToEdgeWrapping;
+  texture.wrapT = THREE.ClampToEdgeWrapping;
+  texture.minFilter = THREE.LinearMipmapLinearFilter;
+  texture.magFilter = THREE.LinearFilter;
+  texture.generateMipmaps = true;
+  texture.needsUpdate = true;
+  return texture;
+}
+
+function configureColorTexture(texture) {
+  texture.colorSpace = THREE.SRGBColorSpace;
   texture.wrapS = THREE.ClampToEdgeWrapping;
   texture.wrapT = THREE.ClampToEdgeWrapping;
   texture.minFilter = THREE.LinearMipmapLinearFilter;
@@ -350,15 +371,24 @@ function mushroomCapHeight(u, v, seed) {
   const capFreckles = Math.max(0, 0.62 - smoothHashNoise(u * 42.0, v * 39.0, seed + 43)) * capBody;
   const gillPleats = Math.max(0, Math.sin(angle * 34 + radius * 18.0)) * rimBand * 0.75;
   const poreDimples = Math.max(0, 0.56 - smoothHashNoise(u * 28.0, v * 31.0, seed + 61)) * capBody;
-  return capRidges * 0.12 + rimLobes * 0.10 + capFreckles * 0.045 + gillPleats * 0.075 - poreDimples * 0.070;
+  return (
+    capRidges * 0.17 +
+    rimLobes * 0.15 +
+    capFreckles * 0.070 +
+    gillPleats * 0.11 -
+    poreDimples * 0.10
+  ) * MUSHROOM_CAP_DETAIL_BOOST;
 }
 
 function buildMushroomCapTextures() {
   const size = MUSHROOM_CAP_TEX_SIZE;
+  const capColorCanvas = makeCanvas(size);
   const capNormalCanvas = makeCanvas(size);
   const capMaterialCanvas = makeCanvas(size);
+  const colorCtx = capColorCanvas.getContext("2d");
   const normalCtx = capNormalCanvas.getContext("2d");
   const materialCtx = capMaterialCanvas.getContext("2d");
+  const colorImage = colorCtx.createImageData(size, size);
   const normalImage = normalCtx.createImageData(size, size);
   const materialImage = materialCtx.createImageData(size, size);
   const seed = state.currentSeed + 1139;
@@ -384,11 +414,11 @@ function buildMushroomCapTextures() {
       const capFreckles = Math.max(0, 0.62 - smoothHashNoise(u * 42.0, v * 39.0, seed + 43)) * capBody;
       const dampSpeckle = smoothHashNoise(u * 86.0, v * 79.0, seed + 79) * capBody;
       const pores = Math.max(0, 0.56 - smoothHashNoise(u * 28.0, v * 31.0, seed + 61)) * capBody;
-      const nx = (hL - hR) * 1.35 + Math.cos(angle) * (rimBand * 0.055 + pores * 0.045);
-      const ny = (hD - hU) * 1.35 + Math.sin(angle) * (rimBand * 0.055 + pores * 0.045);
+      const nx = (hL - hR) * 1.75 + Math.cos(angle) * (rimBand * 0.070 + pores * 0.060);
+      const ny = (hD - hU) * 1.75 + Math.sin(angle) * (rimBand * 0.070 + pores * 0.060);
       const nz = Math.sqrt(Math.max(0.12, 1 - nx * nx - ny * ny));
-      const roughness = 0.56 + pores * 0.20 + capFreckles * 0.14 + radius * 0.09 - Math.max(0, h) * 0.08;
-      const specular = 0.13 + dampSpeckle * 0.20 + capRidges * 0.08 + rimBand * 0.05;
+      const roughness = 0.54 + pores * 0.24 + capFreckles * 0.18 + radius * 0.08 - Math.max(0, h) * 0.10;
+      const specular = 0.14 + dampSpeckle * 0.24 + capRidges * 0.11 + rimBand * 0.07;
       const index = (py * size + px) * 4;
 
       normalImage.data[index + 0] = Math.round((nx * 0.5 + 0.5) * 255);
@@ -396,25 +426,139 @@ function buildMushroomCapTextures() {
       normalImage.data[index + 2] = Math.round(nz * 255);
       normalImage.data[index + 3] = 255;
 
+      const radialStain = clamp01(0.82 + capRidges * 0.16 + capFreckles * 0.12 - pores * 0.12);
+      const rimShade = 1 - rimBand * 0.10;
+      const colorDetail = clamp01(radialStain * rimShade);
+      colorImage.data[index + 0] = Math.round(colorDetail * 255);
+      colorImage.data[index + 1] = Math.round((0.88 + colorDetail * 0.12) * 255);
+      colorImage.data[index + 2] = Math.round((0.90 + colorDetail * 0.10) * 255);
+      colorImage.data[index + 3] = 255;
+
       materialImage.data[index + 0] = Math.round(clamp01(roughness) * 255);
       materialImage.data[index + 1] = Math.round(clamp01(roughness) * 255);
       materialImage.data[index + 2] = 0;
       materialImage.data[index + 3] = Math.round(clamp01(specular) * 255);
     }
   }
+  colorCtx.putImageData(colorImage, 0, 0);
   normalCtx.putImageData(normalImage, 0, 0);
   materialCtx.putImageData(materialImage, 0, 0);
   return {
+    colorTexture: configureColorTexture(new THREE.CanvasTexture(capColorCanvas)),
     normalTexture: configurePBRTexture(new THREE.CanvasTexture(capNormalCanvas)),
     materialTexture: configurePBRTexture(new THREE.CanvasTexture(capMaterialCanvas)),
   };
 }
 
-function applyDetailMaps(material, normalTexture, materialTexture) {
+function buildMushroomUndersideTextures() {
+  const size = MUSHROOM_UNDERSIDE_TEX_SIZE;
+  const undersideColorCanvas = makeCanvas(size);
+  const normalCanvas = makeCanvas(size);
+  const materialCanvas = makeCanvas(size);
+  const colorCtx = undersideColorCanvas.getContext("2d");
+  const normalCtx = normalCanvas.getContext("2d");
+  const materialCtx = materialCanvas.getContext("2d");
+  const colorImage = colorCtx.createImageData(size, size);
+  const normalImage = normalCtx.createImageData(size, size);
+  const materialImage = materialCtx.createImageData(size, size);
+  const seed = state.currentSeed + 1277;
+
+  for (let py = 0; py < size; py++) {
+    const v = py / (size - 1);
+    for (let px = 0; px < size; px++) {
+      const u = px / (size - 1);
+      const dx = u - 0.5;
+      const dy = v - 0.5;
+      const radius = Math.sqrt(dx * dx + dy * dy) * 2;
+      const angle = Math.atan2(dy, dx);
+      const capBody = clamp01(1 - radius);
+      const radialDistance = Math.sqrt(dx * dx + dy * dy);
+      const gillPhase = (angle / (Math.PI * 2)) * UNDERSIDE_GILL_BANDS + radius * 0.12;
+      const gillCycleDistance = Math.abs(gillPhase - Math.round(gillPhase));
+      const gillLineDistance = gillCycleDistance * (Math.PI * 2 / UNDERSIDE_GILL_BANDS) * radialDistance;
+      const thinGillLines =
+        (1 - smoothstep(UNDERSIDE_GILL_LINE_WIDTH, UNDERSIDE_GILL_LINE_WIDTH * 2.35, gillLineDistance)) *
+        smoothstep(0.16, 0.28, radius) *
+        capBody;
+      const undersideGills = thinGillLines;
+      const fineGillStriation =
+        (1 - smoothstep(UNDERSIDE_GILL_LINE_WIDTH * 0.45, UNDERSIDE_GILL_LINE_WIDTH * 1.65, gillLineDistance)) *
+        smoothstep(0.24, 0.38, radius) *
+        capBody *
+        0.24;
+      const pore = Math.max(0, 0.58 - smoothHashNoise(u * 32.0, v * 31.0, seed)) * capBody;
+      const groove = (undersideGills + fineGillStriation) * UNDERSIDE_GILL_CONTRAST;
+      const nx = Math.cos(angle) * (groove * 0.42 + pore * 0.040);
+      const ny = Math.sin(angle) * (groove * 0.42 + pore * 0.040);
+      const nz = Math.sqrt(Math.max(0.10, 1 - nx * nx - ny * ny));
+      const roughness = 0.78 + clamp01(groove) * 0.18 + pore * 0.08;
+      const specular = 0.05 + (1 - clamp01(groove)) * 0.05;
+      const index = (py * size + px) * 4;
+
+      normalImage.data[index + 0] = Math.round((nx * 0.5 + 0.5) * 255);
+      normalImage.data[index + 1] = Math.round((ny * 0.5 + 0.5) * 255);
+      normalImage.data[index + 2] = Math.round(nz * 255);
+      normalImage.data[index + 3] = 255;
+
+      const gillInk = clamp01(undersideGills * 0.86 + fineGillStriation * 0.36 + pore * 0.06);
+      const gillHighlight = clamp01((1 - thinGillLines) * capBody * 0.08);
+      colorImage.data[index + 0] = Math.round(clamp01(0.98 - gillInk * 0.22 + gillHighlight) * 255);
+      colorImage.data[index + 1] = Math.round(clamp01(0.89 - gillInk * 0.30 + gillHighlight * 0.55) * 255);
+      colorImage.data[index + 2] = Math.round(clamp01(0.72 - gillInk * 0.26 + gillHighlight * 0.42) * 255);
+      colorImage.data[index + 3] = 255;
+
+      materialImage.data[index + 0] = Math.round(clamp01(roughness) * 255);
+      materialImage.data[index + 1] = Math.round(clamp01(roughness) * 255);
+      materialImage.data[index + 2] = 0;
+      materialImage.data[index + 3] = Math.round(clamp01(specular) * 255);
+    }
+  }
+
+  colorCtx.putImageData(colorImage, 0, 0);
+  normalCtx.putImageData(normalImage, 0, 0);
+  materialCtx.putImageData(materialImage, 0, 0);
+  return {
+    colorTexture: configureColorTexture(new THREE.CanvasTexture(undersideColorCanvas)),
+    normalTexture: configurePBRTexture(new THREE.CanvasTexture(normalCanvas)),
+    materialTexture: configurePBRTexture(new THREE.CanvasTexture(materialCanvas)),
+  };
+}
+
+function applyDetailMaps(material, normalTexture, materialTexture, colorTexture = null) {
+  if (colorTexture) material.map = colorTexture;
   material.normalMap = normalTexture;
   material.roughnessMap = materialTexture;
   material.specularIntensityMap = materialTexture;
-  material.userData.pbrDetailTextures = [normalTexture, materialTexture];
+  material.userData.pbrDetailTextures = [normalTexture, materialTexture, colorTexture].filter(Boolean);
+  return material;
+}
+
+function addProceduralMushroomGillTint(material) {
+  const prev = material.onBeforeCompile;
+  material.onBeforeCompile = (shader) => {
+    if (prev) prev(shader);
+    shader.fragmentShader = shader.fragmentShader.replace(
+      "#include <map_fragment>",
+      `#include <map_fragment>
+      #ifdef USE_MAP
+        {
+          vec2 gillUv = vMapUv - vec2(0.5);
+          float gillRadius = clamp(length(gillUv) * 2.0, 0.0, 1.0);
+          float gillBody = smoothstep(0.16, 0.28, gillRadius) * (1.0 - smoothstep(0.95, 1.0, gillRadius));
+          float gillAngle = atan(gillUv.y, gillUv.x);
+          float gillPhase = gillAngle / 6.2831853 * 38.0 + gillRadius * 0.12;
+          float gillCycleDistance = abs(fract(gillPhase + 0.5) - 0.5);
+          float gillLineDistance = gillCycleDistance * (6.2831853 / 38.0) * length(gillUv);
+          float gillMask = (1.0 - smoothstep(0.014, 0.032, gillLineDistance)) * gillBody;
+          float gillCore = (1.0 - smoothstep(0.004, 0.012, gillLineDistance)) * gillBody;
+          vec3 warmGillHighlight = vec3(1.04, 0.95, 0.78);
+          vec3 warmGillValley = vec3(0.38, 0.26, 0.15);
+          diffuseColor.rgb = mix(diffuseColor.rgb * warmGillHighlight, warmGillValley, gillMask * 0.82 + gillCore * 0.30);
+        }
+      #endif`
+    );
+  };
+  material.customProgramCacheKey = () => "small-world-procedural-mushroom-gills-v2";
   return material;
 }
 
@@ -513,11 +657,36 @@ export function makeMushroomCapPBRMaterial(params) {
   }
   const material = new THREE.MeshPhysicalMaterial({
     ...params,
-    reflectivity: 0.26,
-    specularIntensity: 0.58,
+    reflectivity: 0.30,
+    specularIntensity: 0.70,
     specularColor: new THREE.Color(params.color).lerp(new THREE.Color(0xffffff), 0.36),
   });
-  const { normalTexture, materialTexture } = buildMushroomCapTextures();
-  material.normalScale.set(0.78, 0.78);
-  return applyDetailMaps(material, normalTexture, materialTexture);
+  const { colorTexture, normalTexture, materialTexture } = buildMushroomCapTextures();
+  material.normalScale.set(1.22, 1.22);
+  return applyDetailMaps(material, normalTexture, materialTexture, colorTexture);
+}
+
+export function makeMushroomUndersideMaterial(params = {}) {
+  const baseParams = {
+    color: params.color ?? "#f1e8d8",
+    roughness: params.roughness ?? 0.94,
+    side: THREE.FrontSide,
+    emissive: params.emissive ?? "#e8d7b9",
+    emissiveIntensity: 0.24,
+  };
+  if (LOWFX || state.userSettings.pbrDetails === false) {
+    return new THREE.MeshStandardMaterial(baseParams);
+  }
+
+  const material = new THREE.MeshPhysicalMaterial({
+    ...baseParams,
+    reflectivity: 0.08,
+    specularIntensity: 0.16,
+    specularColor: new THREE.Color(baseParams.color).lerp(new THREE.Color(0xffffff), 0.16),
+  });
+  const { colorTexture, normalTexture, materialTexture } = buildMushroomUndersideTextures();
+  material.normalScale.set(1.72, 1.72);
+  material.emissiveMap = colorTexture;
+  addProceduralMushroomGillTint(material);
+  return applyDetailMaps(material, normalTexture, materialTexture, colorTexture);
 }

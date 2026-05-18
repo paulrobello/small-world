@@ -7,6 +7,7 @@ import {
   makeLeafballTreeLeafPBRMaterial,
   makeLeafballTreeTrunkPBRMaterial,
   makeMushroomCapPBRMaterial,
+  makeMushroomUndersideMaterial,
   makePlainRockPBRMaterial,
   makeStonePBRMaterial,
 } from "./pbr.js";
@@ -270,6 +271,108 @@ function getLeafballOutlineColor(leaves, trunk) {
     .offsetHSL(0.0, -0.05, -0.18);
 }
 
+function makeMushroomStemGeometry(
+  height,
+  { baseRadius, topRadius, bulbRadius = baseRadius * 0.35, curve = height * 0.028, radialSegments = 7, heightSegments = 9 } = {}
+) {
+  const positions = [];
+  const indices = [];
+  for (let iy = 0; iy <= heightSegments; iy++) {
+    const t = iy / heightSegments;
+    const y = t * height;
+    const sCurve = Math.sin(t * Math.PI * 2) * Math.sin(t * Math.PI);
+    const bulbBase = Math.pow(1 - t, 3.2) * bulbRadius;
+    const neckTuck = Math.sin(t * Math.PI) * baseRadius * 0.10;
+    const radius = baseRadius + (topRadius - baseRadius) * t + bulbBase - neckTuck;
+    const cx = sCurve * curve;
+    const cz = Math.sin(t * Math.PI * 2 + Math.PI * 0.5) * Math.sin(t * Math.PI) * curve * 0.22;
+    for (let ix = 0; ix < radialSegments; ix++) {
+      const a = (ix / radialSegments) * Math.PI * 2;
+      const verticalRidge = Math.sin(a * 5 + t * Math.PI * 1.5) * baseRadius * 0.035;
+      const surfaceRipple = Math.sin(t * Math.PI * 8 + a * 2) * baseRadius * 0.018;
+      const r = radius + verticalRidge + surfaceRipple;
+      positions.push(cx + Math.cos(a) * r, y, cz + Math.sin(a) * r);
+    }
+  }
+
+  for (let iy = 0; iy < heightSegments; iy++) {
+    const row = iy * radialSegments;
+    const next = (iy + 1) * radialSegments;
+    for (let ix = 0; ix < radialSegments; ix++) {
+      const a = row + ix;
+      const b = row + ((ix + 1) % radialSegments);
+      const c = next + ix;
+      const d = next + ((ix + 1) % radialSegments);
+      indices.push(a, c, b, b, c, d);
+    }
+  }
+
+  const bottomCenter = positions.length / 3;
+  positions.push(0, 0, 0);
+  const topCenter = positions.length / 3;
+  positions.push(0, height, 0);
+  const topRow = heightSegments * radialSegments;
+  for (let ix = 0; ix < radialSegments; ix++) {
+    indices.push(bottomCenter, (ix + 1) % radialSegments, ix);
+    indices.push(topCenter, topRow + ix, topRow + ((ix + 1) % radialSegments));
+  }
+
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
+  geo.setIndex(indices);
+  geo.computeVertexNormals();
+  return geo;
+}
+
+function makeMushroomUndersideGeometry(
+  radiusX,
+  radiusZ,
+  y,
+  segments,
+  { rimOverlap = 1.004, yOffset = -0.001, innerRimInset = 0.965, bevelDrop = 0.008 } = {}
+) {
+  const rimY = y + yOffset;
+  const undersideY = rimY - bevelDrop;
+  const rimRadiusX = radiusX * rimOverlap;
+  const rimRadiusZ = radiusZ * rimOverlap;
+  const innerRadiusX = radiusX * innerRimInset;
+  const innerRadiusZ = radiusZ * innerRimInset;
+  const positions = [0, undersideY, 0];
+  const normals = [0, -1, 0];
+  const uvs = [0.5, 0.5];
+  const indices = [];
+  for (let i = 0; i < segments; i++) {
+    const a = (i / segments) * Math.PI * 2;
+    const x = Math.cos(a) * innerRadiusX;
+    const z = Math.sin(a) * innerRadiusZ;
+    positions.push(x, undersideY, z);
+    normals.push(0, -1, 0);
+    uvs.push(0.5 + x / (rimRadiusX * 2), 0.5 + z / (rimRadiusZ * 2));
+  }
+  const outerStart = positions.length / 3;
+  for (let i = 0; i < segments; i++) {
+    const a = (i / segments) * Math.PI * 2;
+    const x = Math.cos(a) * rimRadiusX;
+    const z = Math.sin(a) * rimRadiusZ;
+    positions.push(x, rimY, z);
+    normals.push(0, -1, 0);
+    uvs.push(0.5 + x / (rimRadiusX * 2), 0.5 + z / (rimRadiusZ * 2));
+  }
+  for (let i = 0; i < segments; i++) {
+    indices.push(0, i + 1, ((i + 1) % segments) + 1);
+    indices.push(i + 1, outerStart + i, ((i + 1) % segments) + 1);
+    indices.push(((i + 1) % segments) + 1, outerStart + i, outerStart + ((i + 1) % segments));
+  }
+
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
+  geo.setAttribute("normal", new THREE.Float32BufferAttribute(normals, 3));
+  geo.setAttribute("uv", new THREE.Float32BufferAttribute(uvs, 2));
+  geo.setIndex(indices);
+  geo.userData.normalsFaceDown = true;
+  return geo;
+}
+
 function addGroveMushroomFamily(group, biome, { radius = 0.44, count = 3, capY = 0.35 } = {}) {
   if (!biome.groveDetails?.mushroomFamilies) return;
   const stemGeo = pooled("grove.babyMushroom.stem.geo", () =>
@@ -283,6 +386,10 @@ function addGroveMushroomFamily(group, biome, { radius = 0.44, count = 3, capY =
   const stemMat = pooled("grove.babyMushroom.stem.mat.smooth", () =>
     new THREE.MeshStandardMaterial({ color: "#f4e6c9", roughness: 0.95 })
   );
+  const undersideGeo = pooled("grove.babyMushroom.underside.geo", () =>
+    makeMushroomUndersideGeometry(0.085 * 1.25, 0.085 * 1.25, 0.18, 10)
+  );
+  const undersideMat = pooled("grove.babyMushroom.underside.mat.lit", () => makeMushroomUndersideMaterial());
   const baseCapColor = new THREE.Color(biome.accent).lerp(new THREE.Color("#b85f2a"), 0.18);
   const babies = count + Math.floor(Math.random() * 3);
   for (let i = 0; i < babies; i++) {
@@ -310,6 +417,11 @@ function addGroveMushroomFamily(group, biome, { radius = 0.44, count = 3, capY =
     cap.rotation.y = Math.random() * Math.PI * 2;
     cap.castShadow = true;
     group.add(cap);
+    const underside = new THREE.Mesh(undersideGeo, undersideMat);
+    underside.position.set(x, 0, z);
+    underside.scale.setScalar(scale);
+    underside.rotation.y = cap.rotation.y;
+    group.add(underside);
   }
 
   if (!biome.groveDetails?.sporeGlow) return;
@@ -1135,13 +1247,16 @@ export const FLORA_BUILDERS = {
     const MUSH_WIND = 0.9;
     const STEM_TOP = 0.35;
     const stemGeo = pooled("mushroom.stem.geo", () =>
-      new THREE.CylinderGeometry(0.07, 0.1, 0.35, 6).translate(0, 0.175, 0)
+      makeMushroomStemGeometry(0.35, { baseRadius: 0.095, topRadius: 0.066, bulbRadius: 0.040, radialSegments: 7 })
     );
     const stemMat = pooled("mushroom.stem.mat.smooth", () =>
       applyWindSway(
         new THREE.MeshStandardMaterial({ color: "#f1e8d8" }),
         MUSH_WIND
       )
+    );
+    const undersideMat = pooled("mushroom.underside.mat.lit", () =>
+      applyWindSway(makeMushroomUndersideMaterial(), MUSH_WIND)
     );
     const stem = new THREE.Mesh(stemGeo, stemMat);
     stem.castShadow = true;
@@ -1167,14 +1282,10 @@ export const FLORA_BUILDERS = {
     // from first-person stroll doesn't see through into empty space.
     // Rotation/scale are baked into the geometry so the wind shader sees a
     // uniform transformed.y = STEM_TOP across every vertex.
-    const undersideGeo = pooled("mushroom.underside.geo", () => {
-      const geo = new THREE.CircleGeometry(0.22, 8);
-      geo.rotateX(Math.PI / 2);
-      geo.scale(1.4, 1, 1.4);
-      geo.translate(0, STEM_TOP + 0.01, 0);
-      return geo;
-    });
-    const underside = new THREE.Mesh(undersideGeo, stemMat);
+    const undersideGeo = pooled("mushroom.underside.geo", () =>
+      makeMushroomUndersideGeometry(0.22 * 1.4, 0.22 * 1.4, STEM_TOP + 0.01, 12)
+    );
+    const underside = new THREE.Mesh(undersideGeo, undersideMat);
     g.add(underside);
     // Local Y of the cap top so world.js can register an accurate perch
     // spot for fliers. Sphere radius 0.22 with Y-scale 0.9 puts the apex at
@@ -1624,9 +1735,19 @@ export const FLORA_BUILDERS = {
         BIG_WIND
       )
     );
-    const stemGeo = new THREE.CylinderGeometry(0.13, 0.18, stemH, 7).translate(0, stemH / 2, 0);
+    const undersideMat = pooled("bigmushroom.underside.mat.lit", () =>
+      applyWindSway(makeMushroomUndersideMaterial(), BIG_WIND)
+    );
+    const stemGeo = makeMushroomStemGeometry(stemH, {
+      baseRadius: 0.17,
+      topRadius: 0.12,
+      bulbRadius: 0.090,
+      curve: stemH * 0.024,
+      radialSegments: 9,
+      heightSegments: 12,
+    });
     const stem = new THREE.Mesh(stemGeo, stemMat);
-    stem.rotation.z = (Math.random() - 0.5) * 0.1;
+    stem.rotation.z = (Math.random() - 0.5) * 0.025;
     stem.castShadow = true;
     g.add(stem);
     const capGeo = new THREE.SphereGeometry(0.8, 12, 8, 0, Math.PI * 2, 0, Math.PI / 2)
@@ -1652,11 +1773,9 @@ export const FLORA_BUILDERS = {
     // Underside disc — closes the hemisphere so walking under the cap in
     // first-person doesn't see through into empty space above. Uses the
     // stem material (cream) which reads as a fresh mushroom gill plate.
-    // Rotation baked into geometry so wind shader sees a uniform y = stemH.
-    const undersideGeo = new THREE.CircleGeometry(0.8, 12);
-    undersideGeo.rotateX(Math.PI / 2);
-    undersideGeo.translate(0, stemH, 0);
-    const underside = new THREE.Mesh(undersideGeo, stemMat);
+    // Rotation baked into geometry so wind shader sees a uniform y near stemH.
+    const undersideGeo = makeMushroomUndersideGeometry(0.8, 0.8, stemH, 12);
+    const underside = new THREE.Mesh(undersideGeo, undersideMat);
     g.add(underside);
     // Spots share the cap's wind strength so they sway with it. Each spot's
     // orientation + world position is baked into its geometry — the mesh sits
@@ -1735,6 +1854,9 @@ export const FLORA_BUILDERS = {
       .scale(1.28, 0.72, 1.28)
       .translate(0, 0.18, 0);
     const stemMat = new THREE.MeshStandardMaterial({ color: "#f4e6c9", roughness: 0.95 });
+    const undersideGeo = makeMushroomUndersideGeometry(0.09 * 1.28, 0.09 * 1.28, 0.18, 10);
+    undersideGeo.name = "fairyring.underside.geo";
+    const undersideMat = makeMushroomUndersideMaterial();
     const capBaseColor = new THREE.Color(biome.accent).lerp(new THREE.Color("#b85f2a"), 0.18);
     const mushrooms = 10 + Math.floor(Math.random() * 4);
     for (let i = 0; i < mushrooms; i++) {
@@ -1762,6 +1884,11 @@ export const FLORA_BUILDERS = {
       cap.scale.setScalar(scale);
       cap.castShadow = true;
       g.add(cap);
+      const underside = new THREE.Mesh(undersideGeo, undersideMat);
+      underside.position.set(x, 0, z);
+      underside.rotation.y = cap.rotation.y;
+      underside.scale.setScalar(scale);
+      g.add(underside);
     }
 
     // Will-o-wisps replace the old static spores.

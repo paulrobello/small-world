@@ -34,6 +34,12 @@ function _parseVectorParam(raw) {
   return new THREE.Vector3(parts[0], parts[1], parts[2]);
 }
 
+function _parsePositiveNumberParam(raw) {
+  if (!raw) return null;
+  const value = Number(raw);
+  return Number.isFinite(value) && value > 0 ? value : null;
+}
+
 function _formatVectorParam(v) {
   return [v.x, v.y, v.z].map((n) => Number(n.toFixed(4))).join(",");
 }
@@ -553,6 +559,8 @@ let _inspectRenderer = null;
 let _viewName = _parseViewName(_params.get("view"));
 let _cameraOverride = _parseVectorParam(_params.get("camera"));
 let _targetOverride = _parseVectorParam(_params.get("target"));
+let _distanceOverride = _parsePositiveNumberParam(_params.get("distance"));
+let _zoomOverride = _parsePositiveNumberParam(_params.get("zoom"));
 if (!_cameraOverride || !_targetOverride) {
   _cameraOverride = null;
   _targetOverride = null;
@@ -600,6 +608,8 @@ function _syncUrl() {
   const seed = _seedOverride ?? _derivedSeed();
   sp.set("seed", "0x" + seed.toString(16).padStart(4, "0"));
   sp.set("view", _viewName);
+  if (_distanceOverride) sp.set("distance", Number(_distanceOverride.toFixed(3)));
+  if (_zoomOverride) sp.set("zoom", Number(_zoomOverride.toFixed(3)));
   if (_cameraOverride && _targetOverride) {
     sp.set("camera", _formatVectorParam(_cameraOverride));
     sp.set("target", _formatVectorParam(_targetOverride));
@@ -778,11 +788,12 @@ function _frameSpecimenInView() {
   const horizontalFov = 2 * Math.atan(Math.tan(verticalFov / 2) * camera.aspect);
   const fitFov = Math.max(0.1, Math.min(verticalFov, horizontalFov));
   const fitDistance = (radius / Math.sin(fitFov / 2)) * 1.22;
+  const distance = _distanceOverride ?? fitDistance;
 
   controls.target.copy(center);
-  camera.position.copy(center).addScaledVector(dir, fitDistance);
-  controls.minDistance = Math.max(0.35, fitDistance * 0.28);
-  controls.maxDistance = Math.max(6, fitDistance * 3.2);
+  camera.position.copy(center).addScaledVector(dir, distance);
+  controls.minDistance = Math.max(0.12, Math.min(0.35, distance * 0.28));
+  controls.maxDistance = Math.max(6, distance * 3.2);
   controls.update();
 }
 
@@ -945,9 +956,15 @@ export function setupInspect(scene, renderer, camera, controls) {
     camera.position.copy(_cameraOverride);
   } else {
     controls.target.set(0, 0.35, 0);
-    camera.position.copy(controls.target).add(INSPECT_VIEW_DIRECTIONS[_viewName]);
+    const viewDirection = INSPECT_VIEW_DIRECTIONS[_viewName];
+    const distance = _distanceOverride ?? viewDirection.length();
+    camera.position.copy(controls.target).add(viewDirection.clone().normalize().multiplyScalar(distance));
   }
-  controls.minDistance = 0.8;
+  if (_zoomOverride) {
+    camera.zoom = _zoomOverride;
+    camera.updateProjectionMatrix();
+  }
+  controls.minDistance = _distanceOverride ? Math.max(0.12, Math.min(0.35, _distanceOverride * 0.5)) : 0.8;
   controls.maxDistance = 6;
   controls.autoRotate = !_paused;
   controls.autoRotateSpeed = 0.6;
@@ -965,9 +982,9 @@ export function setupInspect(scene, renderer, camera, controls) {
   document.querySelector(".hud.hud-bottom")?.classList.add("inspect-hidden");
   document.getElementById("settings-panel")?.classList.add("inspect-hidden");
   document.getElementById("help-panel")?.classList.add("inspect-hidden");
-  // Also corner crosshairs + grain/vignette (keep grain for film grain feel,
-  // but hide corners which were originally aligned to the world view)
+  // Also hide the world-view corner crosshairs and vignette; keep grain for film feel.
   document.querySelectorAll(".corner").forEach((el) => el.classList.add("inspect-hidden"));
+  document.querySelector(".vignette")?.classList.add("inspect-hidden");
 
   _hudEl = document.createElement("div");
   _hudEl.className = "inspect-hud";

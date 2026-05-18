@@ -257,10 +257,16 @@ class VerdantGroveCustomDomainTest(unittest.TestCase):
         self.assertIn('sp.set("view", _viewName)', inspect)
         self.assertIn('_parseVectorParam(_params.get("camera"))', inspect)
         self.assertIn('_parseVectorParam(_params.get("target"))', inspect)
+        self.assertIn('_parsePositiveNumberParam(_params.get("distance"))', inspect)
+        self.assertIn('_parsePositiveNumberParam(_params.get("zoom"))', inspect)
         self.assertIn('sp.set("camera", _formatVectorParam(_cameraOverride))', inspect)
         self.assertIn('sp.set("target", _formatVectorParam(_targetOverride))', inspect)
+        self.assertIn('sp.set("distance"', inspect)
+        self.assertIn('sp.set("zoom"', inspect)
         self.assertIn('camera.position.copy(_cameraOverride)', inspect)
         self.assertIn('controls.target.copy(_targetOverride)', inspect)
+        self.assertIn("const distance = _distanceOverride ?? fitDistance", inspect)
+        self.assertIn("camera.zoom = _zoomOverride", inspect)
         self.assertIn('let _paused = _params.get("paused") !== "0";', inspect)
         self.assertIn("controls.autoRotate = !_paused", inspect)
         self.assertIn("autoRotate: false", state)
@@ -275,6 +281,10 @@ class VerdantGroveCustomDomainTest(unittest.TestCase):
         self.assertIn('e.key === "w" || e.key === "W"', inspect)
         self.assertIn('sp.set("wind", "1")', inspect)
         self.assertIn("WIND", inspect)
+
+    def test_inspect_hides_world_vignette(self) -> None:
+        inspect = (ROOT / "src" / "inspect.js").read_text()
+        self.assertIn('document.querySelector(".vignette")?.classList.add("inspect-hidden")', inspect)
 
     def test_inspect_supports_screenshot_param_and_keybind(self) -> None:
         inspect = (ROOT / "src" / "inspect.js").read_text()
