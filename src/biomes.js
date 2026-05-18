@@ -29,6 +29,7 @@ export const BIOMES = [
       },
     ],
     groundMarks: { color: "#20341f", opacity: 0.16, life: 5.5, softness: 1.15 },
+    shadowLod: { microFloraShadows: false },
     groveDetails: {
       mushroomFamilies: true,
       fairyRing: true,

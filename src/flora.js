@@ -335,7 +335,7 @@ function applyDandylionHeadWind(material, strength, headY) {
   return material;
 }
 
-function makeInstancedLeafBatch(geometry, material, matrices) {
+function makeInstancedLeafBatch(geometry, material, matrices, castShadow = true) {
   if (!matrices.length) return null;
   const mesh = new THREE.InstancedMesh(geometry, material, matrices.length);
   for (let i = 0; i < matrices.length; i++) {
@@ -343,9 +343,13 @@ function makeInstancedLeafBatch(geometry, material, matrices) {
   }
   mesh.instanceMatrix.setUsage(THREE.StaticDrawUsage);
   mesh.instanceMatrix.needsUpdate = true;
-  mesh.castShadow = true;
+  mesh.castShadow = castShadow;
   mesh.computeBoundingSphere();
   return mesh;
+}
+
+function shouldCastMicroFloraShadow(biome) {
+  return biome.shadowLod?.microFloraShadows !== false;
 }
 
 function getLeafballTreePalette(biome) {
@@ -1073,6 +1077,7 @@ export const FLORA_BUILDERS = {
 
   dandylion(biome) {
     const g = new THREE.Group();
+    const castMicroShadow = shouldCastMicroFloraShadow(biome);
     const DANDYLION_STEM_H = 0.92;
     const DANDYLION_WIND = 1.15;
     function dandylionStemOffset(t) {
@@ -1103,7 +1108,7 @@ export const FLORA_BUILDERS = {
       )
     );
     const stem = new THREE.Mesh(stemGeo, stemMat);
-    stem.castShadow = true;
+    stem.castShadow = castMicroShadow;
     g.add(stem);
 
     const leafGeo = pooled("dandylion.baseleaf.geo", () =>
@@ -1163,7 +1168,7 @@ export const FLORA_BUILDERS = {
       leaf.rotateY(leafYawVariation);
       leaf.rotateZ(leafRollVariation);
       leaf.scale.setScalar(0.82 + Math.random() * 0.28);
-      leaf.castShadow = true;
+      leaf.castShadow = castMicroShadow;
       g.add(leaf);
     }
 
@@ -1185,7 +1190,7 @@ export const FLORA_BUILDERS = {
       )
     );
     const core = new THREE.Mesh(coreGeo, coreMat);
-    core.castShadow = true;
+    core.castShadow = castMicroShadow;
     g.add(core);
 
     const sporeCount = 384;
@@ -1416,6 +1421,7 @@ export const FLORA_BUILDERS = {
 
   fern(biome) {
     const g = new THREE.Group();
+    const castMicroShadow = shouldCastMicroFloraShadow(biome);
     const stemMat = pooled("fern.frond.stem.mat", () =>
       applyWindSway(
         new THREE.MeshStandardMaterial({
@@ -1477,7 +1483,7 @@ export const FLORA_BUILDERS = {
       const stem = new THREE.Mesh(stemGeo, stemMat);
       stem.position.y = frondLength * 0.5;
       stem.scale.y = frondLength;
-      stem.castShadow = true;
+      stem.castShadow = castMicroShadow;
       frond.add(stem);
 
       const leafletPairs = 5 + Math.floor(Math.random() * 2);
@@ -1492,7 +1498,7 @@ export const FLORA_BUILDERS = {
           leaflet.rotation.y = side * (0.10 + Math.random() * 0.18);
           leaflet.rotation.x = -0.14 + t * 0.20 + (Math.random() - 0.5) * 0.08;
           leaflet.scale.setScalar(leafletScale);
-          leaflet.castShadow = true;
+          leaflet.castShadow = castMicroShadow;
           frond.add(leaflet);
         }
       }
@@ -1502,7 +1508,7 @@ export const FLORA_BUILDERS = {
       tip.rotation.z = (Math.random() - 0.5) * 0.16;
       tip.rotation.x = 0.08 + Math.random() * 0.10;
       tip.scale.setScalar(0.80 + Math.random() * 0.16);
-      tip.castShadow = true;
+      tip.castShadow = castMicroShadow;
       frond.add(tip);
 
       g.add(frond);
@@ -2098,6 +2104,7 @@ export const FLORA_BUILDERS = {
 
   berrybush(biome) {
     const g = new THREE.Group();
+    const castMicroShadow = shouldCastMicroFloraShadow(biome);
 
     // --- Leaf plates (layered dome, like the leafball tree but smaller/bushy) ---
     const leafMats = [
@@ -2286,7 +2293,7 @@ export const FLORA_BUILDERS = {
       }
     }
     for (let i = 0; i < leafBuckets.length; i++) {
-      const leaves = makeInstancedLeafBatch(leafGeo, leafMats[i], leafBuckets[i]);
+      const leaves = makeInstancedLeafBatch(leafGeo, leafMats[i], leafBuckets[i], castMicroShadow);
       if (leaves) g.add(leaves);
     }
 
@@ -2338,7 +2345,7 @@ export const FLORA_BUILDERS = {
       berry.position.set(bx, by, bz);
       const bs = 0.85 + Math.random() * 0.20;
       berry.scale.setScalar(bs);
-      berry.castShadow = true;
+      berry.castShadow = castMicroShadow;
       g.add(berry);
     }
     return g;
