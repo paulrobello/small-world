@@ -499,6 +499,10 @@ export async function generateWorld(seed) {
   // a separate placement radius to prevent silhouettes from intersecting.
   const CANOPY_SPACING_KINDS = new Set(["tree", "leafballtree", "pine", "deadtree", "bigmushroom", "fairyring"]);
   const CANOPY_SPACING_PAD = 2.8;
+  const GRASS_SHORTEN_PAD = 2.6;
+  const GRASS_SHORTEN_MIN_RADIUS = 0.42;
+  const GRASS_SHORTEN_MAX_RADIUS = 1.2;
+  const GRASS_SHORTEN_MIN_HEIGHT = 0.14;
   const PLACEMENT_BLOCK_KINDS = new Set(["lavafissure"]);
   const GROUND_CREATURE_BLOCK_KINDS = new Set(["lavafissure", "fairyring"]);
   const floraPlacementBlocks = [];
@@ -712,6 +716,10 @@ export async function generateWorld(seed) {
     if (kind === "tree" || kind === "leafballtree" || kind === "pine" || kind === "deadtree" || kind === "balloontree") s *= 2;
     if (kind === "berrybush") s *= 1 + Math.random() * 0.25;
     const fp = (FLORA_FOOTPRINT[kind] ?? FLORA_FOOTPRINT_DEFAULT) * s;
+    const grassShortenRadius = Math.min(
+      GRASS_SHORTEN_MAX_RADIUS,
+      Math.max(GRASS_SHORTEN_MIN_RADIUS, fp * GRASS_SHORTEN_PAD)
+    );
     const placementBlockKinds = kind === "lavafissure" ? null : PLACEMENT_BLOCK_KINDS;
     if (blocksFloraPlacement(p.x, p.z, fp * 1.2, placementBlockKinds)) continue;
     if (CANOPY_SPACING_KINDS.has(kind) && blocksFloraPlacement(p.x, p.z, fp * CANOPY_SPACING_PAD, CANOPY_SPACING_KINDS)) continue;
@@ -810,7 +818,7 @@ export async function generateWorld(seed) {
       state.world.add(wisp.group);
       state.willowisps.push(wisp);
     }
-    if (kind === "lavafissure") conformSurfaceChildrenToTerrain(f);
+    if (kind === "lavafissure" || kind === "mushroom" || kind === "bigmushroom") conformSurfaceChildrenToTerrain(f);
     if (kind === "crystal") {
       const glow = new THREE.PointLight(new THREE.Color(biome.accent), 1.4, 6.5, 1.8);
       glow.position.set(0, 0.6, 0); // sits inside the cluster
@@ -832,6 +840,7 @@ export async function generateWorld(seed) {
       kind,
       x: p.x,
       z: p.z,
+      grassRadius: grassShortenRadius,
       r: fp * (CANOPY_SPACING_KINDS.has(kind) ? CANOPY_SPACING_PAD : 1.2),
     });
     if (OBSTACLE_KINDS.has(kind)) {
@@ -943,7 +952,10 @@ export async function generateWorld(seed) {
   const coverExclusions = floraPlacementBlocks
     .filter(b => b.kind === "fairyring")
     .map(b => ({ x: b.x, z: b.z, r: b.r }));
-  const grass = makeGrassField(biome, state.heightFn, coverExclusions);
+  const grassShorteners = floraPlacementBlocks
+    .filter(b => b.kind !== "fairyring" && b.grassRadius > 0)
+    .map(b => ({ x: b.x, z: b.z, r: b.grassRadius, shortenTo: GRASS_SHORTEN_MIN_HEIGHT }));
+  const grass = makeGrassField(biome, state.heightFn, coverExclusions, grassShorteners);
   if (grass) state.world.add(grass);
   await yieldIfNeeded(true);
   for (const m of makeWildflowerField(biome, state.heightFn, coverExclusions)) {

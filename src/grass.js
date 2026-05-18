@@ -28,6 +28,62 @@ const MAX_DENSITY_MULTIPLIER = 37.5;
 const _lowfxScale = (n) => (LOWFX ? Math.max(1, Math.round(n * LOWFX_DENSITY)) : n);
 const _coverScale = (n, gain = 1) =>
   _lowfxScale(Math.round(n * (state.ISLAND_SIZE / DENSITY_BASE) * gain));
+const SHORT_GRASS_CELL_SIZE = 1.25;
+
+function _circleCellKey(cx, cz) {
+  return `${cx},${cz}`;
+}
+
+export function makeFloraShortGrassIndex(circles = []) {
+  const cells = new Map();
+  for (const circle of circles) {
+    const r = circle.r ?? 0;
+    if (r <= 0) continue;
+    const shortenTo = Math.max(0.05, Math.min(1, circle.shortenTo ?? 0.28));
+    if (shortenTo >= 1) continue;
+    const entry = {
+      x: circle.x,
+      z: circle.z,
+      r,
+      r2: r * r,
+      shortenTo,
+    };
+    const minX = Math.floor((circle.x - r) / SHORT_GRASS_CELL_SIZE);
+    const maxX = Math.floor((circle.x + r) / SHORT_GRASS_CELL_SIZE);
+    const minZ = Math.floor((circle.z - r) / SHORT_GRASS_CELL_SIZE);
+    const maxZ = Math.floor((circle.z + r) / SHORT_GRASS_CELL_SIZE);
+    for (let cx = minX; cx <= maxX; cx++) {
+      for (let cz = minZ; cz <= maxZ; cz++) {
+        const key = _circleCellKey(cx, cz);
+        const bucket = cells.get(key);
+        if (bucket) bucket.push(entry);
+        else cells.set(key, [entry]);
+      }
+    }
+  }
+  return { cellSize: SHORT_GRASS_CELL_SIZE, cells };
+}
+
+export function grassHeightScaleAt(x, z, index) {
+  if (!index?.cells?.size) return 1;
+  const cx = Math.floor(x / index.cellSize);
+  const cz = Math.floor(z / index.cellSize);
+  const circles = index.cells.get(_circleCellKey(cx, cz));
+  if (!circles) return 1;
+
+  let heightScale = 1;
+  for (const circle of circles) {
+    const dx = x - circle.x;
+    const dz = z - circle.z;
+    const d2 = dx * dx + dz * dz;
+    if (d2 >= circle.r2) continue;
+    const t = Math.sqrt(d2) / circle.r;
+    const fade = t * t * (3 - 2 * t);
+    const circleScale = circle.shortenTo + (1 - circle.shortenTo) * fade;
+    heightScale = Math.min(heightScale, circleScale);
+  }
+  return heightScale;
+}
 
 // Build the blade geometry + grass shader material. Shared between the
 // production world field (placed by pickGroundPoint across an island) and
@@ -232,7 +288,7 @@ export function makeGrassMaterial(biome, opts = {}) {
   return { blade, material: mat, uniforms, baseCol };
 }
 
-export function makeGrassField(biome, heightFn, excludedCircles = []) {
+export function makeGrassField(biome, heightFn, excludedCircles = [], shortGrassCircles = []) {
   // Per-biome 0 = no grass field at all (burnt/volcanic biomes). Caller
   // handles the null and skips the .add() rather than allocating an empty
   // InstancedMesh.
@@ -265,6 +321,7 @@ export function makeGrassField(biome, heightFn, excludedCircles = []) {
   const clumpNoise = createNoise2D();
   const baldThreshold = BALD_THRESHOLD[biome.id] ?? 0.18;
   const biomeHeightMul = GRASS_HEIGHT[biome.id] ?? 1.0;
+  const shortGrassIndex = makeFloraShortGrassIndex(shortGrassCircles);
 
   const m = new THREE.Matrix4();
   const v = new THREE.Vector3();
@@ -308,9 +365,10 @@ export function makeGrassField(biome, heightFn, excludedCircles = []) {
     const cN = clumpNoise(x * 0.35, z * 0.35) * 0.5 + 0.5;
     const baseScale = 0.7 + Math.random() * 0.7;
     const heightMul = 0.75 + 0.7 * cN;
+    const floraHeightMul = grassHeightScaleAt(x, z, shortGrassIndex);
 
     v.set(x, y, z);
-    s.set(baseScale, baseScale * heightMul * biomeHeightMul, baseScale);
+    s.set(baseScale, baseScale * heightMul * biomeHeightMul * floraHeightMul, baseScale);
     e.set(
       (Math.random() - 0.5) * 0.18,
       Math.random() * Math.PI * 2,

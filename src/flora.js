@@ -545,6 +545,7 @@ function addGroveMushroomFamily(group, biome, { radius = 0.44, count = 3, capY =
     const stem = new THREE.Mesh(stemGeo, stemMat);
     stem.position.set(x, 0, z);
     stem.scale.setScalar(scale);
+    stem.userData.surfaceLift = 0;
     stem.castShadow = true;
     group.add(stem);
     const babyCapColor = baseCapColor.clone().offsetHSL(
@@ -559,12 +560,14 @@ function addGroveMushroomFamily(group, biome, { radius = 0.44, count = 3, capY =
     cap.position.set(x, 0, z);
     cap.scale.setScalar(scale);
     cap.rotation.y = Math.random() * Math.PI * 2;
+    cap.userData.surfaceLift = 0;
     cap.castShadow = true;
     group.add(cap);
     const underside = new THREE.Mesh(undersideGeo, undersideMat);
     underside.position.set(x, 0, z);
     underside.scale.setScalar(scale);
     underside.rotation.y = cap.rotation.y;
+    underside.userData.surfaceLift = 0;
     group.add(underside);
   }
 
