@@ -394,9 +394,13 @@ export const BIOMES = [
     sun: "#ff9050",
     flora: [
       "lavafissure", "lavafissure", "lavafissure",
-      "obsidianshard", "obsidianshard", "rock", "rock", "skull",
+      "obsidianshard", "obsidianshard", "rock", "leafballtree", "skull",
     ],
     floraCount: 56,
+    leafballTreePalette: {
+      trunk: "#1a1018",
+      leaves: ["#140d14", "#3a2018", "#ff7a2a"],
+    },
     particle: "spark",
     creatureColors: ["#1a1018", "#3a2018", "#ff7a2a", "#ffb060"],
     creatureCount: [7, 11],
@@ -441,7 +445,7 @@ export const WILDFLOWER_PALETTES = {
 // Optional per-biome grass density overrides. When empty, every biome uses
 // grass.js's shared stock density; set a biome id to 0 here to disable its
 // grass field, or to a positive count to retune only that biome.
-export const GRASS_DENSITY = { ashen: 0, desert: 0, obsidian: 0 };
+export const GRASS_DENSITY = { ashen: 0, desert: 0, frozen: 0, coral: 0, obsidian: 0 };
 // Optional per-biome grass height multipliers. When empty, every biome uses
 // the shared grass height; add a biome id here for future biome-specific tuning.
 export const GRASS_HEIGHT = {};
@@ -459,9 +463,9 @@ export const BALD_THRESHOLD = {
   obsidian: 0.40,
 };
 export const FLOWER_DENSITY = {
-  verdant: 180, desert: 0, frozen: 90,
+  verdant: 180, desert: 0, frozen: 0,
   marsh:   220, ashen:  50, golden: 200,
-  mossy:   140, twilight: 240, coral: 110,
+  mossy:   140, twilight: 240, coral: 0,
   cloud:   80,  grove:   170, obsidian: 0,
 };
 // Per-biome cloud count for the sky-backdrop. 0 / undefined = no clouds

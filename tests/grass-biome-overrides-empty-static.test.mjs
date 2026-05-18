@@ -1,11 +1,14 @@
 import assert from 'node:assert/strict';
-import { GRASS_DENSITY, GRASS_HEIGHT } from '../src/biomes.js';
+import { FLOWER_DENSITY, GRASS_DENSITY, GRASS_HEIGHT } from '../src/biomes.js';
 
 assert.deepEqual(
   GRASS_DENSITY,
-  { ashen: 0, desert: 0 },
-  'Only ashen wastes and crimson dunes should override grass density, disabling their instanced grass fields.'
+  { ashen: 0, desert: 0, frozen: 0, coral: 0, obsidian: 0 },
+  'Bare biomes should override grass density, disabling their instanced grass fields.'
 );
+
+assert.equal(FLOWER_DENSITY.frozen, 0, 'frozen vale should not spawn wildflower ground cover.');
+assert.equal(FLOWER_DENSITY.coral, 0, 'coral atoll should not spawn wildflower ground cover.');
 
 assert.deepEqual(
   GRASS_HEIGHT,
