@@ -22,20 +22,28 @@ assert(
   obsidian.flora.includes('obsidianglass'),
   'volcanic glass should include shiny obsidian glass flora.'
 );
+assert.equal(
+  obsidian.sunIntensity,
+  8.8,
+  'volcanic glass should be 10% brighter than the previous 8.0 sun intensity.'
+);
 assert(
   obsidian.flora.indexOf('obsidianglass') > obsidian.flora.indexOf('skull'),
   'obsidian glass should be its own volcanic glass flora slot, not a tree replacement in the list.'
 );
 assert(
-  floraSource.includes('obsidianglass(biome)')
+  floraSource.includes('obsidianglass()')
     && floraSource.includes('new THREE.ConeGeometry(0.22, 1, 5, 1)')
     && floraSource.includes('new THREE.MeshPhysicalMaterial')
+    && floraSource.includes('color: new THREE.Color("#020204")')
+    && floraSource.includes('emissive: new THREE.Color("#000000")')
     && floraSource.includes('roughness: 0.035')
-    && floraSource.includes('metalness: 0.82')
+    && floraSource.includes('metalness: 0.88')
     && floraSource.includes('clearcoat: 1.0')
     && floraSource.includes('specularIntensity: 1.0')
-    && floraSource.includes('reflectivity: 1.0'),
-  'obsidian glass flora should use pointed shards and a high-shine physical material.'
+    && floraSource.includes('reflectivity: 1.0')
+    && !floraSource.includes('obsidianglass.glint'),
+  'obsidian glass flora should use black pointed shards and a high-shine physical material without floating glint strips.'
 );
 assert(
   worldSource.includes('obsidianglass: 0.34')

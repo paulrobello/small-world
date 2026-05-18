@@ -7,6 +7,6 @@ assert(ashen.edgeAura, 'ashen wastes should define an edge aura.');
 assert.equal(ashen.edgeAura.pattern, 'mist', 'ashen wastes edge aura should be a mist ring.');
 assert.deepEqual(
   ashen.edgeAura.colors,
-  ['#303030', '#303030', '#303030'],
-  'ashen wastes mist ring should be dark gray.'
+  ['#0c0a12', '#5a3a4a', '#e63946'],
+  'ashen wastes mist ring should use smoky ember contrast colors.'
 );

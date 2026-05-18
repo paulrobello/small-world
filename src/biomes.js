@@ -400,7 +400,7 @@ export const BIOMES = [
     creatureCount: [7, 11],
     glowEyes: true,
     darkBiome: true,
-    sunIntensity: 8.0,
+    sunIntensity: 8.8,
     edgeAura: {
       pattern: "mist",
       colors: ["#0a0204", "#8b1a1a", "#ff4020"],
