@@ -38,6 +38,7 @@ import {
   isManualPaused,
 } from "./src/ui.js";
 import { INSPECT, setupInspect, stepInspect } from "./src/inspect.js";
+import { startPerfProbe } from "./src/perfProbe.js";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Renderer / scene / camera
@@ -98,6 +99,7 @@ state.renderer = renderer;
 // during development. Safe to leave — it's just a window ref. Remove if it
 // becomes load-bearing for anything besides debugging.
 if (typeof window !== "undefined") window.__sw = { state, controls, scene, camera, renderer };
+startPerfProbe({ state, scene, renderer });
 
 // Persisted settings must be applied BEFORE initPostFX so the composer is
 // built with the user's saved bloom / tilt-shift / softParticles / outline /
