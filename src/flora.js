@@ -870,7 +870,7 @@ export const FLORA_BUILDERS = {
       }
     };
 
-    const topHighlightRows = 4;
+    const topHighlightRows = 3;
     const topMotionTuckRows = 4;
     const topMotionTuckAngle = -(0.045 + THREE.MathUtils.degToRad(2));
     const firstTopRowBackoffAngle = THREE.MathUtils.degToRad(2);
