@@ -352,6 +352,30 @@ function shouldCastMicroFloraShadow(biome) {
   return biome.shadowLod?.microFloraShadows !== false;
 }
 
+function shouldUseLeafballCanopyShadowProxy(biome) {
+  return biome.shadowLod?.leafballCanopyProxy === true;
+}
+
+function makeLeafballCanopyShadowProxy(canopyCenter, canopyRadius) {
+  const geo = pooled("leafballtree.canopy.shadowProxy.geo", () => new THREE.SphereGeometry(1, 16, 10));
+  const mat = pooled(
+    "leafballtree.canopy.shadowProxy.mat",
+    () =>
+      new THREE.MeshBasicMaterial({
+        colorWrite: false,
+        depthWrite: false,
+        depthTest: false,
+      })
+  );
+  const proxy = new THREE.Mesh(geo, mat);
+  proxy.position.copy(canopyCenter);
+  proxy.scale.copy(canopyRadius);
+  proxy.castShadow = true;
+  proxy.receiveShadow = false;
+  proxy.userData.inspect = { category: "flora", variant: "leafballtree" };
+  return proxy;
+}
+
 function getLeafballTreePalette(biome) {
   const override = biome.leafballTreePalette || {};
   const fallbackLeaves = [
@@ -828,6 +852,7 @@ export const FLORA_BUILDERS = {
 
     const canopyCenter = new THREE.Vector3(0, 1.46 + canopyYOffset, 0);
     const canopyRadius = new THREE.Vector3(0.88, 0.68, 0.88);
+    const useCanopyShadowProxy = shouldUseLeafballCanopyShadowProxy(biome);
     const up = new THREE.Vector3(0, 1, 0);
     const basis = new THREE.Matrix4();
     const leafBuckets = leafMats.map(() => []);
@@ -907,8 +932,11 @@ export const FLORA_BUILDERS = {
       }
     }
     for (let i = 0; i < leafBuckets.length; i++) {
-      const leaves = makeInstancedLeafBatch(leafGeo, leafMats[i], leafBuckets[i]);
+      const leaves = makeInstancedLeafBatch(leafGeo, leafMats[i], leafBuckets[i], !useCanopyShadowProxy);
       if (leaves) g.add(leaves);
+    }
+    if (useCanopyShadowProxy) {
+      g.add(makeLeafballCanopyShadowProxy(canopyCenter, canopyRadius));
     }
 
     const branchGeo = pooled("leafballtree.branch.geo", () => new THREE.CylinderGeometry(0.045, 0.075, 1, 6));

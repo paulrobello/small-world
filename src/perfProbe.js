@@ -153,6 +153,7 @@ function buildReport({ state, scene, renderer, timings, phaseFrames }) {
     biomeName: biome?.name ?? null,
     shadowLod: {
       microFloraShadows: biome?.shadowLod?.microFloraShadows ?? true,
+      leafballCanopyProxy: biome?.shadowLod?.leafballCanopyProxy ?? false,
     },
     timing: summarizeTimings(timings),
     phaseTimings: summarizePhaseTimings(phaseFrames),

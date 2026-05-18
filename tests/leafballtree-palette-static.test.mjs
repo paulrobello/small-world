@@ -112,3 +112,21 @@ assert(
     && floraSource.includes('pitchOffset: row === 0 ? topMotionTuckAngle + firstTopRowBackoffAngle : row < topMotionTuckRows ? topMotionTuckAngle : 0,'),
   'leafballtree first top row should back off two degrees while the cap and next top rows keep the stronger tuck.'
 );
+
+const verdantBlock = extractObjectBlock(biomesSource, 'id: "verdant"');
+assert(
+  verdantBlock.includes('leafballCanopyProxy: true'),
+  'Verdant grove should opt into a simplified leafball canopy shadow proxy.'
+);
+assert(
+  floraSource.includes('function shouldUseLeafballCanopyShadowProxy(biome)')
+    && floraSource.includes('biome.shadowLod?.leafballCanopyProxy === true'),
+  'Leafball tree shadow proxy usage should be controlled by a biome shadow LOD flag.'
+);
+assert(
+  floraSource.includes('const useCanopyShadowProxy = shouldUseLeafballCanopyShadowProxy(biome);')
+    && floraSource.includes('makeInstancedLeafBatch(leafGeo, leafMats[i], leafBuckets[i], !useCanopyShadowProxy)')
+    && floraSource.includes('makeLeafballCanopyShadowProxy(canopyCenter, canopyRadius)')
+    && floraSource.includes('leafballtree.canopy.shadowProxy.geo'),
+  'Leafball tree canopies should keep visible leaf batches but replace their shadow casting with one proxy mesh when the LOD is enabled.'
+);

@@ -35,7 +35,8 @@ assert(
   perfProbeSource.includes('window.__swPerf')
     && perfProbeSource.includes('[small-world:perf]')
     && perfProbeSource.includes('shadowCastersByParentVariant')
-    && perfProbeSource.includes('microFloraShadows'),
+    && perfProbeSource.includes('microFloraShadows')
+    && perfProbeSource.includes('leafballCanopyProxy'),
   'The perf report should expose a devtools object, console marker, shadow caster breakdown, and biome LOD flags.'
 );
 
