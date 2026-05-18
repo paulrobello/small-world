@@ -1,14 +1,13 @@
 import assert from 'node:assert/strict';
 import { BIOMES } from '../src/biomes.js';
 
-const generatedTreeKinds = new Set(['tree', 'pine', 'snowpine', 'balloontree']);
+const generatedTreeKinds = new Set(['tree', 'pine', 'snowpine']);
 const biomeTreeSlots = new Map([
   ['verdant', 2],
   ['frozen', 3],
   ['golden', 2],
   ['mossy', 1],
   ['twilight', 1],
-  ['cloud', 3],
 ]);
 
 for (const biome of BIOMES) {

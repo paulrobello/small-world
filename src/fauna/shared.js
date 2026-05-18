@@ -175,10 +175,22 @@ export function colorsClose(a, b) {
   return dr * dr + dg * dg + db * db < 0.04;
 }
 
+const STATIC_AVOID_LOOKAHEAD = 1.25;
+const STATIC_AVOID_MAX_TURN = 0.22;
+
+const clamp01 = (v) => Math.max(0, Math.min(1, v));
+const smoothstep01 = (v) => {
+  const t = clamp01(v);
+  return t * t * (3 - 2 * t);
+};
+const wrapAngle = (a) =>
+  ((a + Math.PI) % (Math.PI * 2) + Math.PI * 2) % (Math.PI * 2) - Math.PI;
+
 // Combined obstacle avoidance for grounded movers (walkers + caterpillars).
 //
-// Static phase (state.obstacles — trunks, mushrooms): tangent-slide. If the
-// candidate step penetrates an obstacle, projects motion onto the perimeter
+// Static phase (state.obstacles — trunks, mushrooms): a smooth approach
+// buffer starts bending heading before contact. If the candidate step still
+// penetrates an obstacle, tangent-slide projects motion onto the perimeter
 // tangent that best matches the current heading. If the slid candidate is
 // itself wedged into another obstacle, the mover stays put with a heading
 // pointing outward. Result of this phase becomes the "current candidate"
@@ -206,6 +218,7 @@ export function avoidObstacles(
     const skipping = skipX !== undefined && skipZ !== undefined;
     // Use spatial grid to narrow the candidate set.
     const candidates = nearbyObstacleIndices(nx, nz, cr + 2) || obs.map((_, i) => i);
+    let proactive = null;
     for (let ci = 0; ci < candidates.length; ci++) {
       const i = candidates[ci];
       const o = obs[i];
@@ -218,7 +231,6 @@ export function avoidObstacles(
       const ox = nx - o.x;
       const oz = nz - o.z;
       const minD = o.r + cr;
-      if (ox * ox + oz * oz >= minD * minD) continue;
       const rx = px - o.x;
       const rz = pz - o.z;
       const rlen = Math.sqrt(rx * rx + rz * rz) || 1;
@@ -229,6 +241,27 @@ export function avoidObstacles(
       if (tx * Math.cos(heading) + tz * Math.sin(heading) < 0) {
         tx = nrz;
         tz = -nrx;
+      }
+      const tangentHeading = Math.atan2(tz, tx);
+      const d2 = ox * ox + oz * oz;
+      if (d2 >= minD * minD) {
+        const ahead = (o.x - px) * Math.cos(heading) + (o.z - pz) * Math.sin(heading);
+        const influenceD = minD + STATIC_AVOID_LOOKAHEAD;
+        if (ahead <= 0 || d2 >= influenceD * influenceD) continue;
+        const d = Math.sqrt(d2);
+        const strength = smoothstep01((influenceD - d) / (influenceD - minD));
+        const turn = wrapAngle(tangentHeading - heading);
+        const turnLimit = STATIC_AVOID_MAX_TURN * strength;
+        const steer = Math.max(-turnLimit, Math.min(turnLimit, turn));
+        if (Math.abs(steer) < 0.001) continue;
+        const candidate = {
+          nx: staticResponse === "turn" ? px : nx,
+          nz: staticResponse === "turn" ? pz : nz,
+          heading: heading + steer,
+          strength,
+        };
+        if (!proactive || candidate.strength > proactive.strength) proactive = candidate;
+        continue;
       }
       const sx = px + tx * step;
       const sz = pz + tz * step;
@@ -249,7 +282,6 @@ export function avoidObstacles(
           break;
         }
       }
-      const tangentHeading = Math.atan2(tz, tx);
       // If the current position is already inside this obstacle (e.g. a
       // crawler spawned inside a fairy ring), the normal "turn" freeze
       // would trap it forever. Allow it to step outward instead.
@@ -260,6 +292,9 @@ export function avoidObstacles(
           ? { nx: px, nz: pz, heading: tangentHeading }
           : { nx: sx, nz: sz, heading: tangentHeading };
       break;
+    }
+    if (!result && proactive) {
+      result = { nx: proactive.nx, nz: proactive.nz, heading: proactive.heading };
     }
   }
 

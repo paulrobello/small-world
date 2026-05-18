@@ -290,7 +290,7 @@ export async function generateWorld(seed) {
   // see _bloomCompositeShader). It can only brighten the frame, so darkBiomes
   // can keep bloom on — and the obsidian shard / glow eye / ember halos are
   // exactly the visual feature those moody biomes benefit from.
-  if (state.postfx) state.postfx.setBloom(state.userSettings.bloom);
+  if (state.postfx) state.postfx.setBloom(state.userSettings.bloom && biome.bloom !== false);
   // depth-fog post pass tints distant pixels toward the same atmosphere color
   // as the in-scene FogExp2, just with a more painterly far-field falloff.
   if (state.postfx && state.postfx.setDepthFogColor) {

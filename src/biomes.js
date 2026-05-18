@@ -374,16 +374,13 @@ export const BIOMES = [
     fogDensity: 0.022,
     accent: "#9ec0ff",
     sun: "#ffffff",
-    flora: ["leafballtree", "leafballtree", "leafballtree", "rock", "fern"],
+    flora: ["balloontree", "balloontree", "balloontree", "fern"],
     floraCount: 60,
-    leafballTreePalette: {
-      trunk: "#d7dfef",
-      leaves: ["#edf3ff", "#f8fbff", "#fff5e8"],
-    },
     particle: "feather",
     creatureColors: ["#f7f7ff", "#e6edff", "#cdd8f0", "#fff2b3"],
     creatureCount: [9, 14],
     cloudlike: true,
+    bloom: false,
     cloudSwirl: false,
     furProbability: 0.50,
     edgeAura: {
@@ -502,7 +499,7 @@ export const WILDFLOWER_PALETTES = {
 // Optional per-biome grass density overrides. When empty, every biome uses
 // grass.js's shared stock density; set a biome id to 0 here to disable its
 // grass field, or to a positive count to retune only that biome.
-export const GRASS_DENSITY = { ashen: 0, desert: 0, frozen: 0, coral: 0, obsidian: 0 };
+export const GRASS_DENSITY = { ashen: 0, desert: 0, frozen: 0, coral: 0, cloud: 0, obsidian: 0 };
 // Optional per-biome grass height multipliers. When empty, every biome uses
 // the shared grass height; add a biome id here for future biome-specific tuning.
 export const GRASS_HEIGHT = {};

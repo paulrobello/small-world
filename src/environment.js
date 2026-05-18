@@ -1369,9 +1369,8 @@ export function makeVerdantGroveDetails(biome, heightFn, excludedCircles = []) {
 export function makeCloudPuffField(biome, heightFn, excludedCircles = []) {
   if (!biome.cloudlike) return null;
 
-  const count = _coverScale(LOWFX ? 38 : 64);
   const geo = new THREE.IcosahedronGeometry(0.34, 1);
-  geo.scale(1.7, 0.32, 1.25);
+  geo.scale(1.15, 0.95, 1.05);
   const glow = new THREE.Color(0xffffff);
   const mat = new THREE.MeshStandardMaterial({
     color: new THREE.Color(biome.fog).lerp(glow, 0.82),
@@ -1383,22 +1382,8 @@ export function makeCloudPuffField(biome, heightFn, excludedCircles = []) {
   });
   const group = new THREE.Group();
   group.name = "cloud-puff-field";
-  const mesh = placeInstanced(geo, mat, count, heightFn, {
-    yOffset: 0.05,
-    minScale: 0.58,
-    maxScale: 1.75,
-    tilt: 0.08,
-    maxRadiusFrac: 0.84,
-    minHeight: -0.25,
-    excludedCircles,
-  });
-  mesh.name = "cloud-puff-pads";
-  mesh.castShadow = false;
-  mesh.receiveShadow = true;
-  group.add(mesh);
-
   const floatingCloudlets = placeInstanced(geo, mat, _coverScale(LOWFX ? 14 : 24), heightFn, {
-    yOffset: 0.34,
+    yOffset: 0.16,
     minScale: 0.22,
     maxScale: 0.56,
     tilt: 0.18,
@@ -1410,7 +1395,6 @@ export function makeCloudPuffField(biome, heightFn, excludedCircles = []) {
   floatingCloudlets.castShadow = false;
   floatingCloudlets.receiveShadow = false;
   group.add(floatingCloudlets);
-  group.userData.inspect = { category: "flora", variant: "cloudpuff" };
   return group;
 }
 

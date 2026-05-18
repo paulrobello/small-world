@@ -3,7 +3,7 @@ import { FLOWER_DENSITY, GRASS_DENSITY, GRASS_HEIGHT, WILDFLOWER_PALETTES } from
 
 assert.deepEqual(
   GRASS_DENSITY,
-  { ashen: 0, desert: 0, frozen: 0, coral: 0, obsidian: 0 },
+  { ashen: 0, desert: 0, frozen: 0, coral: 0, cloud: 0, obsidian: 0 },
   'Bare biomes should override grass density, disabling their instanced grass fields.'
 );
 

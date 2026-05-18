@@ -834,7 +834,7 @@ export function initUi({ camera, canvas, controls, renderer }) {
 
   bloomEl.addEventListener("change", () => {
     state.userSettings.bloom = bloomEl.checked;
-    if (state.postfx) state.postfx.setBloom(bloomEl.checked);
+    if (state.postfx) state.postfx.setBloom(bloomEl.checked && state.currentBiome?.bloom !== false);
     saveSettings();
   });
   bloomRadiusEl.addEventListener("input", () => {

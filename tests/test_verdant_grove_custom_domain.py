@@ -72,7 +72,7 @@ class VerdantGroveCustomDomainTest(unittest.TestCase):
 
     def test_only_bare_biome_grass_density_overrides_are_present(self) -> None:
         biomes = (ROOT / "src" / "biomes.js").read_text()
-        self.assertIn("export const GRASS_DENSITY = { ashen: 0, desert: 0, frozen: 0, coral: 0, obsidian: 0 };", biomes)
+        self.assertIn("export const GRASS_DENSITY = { ashen: 0, desert: 0, frozen: 0, coral: 0, cloud: 0, obsidian: 0 };", biomes)
         self.assertIn("export const GRASS_HEIGHT = {};", biomes)
         self.assertNotIn("verdant: 300", biomes)
         self.assertNotIn("grove: 0.75", biomes)
