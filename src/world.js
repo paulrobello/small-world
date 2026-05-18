@@ -413,7 +413,7 @@ export function generateWorld(seed) {
     // canopy width here samples far downhill and can bury the trunk center.
     tree: 0.28, leafballtree: 0.32, pine: 0.28, deadtree: 0.22, mushroom: 0.18,
     bigmushroom: 0.45, fairyring: 1.15, lantern: 0.18, pillar: 0.30, archstone: 0.55,
-    balloontree: 0.22, crystal: 0.30, obsidianshard: 0.28, skull: 0.22,
+    balloontree: 0.22, crystal: 0.30, obsidianshard: 0.28, obsidianglass: 0.34, skull: 0.22,
     berrybush: 0.30, coral: 0.25, braincoral: 0.26, cupcoral: 0.22,
     fern: 0.18, rock: 0.30, limestonerock: 0.30, reed: 0.10,
     seaweed: 0.12, beachsucculent: 0.20, lavafissure: 1.45,
@@ -427,7 +427,7 @@ export function generateWorld(seed) {
   const OBSTACLE_KINDS = new Set([
     "tree", "leafballtree", "pine", "deadtree", "mushroom", "bigmushroom",
     "fairyring", "cactus", "pillar", "archstone", "balloontree", "crystal",
-    "lantern", "obsidianshard", "skull", "lavafissure", "berrybush",
+    "lantern", "obsidianshard", "obsidianglass", "skull", "lavafissure", "berrybush",
   ]);
   // Per-kind canopy top height (local Y of the highest visible mass at
   // scale=1). Fliers below ground + top * scale must route around the
@@ -435,7 +435,7 @@ export function generateWorld(seed) {
   const OBSTACLE_TOP = {
     tree: 2.3, leafballtree: 2.25, pine: 2.2, deadtree: 1.8, mushroom: 1.1,
     bigmushroom: 2.6, fairyring: 0.9, cactus: 1.2, pillar: 2.8, archstone: 2.6, balloontree: 3.2,
-    crystal: 1.6, lantern: 1.7, obsidianshard: 2.2, skull: 1.5,
+    crystal: 1.6, lantern: 1.7, obsidianshard: 2.2, obsidianglass: 1.6, skull: 1.5,
     lavafissure: 0.16, berrybush: 0.58,
   };
   const OBSTACLE_TOP_DEFAULT = 2.0;

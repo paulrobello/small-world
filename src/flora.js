@@ -2199,6 +2199,80 @@ export const FLORA_BUILDERS = {
     return g;
   },
 
+  obsidianglass(biome) {
+    const g = new THREE.Group();
+    const ember = new THREE.Color(biome.accent);
+    const glassGeo = pooled("obsidianglass.fin.geo", () => {
+      const geo = new THREE.CylinderGeometry(0.16, 0.24, 1, 5, 1);
+      geo.scale(0.78, 1, 0.18);
+      geo.translate(0, 0.5, 0);
+      return geo;
+    });
+    const glassMat = pooled("obsidianglass.glass.mat", () =>
+      new THREE.MeshPhysicalMaterial({
+        color: new THREE.Color("#09070d"),
+        emissive: ember.clone().multiplyScalar(0.08),
+        flatShading: true,
+        roughness: 0.035,
+        metalness: 0.72,
+        clearcoat: 1.0,
+        clearcoatRoughness: 0.02,
+        reflectivity: 1.0,
+      })
+    );
+    const glintGeo = pooled("obsidianglass.glint.geo", () => new THREE.PlaneGeometry(0.035, 0.22));
+    const glintMat = pooled("obsidianglass.glint.mat", () =>
+      new THREE.MeshBasicMaterial({
+        color: "#ffd08a",
+        transparent: true,
+        opacity: 0.54,
+        blending: THREE.AdditiveBlending,
+        depthWrite: false,
+        side: THREE.DoubleSide,
+      })
+    );
+    const fins = 4 + Math.floor(Math.random() * 3);
+    for (let i = 0; i < fins; i++) {
+      const a = (i / fins) * Math.PI * 2 + Math.random() * 0.28;
+      const height = 0.72 + Math.random() * 0.72;
+      const off = Math.random() * 0.16;
+      const fin = new THREE.Mesh(glassGeo, glassMat);
+      fin.position.set(Math.cos(a) * off, 0.015, Math.sin(a) * off);
+      fin.scale.set(0.72 + Math.random() * 0.36, height, 0.78 + Math.random() * 0.24);
+      fin.rotation.order = "YXZ";
+      fin.rotation.y = a + Math.PI * 0.5;
+      fin.rotation.x = (Math.random() - 0.5) * 0.18;
+      fin.rotation.z = (Math.random() - 0.5) * 0.18;
+      fin.castShadow = true;
+      g.add(fin);
+
+      if (i < 3) {
+        const glint = new THREE.Mesh(glintGeo, glintMat);
+        glint.position.set(
+          fin.position.x + Math.cos(a) * 0.035,
+          height * (0.46 + Math.random() * 0.22),
+          fin.position.z + Math.sin(a) * 0.035
+        );
+        glint.rotation.order = "YXZ";
+        glint.rotation.y = fin.rotation.y;
+        glint.rotation.z = -0.42 + Math.random() * 0.18;
+        glint.layers.enable(BLOOM_LAYER);
+        g.add(glint);
+      }
+    }
+    const base = new THREE.Mesh(
+      pooled("obsidianglass.base.geo", () => jitterGeo(new THREE.IcosahedronGeometry(0.22, 0), 0.05)),
+      glassMat
+    );
+    base.scale.set(1.35, 0.28, 1.05);
+    base.position.y = 0.04;
+    base.rotation.y = Math.random() * Math.PI * 2;
+    base.castShadow = true;
+    g.add(base);
+    g.userData.inspect = { category: "flora", variant: "obsidianglass" };
+    return g;
+  },
+
   obsidianshard(biome) {
     const g = new THREE.Group();
     const ember = new THREE.Color(biome.accent);

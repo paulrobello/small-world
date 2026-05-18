@@ -1484,6 +1484,7 @@ export function initUi({ camera, canvas, controls, renderer }) {
     deadtree: "Dead Tree", grass: "Tall Grass", balloontree: "Balloon Tree",
     coral: "Coral", braincoral: "Brain Coral", cupcoral: "Cup Coral",
     seaweed: "Seaweed", lavafissure: "Lava Fissure", obsidianshard: "Obsidian Shard",
+    obsidianglass: "Obsidian Glass",
     archstone: "Arch Stone", limestonerock: "Limestone", beachsucculent: "Beach Succulent",
     fairyring: "Fairy Ring",
   };

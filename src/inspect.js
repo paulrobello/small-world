@@ -469,7 +469,7 @@ const VARIANTS_BY_CATEGORY = {
     "reed", "seaweed", "grass", "beachsucculent", "deadtree", "skull",
     "pillar", "archstone", "crystal", "bigmushroom", "fairyring", "berrybush",
     "lantern", "coral", "braincoral", "cupcoral", "balloontree",
-    "lavafissure", "obsidianshard",
+    "lavafissure", "obsidianshard", "obsidianglass",
   ].map((name) => ({
     name,
     kind: "flora",

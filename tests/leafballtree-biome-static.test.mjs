@@ -9,7 +9,6 @@ const biomeTreeSlots = new Map([
   ['mossy', 1],
   ['twilight', 1],
   ['cloud', 3],
-  ['obsidian', 1],
 ]);
 
 for (const biome of BIOMES) {
