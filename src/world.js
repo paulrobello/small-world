@@ -419,7 +419,7 @@ export function generateWorld(seed) {
     bigmushroom: 0.45, fairyring: 1.15, lantern: 0.18, pillar: 0.30, archstone: 0.55,
     balloontree: 0.22, crystal: 0.30, obsidianshard: 0.28, obsidianglass: 0.34, skull: 0.22,
     berrybush: 0.30, coral: 0.25, braincoral: 0.26, cupcoral: 0.22,
-    fern: 0.18, rock: 0.30, limestonerock: 0.30, reed: 0.10,
+    fern: 0.18, dandylion: 0.16, rock: 0.30, limestonerock: 0.30, reed: 0.10,
     seaweed: 0.12, beachsucculent: 0.20, lavafissure: 1.45,
   };
   const FLORA_FOOTPRINT_DEFAULT = 0.20;
@@ -772,9 +772,9 @@ export function generateWorld(seed) {
       fissureLightCount++;
     }
     state.world.add(f);
-    // Berry bushes are nectar targets for bees alongside flowers.
-    if (kind === "berrybush") {
-      state.flowerSpots.push({ x: p.x, y: y + 0.3 * s, z: p.z });
+    // Berry bushes and dandy lions are nectar targets for bees alongside flowers.
+    if (kind === "berrybush" || kind === "dandylion") {
+      state.flowerSpots.push({ x: p.x, y: y + (f.userData.flowerSpotY ?? 0.3) * s, z: p.z });
     }
     floraPlacementBlocks.push({
       kind,

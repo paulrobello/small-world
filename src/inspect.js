@@ -465,7 +465,7 @@ const INSPECT_SCENERY_BUILDERS = {
 const VARIANTS_BY_CATEGORY = {
   creature: CREATURE_VARIANTS,
   flora: [
-    "tree", "leafballtree", "pine", "snowpine", "cactus", "mushroom", "fern", "rock", "limestonerock",
+    "tree", "leafballtree", "pine", "snowpine", "dandylion", "cactus", "mushroom", "fern", "rock", "limestonerock",
     "reed", "seaweed", "grass", "beachsucculent", "deadtree", "skull",
     "pillar", "archstone", "crystal", "bigmushroom", "fairyring", "berrybush",
     "lantern", "coral", "braincoral", "cupcoral", "balloontree",

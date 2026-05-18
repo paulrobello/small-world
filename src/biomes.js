@@ -11,7 +11,7 @@ export const BIOMES = [
     fogDensity: 0.011,
     accent: "#f4a261",
     sun: "#fff8e0",
-    flora: ["leafballtree", "leafballtree", "mushroom", "bigmushroom", "berrybush", "fern", "fern", "rock"],
+    flora: ["leafballtree", "leafballtree", "mushroom", "bigmushroom", "berrybush", "fern", "fern", "dandylion", "rock"],
     floraCount: 90,
     leafballTreePalette: {
       trunk: "#5b3a24",
@@ -141,7 +141,7 @@ export const BIOMES = [
     sun: "#d4b3ff",
     water: "#1b1230",
     anglerFish: true,
-    flora: ["reed", "reed", "reed", "mushroom", "mushroom", "rock", "lantern", "lantern", "archstone"],
+    flora: ["reed", "reed", "reed", "mushroom", "mushroom", "dandylion", "rock", "lantern", "lantern", "archstone"],
     floraCount: 100,
     particle: "rain",
     creatureColors: ["#ffba08", "#faa307", "#f48c06", "#ffd166"],
@@ -177,7 +177,7 @@ export const BIOMES = [
     sun: "#ff8866",
     flora: [
       "lavafissure", "lavafissure", "lavafissure", "lavafissure",
-      "deadtree", "rock", "skull", "crystal",
+      "deadtree", "dandylion", "rock", "skull", "crystal",
     ],
     floraCount: 58,
     leafballTreePalette: {
@@ -216,7 +216,7 @@ export const BIOMES = [
     fogDensity: 0.010,
     accent: "#606c38",
     sun: "#fff4d0",
-    flora: ["rock", "leafballtree", "leafballtree", "berrybush"],
+    flora: ["rock", "leafballtree", "leafballtree", "berrybush", "dandylion"],
     floraCount: 115,
     leafballTreePalette: {
       trunk: "#8a5a2c",
@@ -255,7 +255,7 @@ export const BIOMES = [
     fogDensity: 0.014,
     accent: "#cdef8f",
     sun: "#f6ffe0",
-    flora: ["pillar", "pillar", "archstone", "archstone", "fern", "fern", "mushroom", "rock", "rock", "leafballtree"],
+    flora: ["pillar", "pillar", "archstone", "archstone", "fern", "fern", "mushroom", "dandylion", "rock", "rock", "leafballtree"],
     floraCount: 80,
     leafballTreePalette: {
       trunk: "#4c3d28",
@@ -294,7 +294,7 @@ export const BIOMES = [
     fogDensity: 0.013,
     accent: "#ffd97a",
     sun: "#ffb070",
-    flora: ["leafballtree", "fern", "rock", "berrybush"],
+    flora: ["leafballtree", "fern", "dandylion", "rock", "berrybush"],
     floraCount: 95,
     leafballTreePalette: {
       trunk: "#3b3158",
@@ -414,7 +414,7 @@ export const BIOMES = [
     fogDensity: 0.016,
     accent: "#ff90c0",
     sun: "#ffe0f0",
-    flora: ["bigmushroom", "bigmushroom", "mushroom", "mushroom", "mushroom", "fern", "fern", "rock"],
+    flora: ["bigmushroom", "bigmushroom", "mushroom", "mushroom", "mushroom", "fern", "fern", "dandylion", "rock"],
     floraCount: 95,
     particle: "pollen",
     creatureColors: ["#ff90c0", "#c7a0c8", "#9c84d4", "#ffd1a3"],

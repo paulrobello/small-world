@@ -848,6 +848,250 @@ export const FLORA_BUILDERS = {
     return g;
   },
 
+  dandylion(biome) {
+    const g = new THREE.Group();
+    const DANDYLION_STEM_H = 0.92;
+    const DANDYLION_WIND = 1.15;
+    function dandylionStemOffset(t) {
+      return new THREE.Vector3(
+        Math.sin(t * Math.PI * 0.88) * 0.026,
+        t * DANDYLION_STEM_H,
+        Math.sin(t * Math.PI * 1.7 + 0.6) * 0.008
+      );
+    }
+    const stemGeo = pooled("dandylion.stem.geo", () => {
+      const geo = new THREE.CylinderGeometry(0.011, 0.022, DANDYLION_STEM_H, 12, 8).translate(0, DANDYLION_STEM_H / 2, 0);
+      const pos = geo.attributes.position;
+      for (let i = 0; i < pos.count; i++) {
+        const t = pos.getY(i) / DANDYLION_STEM_H;
+        const stemOffset = dandylionStemOffset(t);
+        pos.setX(i, pos.getX(i) + stemOffset.x);
+        pos.setZ(i, pos.getZ(i) + stemOffset.z);
+      }
+      pos.needsUpdate = true;
+      geo.computeVertexNormals();
+      return geo;
+    });
+    const stemColor = new THREE.Color(biome.ground[0]).lerp(new THREE.Color("#4f7d2b"), 0.65);
+    const stemMat = pooled("dandylion.stem.mat.smooth", () =>
+      applyWindSway(
+        new THREE.MeshStandardMaterial({ color: stemColor, flatShading: false, roughness: 0.88 }),
+        DANDYLION_WIND
+      )
+    );
+    const stem = new THREE.Mesh(stemGeo, stemMat);
+    stem.castShadow = true;
+    g.add(stem);
+
+    const leafGeo = pooled("dandylion.baseleaf.geo", () =>
+      buildLeafGeo({
+        lengthSegs: 8,
+        widthSegs: 5,
+        length: 0.44,
+        maxWidth: 0.115,
+        minWidth: 0.010,
+        profileExp: 0.54,
+        taperEnd: 0.34,
+        centerLift: 0.018,
+        centerLiftFade: 0.42,
+        tipCurlStrength: 0.045,
+        tipCurlExp: 1.25,
+        edgeCurlStrength: 0.018,
+        centerRibLift: 0.018,
+        secondaryRibLift: 0.010,
+        secondaryRibFrequency: 6.0,
+      })
+    );
+    const leafMat = pooled("dandylion.baseleaf.mat", () =>
+      applyWindSway(
+        new THREE.MeshStandardMaterial({
+          color: new THREE.Color(biome.ground[0]).lerp(new THREE.Color("#5b8f33"), 0.58),
+          side: THREE.DoubleSide,
+          flatShading: false,
+          roughness: 0.86,
+        }),
+        0.72
+      )
+    );
+    const baseLeafCount = 5;
+    const leafHeightGap = 0.18 / Math.max(1, baseLeafCount - 1);
+    const basis = new THREE.Matrix4();
+    for (let i = 0; i < baseLeafCount; i++) {
+      const a = (i / baseLeafCount) * Math.PI * 2 + Math.random() * 0.35;
+      const outward = new THREE.Vector3(Math.cos(a), 0, Math.sin(a));
+      const tipDir = outward.clone().multiplyScalar(0.96).add(new THREE.Vector3(0, -0.28, 0)).normalize();
+      const yAxis = tipDir.clone().multiplyScalar(-1);
+      const zAxis = new THREE.Vector3(0, 1, 0).addScaledVector(outward, 0.18);
+      zAxis.addScaledVector(yAxis, -zAxis.dot(yAxis)).normalize();
+      const xAxis = yAxis.clone().cross(zAxis).normalize();
+      zAxis.copy(xAxis).cross(yAxis).normalize();
+      basis.makeBasis(xAxis, yAxis, zAxis);
+
+      const leaf = new THREE.Mesh(leafGeo, leafMat);
+      const attachT = 0.055 + i * leafHeightGap + Math.random() * 0.012;
+      const attachPos = dandylionStemOffset(attachT);
+      leaf.position.copy(attachPos);
+      leaf.quaternion.setFromRotationMatrix(basis);
+      const leafPitchVariation = (Math.random() - 0.5) * 0.34;
+      const leafYawVariation = (Math.random() - 0.5) * 0.18;
+      const leafRollVariation = (Math.random() - 0.5) * 0.28;
+      leaf.rotateX(leafPitchVariation);
+      leaf.rotateY(leafYawVariation);
+      leaf.rotateZ(leafRollVariation);
+      leaf.scale.setScalar(0.82 + Math.random() * 0.28);
+      leaf.castShadow = true;
+      g.add(leaf);
+    }
+
+    const coreGeo = pooled("dandylion.core.geo", () =>
+      new THREE.SphereGeometry(0.070, 16, 12).scale(1, 0.82, 1).translate(0, DANDYLION_STEM_H, 0)
+    );
+    const glow = !!biome.glowFlowers;
+    const coreMat = pooled("dandylion.core.mat.smooth", () =>
+      applyWindSway(
+        new THREE.MeshStandardMaterial({
+          color: "#ece0b8",
+          emissive: glow ? new THREE.Color(biome.accent).multiplyScalar(0.32) : 0x000000,
+          emissiveIntensity: glow ? 0.55 : 0,
+          flatShading: false,
+          roughness: 0.78,
+        }),
+        DANDYLION_WIND
+      )
+    );
+    const core = new THREE.Mesh(coreGeo, coreMat);
+    core.castShadow = true;
+    g.add(core);
+
+    const sporeCount = 192;
+    const goldenAngle = Math.PI * (3 - Math.sqrt(5));
+    const fuzzInnerRadius = 0.050;
+    const fuzzOuterRadius = 0.152;
+    const linePositions = new Float32Array(sporeCount * 2 * 3);
+    const lineSeeds = new Float32Array(sporeCount * 2);
+    const sporePositions = new Float32Array(sporeCount * 3);
+    const sporeSeeds = new Float32Array(sporeCount);
+    const sporeSizes = new Float32Array(sporeCount);
+    const v = new THREE.Vector3();
+    for (let i = 0; i < sporeCount; i++) {
+      const y = 1 - (i / (sporeCount - 1)) * 2;
+      const r = Math.sqrt(Math.max(0, 1 - y * y));
+      const a = i * goldenAngle;
+      const wobble = 0.92 + Math.random() * 0.18;
+      v.set(Math.cos(a) * r, y * 0.92, Math.sin(a) * r).normalize();
+      const root = v.clone().multiplyScalar(fuzzInnerRadius);
+      const tip = v.clone().multiplyScalar(fuzzOuterRadius * wobble);
+      root.y += DANDYLION_STEM_H;
+      tip.y += DANDYLION_STEM_H;
+
+      linePositions.set([root.x, root.y, root.z, tip.x, tip.y, tip.z], i * 6);
+      lineSeeds[i * 2] = i * 0.173;
+      lineSeeds[i * 2 + 1] = i * 0.173 + 0.37;
+      sporePositions.set([tip.x, tip.y, tip.z], i * 3);
+      sporeSeeds[i] = i * 0.173 + 0.71;
+      sporeSizes[i] = 4.2 + Math.random() * 4.2;
+    }
+
+    const lineGeo = pooled("dandylion.fuzz.line.geo", () => {
+      const geo = new THREE.BufferGeometry();
+      geo.setAttribute("position", new THREE.Float32BufferAttribute(linePositions, 3));
+      geo.setAttribute("aSeed", new THREE.Float32BufferAttribute(lineSeeds, 1));
+      return geo;
+    });
+    const sporeGeo = pooled("dandylion.spore.point.geo", () => {
+      const geo = new THREE.BufferGeometry();
+      geo.setAttribute("position", new THREE.Float32BufferAttribute(sporePositions, 3));
+      geo.setAttribute("aSeed", new THREE.Float32BufferAttribute(sporeSeeds, 1));
+      geo.setAttribute("aSize", new THREE.Float32BufferAttribute(sporeSizes, 1));
+      return geo;
+    });
+    const fuzzVertexShader = `
+      attribute float aSeed;
+      uniform float uTime;
+      uniform float uWindStrength;
+      uniform float uFoliageWind;
+      varying float vSeed;
+      void main() {
+        vSeed = aSeed;
+        vec3 p = position;
+        float windY = max(p.y, 0.0);
+        float windAmp = windY * windY * uWindStrength * uFoliageWind;
+        vec4 wp = modelMatrix * vec4(p, 1.0);
+        float w1 = sin(uTime * 1.4 + wp.x * 0.30 + wp.z * 0.40);
+        float w2 = sin(uTime * 0.9 + wp.x * 0.15 - wp.z * 0.25);
+        vec2 windWorld = vec2(w1 * windAmp * 0.06, w2 * windAmp * 0.05);
+        p.x += windWorld.x;
+        p.z += windWorld.y;
+        gl_Position = projectionMatrix * modelViewMatrix * vec4(p, 1.0);
+      }
+    `;
+    const lineMat = pooled("dandylion.fuzz.line.mat", () =>
+      new THREE.ShaderMaterial({
+        uniforms: {
+          uTime: state.windUniforms.uTime,
+          uWindStrength: { value: DANDYLION_WIND },
+          uFoliageWind: state.windUniforms.uFoliageWind,
+          uColor: { value: new THREE.Color("#f9f0d8") },
+          uOpacity: { value: glow ? 0.46 : 0.34 },
+        },
+        vertexShader: fuzzVertexShader,
+        fragmentShader: `
+          uniform vec3 uColor;
+          uniform float uOpacity;
+          varying float vSeed;
+          void main() {
+            float twinkle = 0.84 + 0.16 * sin(vSeed * 11.0);
+            gl_FragColor = vec4(uColor * twinkle, uOpacity);
+          }
+        `,
+        transparent: true,
+        depthWrite: false,
+      })
+    );
+    const sporeMat = pooled("dandylion.spore.point.mat", () =>
+      new THREE.ShaderMaterial({
+        uniforms: {
+          uTime: state.windUniforms.uTime,
+          uWindStrength: { value: DANDYLION_WIND },
+          uFoliageWind: state.windUniforms.uFoliageWind,
+          uColor: { value: new THREE.Color("#fff8e8") },
+          uOpacity: { value: glow ? 0.58 : 0.44 },
+        },
+        vertexShader: fuzzVertexShader.replace(
+          "void main() {",
+          "attribute float aSize;\nvoid main() {"
+        ).replace(
+          "gl_Position = projectionMatrix * modelViewMatrix * vec4(p, 1.0);",
+          "vec4 mv = modelViewMatrix * vec4(p, 1.0);\n        gl_Position = projectionMatrix * mv;\n        gl_PointSize = aSize;"
+        ),
+        fragmentShader: `
+          uniform vec3 uColor;
+          uniform float uOpacity;
+          varying float vSeed;
+          void main() {
+            vec2 c = gl_PointCoord - 0.5;
+            float d = length(c);
+            if (d > 0.5) discard;
+            float soft = smoothstep(0.5, 0.08, d);
+            float twinkle = 0.82 + 0.18 * sin(vSeed * 13.0);
+            gl_FragColor = vec4(uColor * twinkle, soft * uOpacity);
+          }
+        `,
+        transparent: true,
+        depthWrite: false,
+      })
+    );
+    const fuzzLines = new THREE.LineSegments(lineGeo, lineMat);
+    const spores = new THREE.Points(sporeGeo, sporeMat);
+    fuzzLines.renderOrder = 1;
+    spores.renderOrder = 2;
+    g.add(fuzzLines);
+    g.add(spores);
+
+    g.userData.flowerSpotY = DANDYLION_STEM_H;
+    return g;
+  },
+
   cactus() {
     const g = new THREE.Group();
     const m = pooled("cactus.mat", () =>
