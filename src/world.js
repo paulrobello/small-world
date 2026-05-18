@@ -494,10 +494,10 @@ export async function generateWorld(seed) {
   // Extra pad on top of the slope-plant footprint so creature bodies don't
   // visually nose-clip the trunk. fp itself is already ~1.5× the trunk radius.
   const OBSTACLE_PAD = 1.15;
-  // Visual canopy spacing is wider than root/footprint spacing. Trees and
-  // big mushrooms can have small trunks but broad crowns/caps, so they need
+  // Visual canopy spacing is wider than root/footprint spacing. Trees, bushes,
+  // and big mushrooms can have small bases but broad crowns/caps, so they need
   // a separate placement radius to prevent silhouettes from intersecting.
-  const CANOPY_SPACING_KINDS = new Set(["tree", "leafballtree", "pine", "deadtree", "bigmushroom", "fairyring"]);
+  const CANOPY_SPACING_KINDS = new Set(["tree", "leafballtree", "pine", "deadtree", "bigmushroom", "fairyring", "berrybush"]);
   const CANOPY_SPACING_PAD = 2.8;
   const GRASS_SHORTEN_PAD = 2.6;
   const GRASS_SHORTEN_MIN_RADIUS = 0.42;
