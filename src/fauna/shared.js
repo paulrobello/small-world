@@ -255,8 +255,8 @@ export function avoidObstacles(
         const steer = Math.max(-turnLimit, Math.min(turnLimit, turn));
         if (Math.abs(steer) < 0.001) continue;
         const candidate = {
-          nx: staticResponse === "turn" ? px : nx,
-          nz: staticResponse === "turn" ? pz : nz,
+          nx,
+          nz,
           heading: heading + steer,
           strength,
         };

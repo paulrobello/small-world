@@ -36,3 +36,22 @@ assert.ok(
   Math.abs(result.heading - heading) > 0.01 && Math.abs(result.heading - heading) < Math.PI / 2,
   'proactive steering should apply a small heading correction rather than a last-moment tangent snap'
 );
+
+const turnResult = avoidObstacles(
+  0,
+  0,
+  step,
+  0,
+  heading,
+  step,
+  0.25,
+  undefined,
+  undefined,
+  undefined,
+  {},
+  { staticResponse: 'turn' }
+);
+
+assert.ok(turnResult, 'turn response should also steer before hard contact');
+assert.equal(turnResult.nx, step, 'proactive turn response should keep moving forward');
+assert.equal(turnResult.nz, 0, 'proactive turn response should not freeze at the current position');

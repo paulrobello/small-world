@@ -236,6 +236,105 @@ function applySporeDrift(material, strength = 0.035) {
   return material;
 }
 
+function applyBalloonPuffWisps(material, strength = 0.34) {
+  const prev = material.onBeforeCompile;
+  material.onBeforeCompile = (shader) => {
+    if (prev) prev(shader);
+    shader.uniforms.uBalloonWispTime = state.windUniforms.uTime;
+    shader.uniforms.uBalloonWispStrength = { value: strength };
+    shader.uniforms.uBalloonWispContrast = { value: 0.62 };
+    shader.uniforms.uBalloonWispShadow = { value: 0.44 };
+    shader.vertexShader = shader.vertexShader
+      .replace(
+        "#include <common>",
+        `#include <common>
+        varying vec3 vBalloonLocalPos;`
+      )
+      .replace(
+        "#include <begin_vertex>",
+        `#include <begin_vertex>
+        vBalloonLocalPos = position;`
+      );
+    shader.fragmentShader = shader.fragmentShader
+      .replace(
+        "#include <common>",
+        `#include <common>
+        uniform float uBalloonWispTime;
+        uniform float uBalloonWispStrength;
+        uniform float uBalloonWispContrast;
+        uniform float uBalloonWispShadow;
+        varying vec3 vBalloonLocalPos;
+        float balloonWispSoftNoise(vec3 p) {
+          return sin(p.x * 2.1 + p.y * 1.4 - p.z * 1.7) * 0.5 + 0.5;
+        }`
+      )
+      .replace(
+        "#include <color_fragment>",
+        `#include <color_fragment>
+        {
+          float angle = atan(vBalloonLocalPos.z, vBalloonLocalPos.x);
+          float radius = length(vBalloonLocalPos.xz);
+          float shell = smoothstep(0.015, 0.22, radius) * (1.0 - smoothstep(0.58, 0.76, radius));
+          float drift = uBalloonWispTime * 0.46;
+          float softWarp = (balloonWispSoftNoise(vBalloonLocalPos * 4.2 + vec3(drift, -drift * 0.35, drift * 0.5)) - 0.5) * 0.34;
+          float spiralPhase = atan(vBalloonLocalPos.z, vBalloonLocalPos.x) * 2.8
+            + vBalloonLocalPos.y * 9.5
+            - radius * 3.8
+            + drift
+            + softWarp;
+          float spiralRibbon = 1.0 - smoothstep(0.16, 0.54, abs(sin(spiralPhase)));
+          float secondaryPhase = spiralPhase + 2.35 + radius * 2.2;
+          float secondaryRibbon = 1.0 - smoothstep(0.12, 0.48, abs(sin(secondaryPhase)));
+          float brightWisps = (spiralRibbon * 0.86 + secondaryRibbon * 0.38) * shell * uBalloonWispStrength;
+          float shadowWisps = (1.0 - smoothstep(0.20, 0.64, abs(sin(spiralPhase + 1.30))))
+            * shell * uBalloonWispStrength;
+          vec3 wispColor = vec3(1.0, 0.985, 0.94);
+          vec3 shadowColor = vec3(0.55, 0.55, 0.62);
+          diffuseColor.rgb = mix(diffuseColor.rgb, shadowColor, shadowWisps * uBalloonWispShadow);
+          diffuseColor.rgb = mix(diffuseColor.rgb, wispColor, brightWisps * uBalloonWispContrast);
+        }`
+      )
+      .replace(
+        "#include <roughnessmap_fragment>",
+        `#include <roughnessmap_fragment>
+        roughnessFactor = clamp(roughnessFactor - uBalloonWispStrength * 0.08, 0.18, 1.0);`
+      );
+  };
+  material.needsUpdate = true;
+  return material;
+}
+
+function applyDandylionHeadWind(material, strength, headY) {
+  const prev = material.onBeforeCompile;
+  material.onBeforeCompile = (shader) => {
+    if (prev) prev(shader);
+    shader.uniforms.uTime = state.windUniforms.uTime;
+    shader.uniforms.uWindStrength = { value: strength };
+    shader.uniforms.uFoliageWind = state.windUniforms.uFoliageWind;
+    shader.uniforms.uDandylionHeadY = { value: headY };
+    shader.vertexShader = shader.vertexShader
+      .replace(
+        "#include <common>",
+        "#include <common>\nuniform float uTime;\nuniform float uWindStrength;\nuniform float uFoliageWind;\nuniform float uDandylionHeadY;"
+      )
+      .replace(
+        "#include <begin_vertex>",
+        `#include <begin_vertex>
+        {
+          float windY = uDandylionHeadY;
+          float windAmp = windY * windY * uWindStrength * uFoliageWind;
+          vec4 wp = modelMatrix * vec4(vec3(0.0, uDandylionHeadY, 0.0), 1.0);
+          float w1 = sin(uTime * 1.4 + wp.x * 0.30 + wp.z * 0.40);
+          float w2 = sin(uTime * 0.9 + wp.x * 0.15 - wp.z * 0.25);
+          vec2 windWorld = vec2(w1 * windAmp * 0.06, w2 * windAmp * 0.05);
+          transformed.xz += windWorld;
+        }`
+      );
+  };
+  material.needsUpdate = true;
+  return material;
+}
+
 function makeInstancedLeafBatch(geometry, material, matrices) {
   if (!matrices.length) return null;
   const mesh = new THREE.InstancedMesh(geometry, material, matrices.length);
@@ -270,6 +369,17 @@ function getLeafballOutlineColor(leaves, trunk) {
   return new THREE.Color(leaves[0])
     .lerp(new THREE.Color(trunk), 0.34)
     .offsetHSL(0.0, -0.05, -0.18);
+}
+
+function getDandylionFloraPalette(biome) {
+  const ground0 = new THREE.Color(biome.ground[0]);
+  const ground1 = new THREE.Color(biome.ground[1] ?? biome.ground[0]);
+  const ground2 = new THREE.Color(biome.ground[2] ?? biome.ground[1] ?? biome.ground[0]);
+  const cliff = new THREE.Color(biome.cliff);
+  return {
+    stem: ground0.clone().lerp(cliff, 0.32).offsetHSL(0, -0.04, -0.02),
+    leaf: ground1.clone().lerp(ground2, 0.38).offsetHSL(0, 0.04, 0.00),
+  };
 }
 
 function makeMushroomStemGeometry(
@@ -985,10 +1095,10 @@ export const FLORA_BUILDERS = {
       geo.computeVertexNormals();
       return geo;
     });
-    const stemColor = new THREE.Color(biome.ground[0]).lerp(new THREE.Color("#4f7d2b"), 0.65);
+    const dandyPalette = getDandylionFloraPalette(biome);
     const stemMat = pooled("dandylion.stem.mat.smooth", () =>
       applyWindSway(
-        new THREE.MeshStandardMaterial({ color: stemColor, flatShading: false, roughness: 0.88 }),
+        new THREE.MeshStandardMaterial({ color: dandyPalette.stem, flatShading: false, roughness: 0.88 }),
         DANDYLION_WIND
       )
     );
@@ -1018,7 +1128,7 @@ export const FLORA_BUILDERS = {
     const leafMat = pooled("dandylion.baseleaf.mat", () =>
       applyWindSway(
         new THREE.MeshStandardMaterial({
-          color: new THREE.Color(biome.ground[0]).lerp(new THREE.Color("#5b8f33"), 0.58),
+          color: dandyPalette.leaf,
           side: THREE.DoubleSide,
           flatShading: false,
           roughness: 0.86,
@@ -1027,6 +1137,7 @@ export const FLORA_BUILDERS = {
       )
     );
     const baseLeafCount = 5;
+    const leafHeightStart = 0.20;
     const leafHeightGap = 0.18 / Math.max(1, baseLeafCount - 1);
     const basis = new THREE.Matrix4();
     for (let i = 0; i < baseLeafCount; i++) {
@@ -1041,7 +1152,7 @@ export const FLORA_BUILDERS = {
       basis.makeBasis(xAxis, yAxis, zAxis);
 
       const leaf = new THREE.Mesh(leafGeo, leafMat);
-      const attachT = 0.055 + i * leafHeightGap + Math.random() * 0.012;
+      const attachT = leafHeightStart + i * leafHeightGap + Math.random() * 0.012;
       const attachPos = dandylionStemOffset(attachT);
       leaf.position.copy(attachPos);
       leaf.quaternion.setFromRotationMatrix(basis);
@@ -1061,7 +1172,7 @@ export const FLORA_BUILDERS = {
     );
     const glow = !!biome.glowFlowers;
     const coreMat = pooled("dandylion.core.mat.smooth", () =>
-      applyWindSway(
+      applyDandylionHeadWind(
         new THREE.MeshStandardMaterial({
           color: "#ece0b8",
           emissive: glow ? new THREE.Color(biome.accent).multiplyScalar(0.32) : 0x000000,
@@ -1069,14 +1180,15 @@ export const FLORA_BUILDERS = {
           flatShading: false,
           roughness: 0.78,
         }),
-        DANDYLION_WIND
+        DANDYLION_WIND,
+        DANDYLION_STEM_H
       )
     );
     const core = new THREE.Mesh(coreGeo, coreMat);
     core.castShadow = true;
     g.add(core);
 
-    const sporeCount = 192;
+    const sporeCount = 384;
     const goldenAngle = Math.PI * (3 - Math.sqrt(5));
     const fuzzInnerRadius = 0.050;
     const fuzzOuterRadius = 0.152;
@@ -1123,18 +1235,21 @@ export const FLORA_BUILDERS = {
       uniform float uTime;
       uniform float uWindStrength;
       uniform float uFoliageWind;
+      uniform float uDandylionHeadY;
       varying float vSeed;
-      void main() {
-        vSeed = aSeed;
-        vec3 p = position;
-        float windY = max(p.y, 0.0);
+      vec2 dandylionHeadWindOffset() {
+        float windY = uDandylionHeadY;
         float windAmp = windY * windY * uWindStrength * uFoliageWind;
-        vec4 wp = modelMatrix * vec4(p, 1.0);
+        vec4 wp = modelMatrix * vec4(vec3(0.0, uDandylionHeadY, 0.0), 1.0);
         float w1 = sin(uTime * 1.4 + wp.x * 0.30 + wp.z * 0.40);
         float w2 = sin(uTime * 0.9 + wp.x * 0.15 - wp.z * 0.25);
         vec2 windWorld = vec2(w1 * windAmp * 0.06, w2 * windAmp * 0.05);
-        p.x += windWorld.x;
-        p.z += windWorld.y;
+        return windWorld;
+      }
+      void main() {
+        vSeed = aSeed;
+        vec3 p = position;
+        p.xz += dandylionHeadWindOffset();
         gl_Position = projectionMatrix * modelViewMatrix * vec4(p, 1.0);
       }
     `;
@@ -1144,6 +1259,7 @@ export const FLORA_BUILDERS = {
           uTime: state.windUniforms.uTime,
           uWindStrength: { value: DANDYLION_WIND },
           uFoliageWind: state.windUniforms.uFoliageWind,
+          uDandylionHeadY: { value: DANDYLION_STEM_H },
           uColor: { value: new THREE.Color("#f9f0d8") },
           uOpacity: { value: glow ? 0.46 : 0.34 },
         },
@@ -1167,6 +1283,7 @@ export const FLORA_BUILDERS = {
           uTime: state.windUniforms.uTime,
           uWindStrength: { value: DANDYLION_WIND },
           uFoliageWind: state.windUniforms.uFoliageWind,
+          uDandylionHeadY: { value: DANDYLION_STEM_H },
           uColor: { value: new THREE.Color("#fff8e8") },
           uOpacity: { value: glow ? 0.58 : 0.44 },
         },
@@ -1299,24 +1416,96 @@ export const FLORA_BUILDERS = {
 
   fern(biome) {
     const g = new THREE.Group();
-    const mat = pooled("fern.mat", () =>
+    const stemMat = pooled("fern.frond.stem.mat", () =>
       applyWindSway(
         new THREE.MeshStandardMaterial({
-          color: new THREE.Color(biome.ground[0]).offsetHSL(0, 0, 0.15),
-          flatShading: true,
+          color: new THREE.Color(biome.ground[0]).offsetHSL(0, 0.04, -0.06),
+          flatShading: false,
+          roughness: 0.92,
         }),
-        1.4
+        1.0
       )
     );
-    const bladeGeo = pooled("fern.blade.geo", () => new THREE.ConeGeometry(0.06, 0.5, 4));
-    const blades = 4 + Math.floor(Math.random() * 3);
-    for (let i = 0; i < blades; i++) {
-      const blade = new THREE.Mesh(bladeGeo, mat);
-      const a = (i / blades) * Math.PI * 2;
-      blade.position.set(Math.cos(a) * 0.05, 0.22, Math.sin(a) * 0.05);
-      blade.rotation.z = Math.cos(a) * 0.6;
-      blade.rotation.x = Math.sin(a) * 0.6;
-      g.add(blade);
+    const leafMat = pooled("fern.frond.leaflet.mat", () =>
+      applyWindSway(
+        new THREE.MeshStandardMaterial({
+          color: new THREE.Color(biome.ground[1] ?? biome.ground[0]).offsetHSL(0, 0.10, 0.02),
+          side: THREE.DoubleSide,
+          flatShading: false,
+          roughness: 0.84,
+        }),
+        1.45
+      )
+    );
+    const stemGeo = pooled("fern.frond.stem.geo", () => new THREE.CylinderGeometry(0.007, 0.014, 1, 5));
+    const leafletGeo = pooled("fern.frond.leaflet.geo", () => {
+      const geo = buildLeafGeo({
+        lengthSegs: 8,
+        widthSegs: 4,
+        length: 0.18,
+        maxWidth: 0.030,
+        minWidth: 0.003,
+        profileExp: 0.72,
+        taperEnd: 0.28,
+        centerLift: 0.006,
+        centerLiftFade: 0.45,
+        tipCurlStrength: 0.035,
+        tipCurlExp: 1.35,
+        edgeCurlStrength: 0.012,
+        centerRibLift: 0.004,
+        secondaryRibLift: 0.0025,
+        secondaryRibFrequency: 5.8,
+      });
+      geo.rotateZ(Math.PI);
+      return geo;
+    });
+    const yAxis = new THREE.Vector3(0, 1, 0);
+    const fronds = 5 + Math.floor(Math.random() * 3);
+    for (let i = 0; i < fronds; i++) {
+      const frond = new THREE.Group();
+      const a = (i / fronds) * Math.PI * 2 + (Math.random() - 0.5) * 0.42;
+      const lean = 0.40 + Math.random() * 0.34;
+      const frondLength = 0.44 + Math.random() * 0.20;
+      const dir = new THREE.Vector3(
+        Math.cos(a) * Math.sin(lean),
+        Math.cos(lean),
+        Math.sin(a) * Math.sin(lean)
+      ).normalize();
+      frond.quaternion.setFromUnitVectors(yAxis, dir);
+      frond.position.set(Math.cos(a) * 0.025, 0, Math.sin(a) * 0.025);
+
+      const stem = new THREE.Mesh(stemGeo, stemMat);
+      stem.position.y = frondLength * 0.5;
+      stem.scale.y = frondLength;
+      stem.castShadow = true;
+      frond.add(stem);
+
+      const leafletPairs = 5 + Math.floor(Math.random() * 2);
+      for (let j = 0; j < leafletPairs; j++) {
+        const t = (j + 1) / (leafletPairs + 1);
+        const y = frondLength * (0.14 + t * 0.70);
+        const leafletScale = 0.72 + t * 0.46 + Math.random() * 0.08;
+        for (const side of [-1, 1]) {
+          const leaflet = new THREE.Mesh(leafletGeo, leafMat);
+          leaflet.position.set(side * (0.006 + t * 0.010), y, (Math.random() - 0.5) * 0.010);
+          leaflet.rotation.z = side * (0.82 + t * 0.34 + Math.random() * 0.12);
+          leaflet.rotation.y = side * (0.10 + Math.random() * 0.18);
+          leaflet.rotation.x = -0.14 + t * 0.20 + (Math.random() - 0.5) * 0.08;
+          leaflet.scale.setScalar(leafletScale);
+          leaflet.castShadow = true;
+          frond.add(leaflet);
+        }
+      }
+
+      const tip = new THREE.Mesh(leafletGeo, leafMat);
+      tip.position.y = frondLength * 0.90;
+      tip.rotation.z = (Math.random() - 0.5) * 0.16;
+      tip.rotation.x = 0.08 + Math.random() * 0.10;
+      tip.scale.setScalar(0.80 + Math.random() * 0.16);
+      tip.castShadow = true;
+      frond.add(tip);
+
+      g.add(frond);
     }
     return g;
   },
@@ -2391,13 +2580,16 @@ export const FLORA_BUILDERS = {
       }
     }
     const puffMat = pooled("balloontree.puff.mat", () =>
-      applyWindSway(
-        new THREE.MeshStandardMaterial({
-          color: new THREE.Color(biome.ground[2]).lerp(new THREE.Color("#ffffff"), 0.6),
-          flatShading: false,
-          roughness: 0.95,
-        }),
-        0.3
+      applyBalloonPuffWisps(
+        applyWindSway(
+          new THREE.MeshStandardMaterial({
+            color: new THREE.Color(biome.ground[2]).lerp(new THREE.Color("#ffffff"), 0.6),
+            flatShading: false,
+            roughness: 0.95,
+          }),
+          0.3
+        ),
+        biome.cloudlike ? 1.08 : 0.48
       )
     );
     const puffs = biome.cloudlike ? 7 + Math.floor(Math.random() * 4) : 4 + Math.floor(Math.random() * 3);
@@ -2425,6 +2617,60 @@ export const FLORA_BUILDERS = {
     crown.position.y = trunkH + 0.5;
     crown.castShadow = true;
     g.add(crown);
+    const detailPuffs = biome.cloudlike ? 8 + Math.floor(Math.random() * 5) : 0;
+    if (detailPuffs) {
+      const detailPuffMat = pooled("balloontree.puff.detail.mat", () =>
+        applyBalloonPuffWisps(
+          applyWindSway(
+            new THREE.MeshStandardMaterial({
+              color: new THREE.Color("#ffffff"),
+              flatShading: false,
+              roughness: 0.9,
+              transparent: true,
+              opacity: 0.82,
+            }),
+            0.34
+          ),
+          1.18
+        )
+      );
+      const tetherMat = pooled("balloontree.tether.cloud.mat", () =>
+        new THREE.MeshStandardMaterial({
+          color: new THREE.Color("#f5f9ff"),
+          flatShading: false,
+          roughness: 0.86,
+        })
+      );
+      const yAxis = new THREE.Vector3(0, 1, 0);
+      const tetherRoot = new THREE.Vector3(0, trunkH * 0.92, 0);
+      for (let i = 0; i < detailPuffs; i++) {
+        const r = 0.055 + Math.random() * 0.055;
+        const puff = new THREE.Mesh(
+          jitterGeo(new THREE.IcosahedronGeometry(r, 1), r * 0.08),
+          detailPuffMat
+        );
+        const a = (i / detailPuffs) * Math.PI * 2 + Math.random() * 0.32;
+        const ring = 0.18 + Math.random() * 0.38;
+        puff.position.set(
+          Math.cos(a) * ring,
+          trunkH + 0.34 + Math.random() * 0.56,
+          Math.sin(a) * ring
+        );
+        puff.castShadow = true;
+        g.add(puff);
+
+        const tetherEnd = puff.position.clone();
+        const tetherDelta = tetherEnd.clone().sub(tetherRoot);
+        const tetherLength = tetherDelta.length();
+        const tether = new THREE.Mesh(
+          new THREE.CylinderGeometry(0.006, 0.004, tetherLength, 5),
+          tetherMat
+        );
+        tether.position.copy(tetherRoot).add(tetherEnd).multiplyScalar(0.5);
+        tether.quaternion.setFromUnitVectors(yAxis, tetherDelta.normalize());
+        g.add(tether);
+      }
+    }
     const satellitePuffs = biome.cloudlike ? 5 + Math.floor(Math.random() * 4) : 0;
     for (let i = 0; i < satellitePuffs; i++) {
       const r = 0.12 + Math.random() * 0.12;

@@ -13,10 +13,10 @@ assert(
 
 for (const biome of BIOMES) {
   const flowerDensity = FLOWER_DENSITY[biome.id] ?? 100;
-  if (flowerDensity > 0 && biome.id !== 'ashen') {
+  if ((flowerDensity > 0 && biome.id !== 'ashen') || biome.id === 'cloud') {
     assert(
       biome.flora.includes('dandylion'),
-      `${biome.id} should spawn dandy lions anywhere wildflowers are enabled.`
+      `${biome.id} should spawn dandy lions anywhere wildflowers are enabled, plus cloud island's hand-placed puff flowers.`
     );
   } else {
     assert(
@@ -37,8 +37,8 @@ assert(
     && builderBlock.includes('baseLeafCount')
     && builderBlock.includes('applyWindSway')
     && builderBlock.includes('flowerSpotY')
-    && builderBlock.includes('sporeCount = 192'),
-  'Dandy lion should have a long wind-swaying stem, broad leaves, and a procedural fuzz ball.'
+    && builderBlock.includes('sporeCount = 384'),
+  'Dandy lion should have a long wind-swaying stem, broad leaves, and a dense procedural fuzz ball.'
 );
 
 assert(
@@ -60,24 +60,26 @@ assert(
 );
 
 assert(
-  builderBlock.includes('vec4 wp = modelMatrix * vec4(p, 1.0)')
+  builderBlock.includes('vec4 wp = modelMatrix * vec4(vec3(0.0, uDandylionHeadY, 0.0), 1.0)')
+    && builderBlock.includes('float windY = uDandylionHeadY')
     && builderBlock.includes('float w1 = sin(uTime * 1.4 + wp.x * 0.30 + wp.z * 0.40)')
     && builderBlock.includes('float w2 = sin(uTime * 0.9 + wp.x * 0.15 - wp.z * 0.25)')
     && builderBlock.includes('vec2 windWorld = vec2(w1 * windAmp * 0.06, w2 * windAmp * 0.05)')
-    && builderBlock.includes('p.x += windWorld.x')
-    && builderBlock.includes('p.z += windWorld.y')
+    && builderBlock.includes('p.xz += dandylionHeadWindOffset()')
+    && !builderBlock.includes('float windY = max(p.y, 0.0)')
     && !builderBlock.includes('aSeed * 16.0 + p.z * 8.0'),
-  'Dandy lion fuzz shader should use the same wind displacement as the core ball.'
+  'Dandy lion fuzz shader should use one rigid seed-head wind displacement so the spore sphere does not distort.'
 );
 
 assert(
   builderBlock.includes('function dandylionStemOffset(t)')
     && builderBlock.includes('const baseLeafCount = 5')
+    && builderBlock.includes('const leafHeightStart = 0.20')
     && builderBlock.includes('const leafHeightGap = 0.18 / Math.max(1, baseLeafCount - 1)')
-    && builderBlock.includes('const attachT = 0.055 + i * leafHeightGap + Math.random() * 0.012')
+    && builderBlock.includes('const attachT = leafHeightStart + i * leafHeightGap + Math.random() * 0.012')
     && builderBlock.includes('const attachPos = dandylionStemOffset(attachT)')
     && builderBlock.includes('leaf.position.copy(attachPos)'),
-  'Dandy lion should use exactly five leaves with visible vertical spacing in the bottom quarter.'
+  'Dandy lion should use exactly five leaves with visible vertical spacing, starting 20% of the stem length from the bottom.'
 );
 
 assert(
@@ -91,11 +93,22 @@ assert(
 );
 
 assert(
+  builderBlock.includes('const dandyPalette = getDandylionFloraPalette(biome)')
+    && builderBlock.includes('color: dandyPalette.stem')
+    && builderBlock.includes('color: dandyPalette.leaf')
+    && !builderBlock.includes('new THREE.Color("#4f7d2b")')
+    && !builderBlock.includes('new THREE.Color("#5b8f33")'),
+  'Dandy lion stem and leaves should adopt the biome flora palette instead of fixed green colors.'
+);
+
+assert(
   builderBlock.includes('dandylion.stem.mat.smooth')
-    && builderBlock.includes('new THREE.MeshStandardMaterial({ color: stemColor, flatShading: false')
+    && floraSource.includes('function applyDandylionHeadWind(material')
+    && builderBlock.includes('applyDandylionHeadWind(')
+    && builderBlock.includes('new THREE.MeshStandardMaterial({ color: dandyPalette.stem, flatShading: false')
     && builderBlock.includes('dandylion.core.mat.smooth')
     && builderBlock.includes('flatShading: false'),
-  'Dandy lion stem and center ball should use smooth-shaded materials.'
+  'Dandy lion stem and center ball should use smooth-shaded materials, with the center ball moving rigidly at the stem top.'
 );
 
 assert(
