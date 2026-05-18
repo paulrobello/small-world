@@ -38,7 +38,12 @@ import {
   isManualPaused,
 } from "./src/ui.js";
 import { INSPECT, setupInspect, stepInspect } from "./src/inspect.js";
-import { startPerfProbe } from "./src/perfProbe.js";
+import {
+  beginPerfFrame,
+  endPerfFrame,
+  measurePerfPhase,
+  startPerfProbe,
+} from "./src/perfProbe.js";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Renderer / scene / camera
@@ -168,6 +173,7 @@ function animate() {
   if (!paused) state.lastSimT = rawT;
   const dt = paused ? 0 : rawDt;
   const t = paused ? (state.lastSimT ?? rawT) : rawT;
+  beginPerfFrame();
 
   // Fur shells read these once per frame — shared across all fur instances.
   // Done before INSPECT branch so fuzzy specimens get lit correctly.
@@ -178,27 +184,32 @@ function animate() {
   }
 
   if (INSPECT) {
-    // shared wind shader time still needs to advance for any swaying flora
-    state.windUniforms.uTime.value = t;
-    stepInspect(dt, t);
-    controls.update();
-    // Bypass the composer in inspect — the renderer's tone mapping plus
-    // OutputPass tone mapping inside the composer crushes the neutral-gray
-    // studio backdrop to black. Inspect mode doesn't need bloom anyway.
-    renderer.render(scene, camera);
+    measurePerfPhase("inspect", () => {
+      // shared wind shader time still needs to advance for any swaying flora
+      state.windUniforms.uTime.value = t;
+      stepInspect(dt, t);
+      controls.update();
+      // Bypass the composer in inspect — the renderer's tone mapping plus
+      // OutputPass tone mapping inside the composer crushes the neutral-gray
+      // studio backdrop to black. Inspect mode doesn't need bloom anyway.
+      renderer.render(scene, camera);
+    });
+    endPerfFrame();
     return;
   }
 
-  if (!paused) {
-    // shared wind shader time — frozen when the user disables wind in
-    // settings, so grass and applyWindSway-driven foliage settle into a
-    // still pose (easier to see other effects like the creature-push bend).
-    if (state.userSettings.windEnabled !== false) {
-      state.windUniforms.uTime.value = t;
+  measurePerfPhase("windGrassDayNight", () => {
+    if (!paused) {
+      // shared wind shader time — frozen when the user disables wind in
+      // settings, so grass and applyWindSway-driven foliage settle into a
+      // still pose (easier to see other effects like the creature-push bend).
+      if (state.userSettings.windEnabled !== false) {
+        state.windUniforms.uTime.value = t;
+      }
+      stepGrass(camera, isAnyFP() ? camera.position : controls.target);
+      updateDayNight(t);
     }
-    stepGrass(camera, isAnyFP() ? camera.position : controls.target);
-    updateDayNight(t);
-  }
+  });
 
   // Rebuild the per-frame mover-vs-mover collision list before any step
   // runs (so each stepX sees an up-to-date snapshot of where everyone is).
@@ -210,60 +221,72 @@ function animate() {
   //
   // Pool objects to avoid GC pressure from per-frame object literal
   // allocation. Grows if needed but never shrinks.
-  const dyn = state.dynamicObstacles;
-  let _dynPool = state._dynPool;
-  if (!_dynPool) {
-    _dynPool = [];
-    state._dynPool = _dynPool;
-  }
-  let di = 0;
-  function nextDyn() {
-    if (di < _dynPool.length) return _dynPool[di++];
-    const obj = { x: 0, z: 0, r: 0, top: 0, owner: null };
-    _dynPool.push(obj);
-    di++;
-    return obj;
-  }
-  dyn.length = 0;
-  for (const c of state.creatures) {
-    if (c.flies) continue;
-    const p = c.group.position;
-    const obj = nextDyn();
-    obj.x = p.x; obj.z = p.z;
-    obj.r = 0.32 * c.scale;
-    obj.top = p.y + 0.5 * c.scale;
-    obj.owner = c;
-    dyn.push(obj);
-  }
-  for (const c of state.caterpillars) {
-    const r = 0.22 * c.scale;
-    for (let i = 0; i < c.segments.length; i++) {
-      const sp = c.segments[i].position;
+  measurePerfPhase("dynamicCollisionObstacles", () => {
+    const dyn = state.dynamicObstacles;
+    let _dynPool = state._dynPool;
+    if (!_dynPool) {
+      _dynPool = [];
+      state._dynPool = _dynPool;
+    }
+    let di = 0;
+    function nextDyn() {
+      if (di < _dynPool.length) return _dynPool[di++];
+      const obj = { x: 0, z: 0, r: 0, top: 0, owner: null };
+      _dynPool.push(obj);
+      di++;
+      return obj;
+    }
+    dyn.length = 0;
+    for (const c of state.creatures) {
+      if (c.flies) continue;
+      const p = c.group.position;
       const obj = nextDyn();
-      obj.x = sp.x; obj.z = sp.z;
-      obj.r = r;
-      obj.top = sp.y + 0.25 * c.scale;
+      obj.x = p.x; obj.z = p.z;
+      obj.r = 0.32 * c.scale;
+      obj.top = p.y + 0.5 * c.scale;
       obj.owner = c;
       dyn.push(obj);
     }
-  }
+    for (const c of state.caterpillars) {
+      const r = 0.22 * c.scale;
+      for (let i = 0; i < c.segments.length; i++) {
+        const sp = c.segments[i].position;
+        const obj = nextDyn();
+        obj.x = sp.x; obj.z = sp.z;
+        obj.r = r;
+        obj.top = sp.y + 0.25 * c.scale;
+        obj.owner = c;
+        dyn.push(obj);
+      }
+    }
+  });
 
-  for (const c of state.creatures) stepCreature(c, dt, t, state.heightFn);
-  for (const c of state.caterpillars) stepCaterpillar(c, dt, t, state.heightFn);
-  for (const b of state.butterflies)
-    stepButterfly(b, dt, t, state.flowerSpots, state.heightFn);
-  for (const b of state.bees)
-    stepBee(b, dt, t, state.flowerSpots, state.heightFn);
-  for (const f of state.flocks) stepFlock(f, dt, t);
-  stepParticles(state.particles, dt, t);
-  stepWater(state.waterMesh, dt, t);
-  stepDirtPuffs(state.dirtPuffs, dt);
-  stepDustKicks(state.dustKicks, dt);
-  stepGroundMarks(state.groundMarks, dt);
-  stepFlySwarms(state.flySwarms, t);
-  for (const w of state.willowisps) stepWillOWisp(w, dt, t, state.heightFn);
-  stepShadowDisks(state.shadowDisks, state.heightFn);
-  stepClouds(state.clouds, dt);
+  measurePerfPhase("creatureMovement", () => {
+    for (const c of state.creatures) stepCreature(c, dt, t, state.heightFn);
+  });
+  measurePerfPhase("caterpillarMovement", () => {
+    for (const c of state.caterpillars) stepCaterpillar(c, dt, t, state.heightFn);
+  });
+  measurePerfPhase("airborneMovement", () => {
+    for (const b of state.butterflies)
+      stepButterfly(b, dt, t, state.flowerSpots, state.heightFn);
+    for (const b of state.bees)
+      stepBee(b, dt, t, state.flowerSpots, state.heightFn);
+    for (const f of state.flocks) stepFlock(f, dt, t);
+  });
+  measurePerfPhase("environmentAnimation", () => {
+    stepParticles(state.particles, dt, t);
+    stepWater(state.waterMesh, dt, t);
+    stepDirtPuffs(state.dirtPuffs, dt);
+    stepDustKicks(state.dustKicks, dt);
+    stepGroundMarks(state.groundMarks, dt);
+    stepFlySwarms(state.flySwarms, t);
+    stepShadowDisks(state.shadowDisks, state.heightFn);
+    stepClouds(state.clouds, dt);
+  });
+  measurePerfPhase("airborneMovement", () => {
+    for (const w of state.willowisps) stepWillOWisp(w, dt, t, state.heightFn);
+  });
 
   // Sky dome and starfield follow the camera so the gradient zenith and the
   // star sphere are always centered on the viewer — otherwise they read as
@@ -271,103 +294,114 @@ function animate() {
   // that drifts across the view as the camera orbits). Both live under
   // state.world which has worldScale applied; divide by it so the final
   // position lands on the camera regardless of scale.
-  const invWorldScale = 1 / (state.userSettings.worldScale || 1);
-  if (state.skyDome) {
-    state.skyDome.position.copy(camera.position).multiplyScalar(invWorldScale);
-  }
-  if (state.starfield) {
-    state.starfield.position.copy(camera.position).multiplyScalar(invWorldScale);
-  }
+  measurePerfPhase("backgroundAnimation", () => {
+    const invWorldScale = 1 / (state.userSettings.worldScale || 1);
+    if (state.skyDome) {
+      state.skyDome.position.copy(camera.position).multiplyScalar(invWorldScale);
+    }
+    if (state.starfield) {
+      state.starfield.position.copy(camera.position).multiplyScalar(invWorldScale);
+    }
 
-  // Subtle parallax: mountains drift opposite to camera azimuth so they read
-  // as farther from the camera than the islands.
-  if (state.mountains && state.mountainBasePos) {
-    const az = Math.atan2(camera.position.x, camera.position.z);
-    state.mountains.position.x = state.mountainBasePos.x - Math.sin(az) * 0.6;
-    state.mountains.position.z = state.mountainBasePos.z - Math.cos(az) * 0.6;
-  }
+    // Subtle parallax: mountains drift opposite to camera azimuth so they read
+    // as farther from the camera than the islands.
+    if (state.mountains && state.mountainBasePos) {
+      const az = Math.atan2(camera.position.x, camera.position.z);
+      state.mountains.position.x = state.mountainBasePos.x - Math.sin(az) * 0.6;
+      state.mountains.position.z = state.mountainBasePos.z - Math.cos(az) * 0.6;
+    }
+  });
 
-  if (isAnyFP()) {
-    stepStroll(isPhotoFP() ? rawDt : dt);
-    if (state.currentBiome?.cloudlike && scene.fog) {
-      // Cloud fog is tuned for orbit mode; from eye level it can flatten the
-      // whole frame. Pull it back only while strolling so nearby puffs and
-      // hills keep readable depth.
-      scene.fog.density *= 0.55;
+  measurePerfPhase("cameraFollowAndWake", () => {
+    if (isAnyFP()) {
+      stepStroll(isPhotoFP() ? rawDt : dt);
+      if (state.currentBiome?.cloudlike && scene.fog) {
+        // Cloud fog is tuned for orbit mode; from eye level it can flatten the
+        // whole frame. Pull it back only while strolling so nearby puffs and
+        // hills keep readable depth.
+        scene.fog.density *= 0.55;
+      }
+      // Walk-up wake: any sleeping creature within ~2.5 mesh-local units of
+      // the player pops awake. Camera lives in world space; creatures live
+      // inside state.world (scaled by worldScale), so convert camera XZ to
+      // mesh-local before comparing. Wakes both spawned sleepers and any
+      // walker that has curled up from the night sleepiness cycle.
+      const ws = state.userSettings.worldScale ?? 1;
+      const wsi = 1 / ws;
+      const camLx = camera.position.x * wsi;
+      const camLz = camera.position.z * wsi;
+      const WAKE_DIST_SQ = 2.5 * 2.5;
+      for (const c of state.creatures) {
+        const asleep = c.isSleeper || (!c.flies && c.sleepiness > 0.4);
+        if (!asleep) continue;
+        const p = c.group.position;
+        const dx = p.x - camLx;
+        const dz = p.z - camLz;
+        if (dx * dx + dz * dz < WAKE_DIST_SQ) wakeCreature(c);
+      }
+    } else {
+      // Smoothly track a followed creature, if any. Caterpillars/snails keep
+      // their root group at the origin and animate the head + body segment
+      // meshes inside it — so for those we focus on the head's position,
+      // otherwise camera target snaps to (0,0,0) and the follow looks broken.
+      const ft = getFollowTarget();
+      if (ft && ft.group && ft.group.parent) {
+        const anchor = ft.segments ? ft.segments[0] : ft.group;
+        const p = anchor.position;
+        const k = Math.min(1, dt * 4);
+        controls.target.x += (p.x - controls.target.x) * k;
+        controls.target.y += (p.y + 0.6 - controls.target.y) * k;
+        controls.target.z += (p.z - controls.target.z) * k;
+      } else if (ft) {
+        setFollowTarget(null);
+      }
+      controls.update();
     }
-    // Walk-up wake: any sleeping creature within ~2.5 mesh-local units of
-    // the player pops awake. Camera lives in world space; creatures live
-    // inside state.world (scaled by worldScale), so convert camera XZ to
-    // mesh-local before comparing. Wakes both spawned sleepers and any
-    // walker that has curled up from the night sleepiness cycle.
-    const ws = state.userSettings.worldScale ?? 1;
-    const wsi = 1 / ws;
-    const camLx = camera.position.x * wsi;
-    const camLz = camera.position.z * wsi;
-    const WAKE_DIST_SQ = 2.5 * 2.5;
-    for (const c of state.creatures) {
-      const asleep = c.isSleeper || (!c.flies && c.sleepiness > 0.4);
-      if (!asleep) continue;
-      const p = c.group.position;
-      const dx = p.x - camLx;
-      const dz = p.z - camLz;
-      if (dx * dx + dz * dz < WAKE_DIST_SQ) wakeCreature(c);
-    }
-  } else {
-    // Smoothly track a followed creature, if any. Caterpillars/snails keep
-    // their root group at the origin and animate the head + body segment
-    // meshes inside it — so for those we focus on the head's position,
-    // otherwise camera target snaps to (0,0,0) and the follow looks broken.
-    const ft = getFollowTarget();
-    if (ft && ft.group && ft.group.parent) {
-      const anchor = ft.segments ? ft.segments[0] : ft.group;
-      const p = anchor.position;
-      const k = Math.min(1, dt * 4);
-      controls.target.x += (p.x - controls.target.x) * k;
-      controls.target.y += (p.y + 0.6 - controls.target.y) * k;
-      controls.target.z += (p.z - controls.target.z) * k;
-    } else if (ft) {
-      setFollowTarget(null);
-    }
-    controls.update();
-  }
+  });
   // Refresh sky-only reflection RT for water biomes. One extra render pass
   // per frame at 256×256 — cheap, and shared uniforms mean day/night updates
   // flow through without extra wiring.
-  if (state.waterReflection) {
-    updateWaterReflection(state.waterReflection, renderer, camera, controls);
-  }
+  measurePerfPhase("waterReflection", () => {
+    if (state.waterReflection) {
+      updateWaterReflection(state.waterReflection, renderer, camera, controls);
+    }
+  });
 
   // Update tilt-shift focus: project the active camera focus point to
   // screen-Y for the sharp band, and measure camera→focus distance for the
   // depth focus.
-  if (postfx.isActive && postfx.isActive()) {
-    let focusZ;
-    if (isAnyFP()) {
-      focusZ = 8;
-      camera.getWorldDirection(_focusDir);
-      _focusProj.copy(camera.position).addScaledVector(_focusDir, focusZ).project(camera);
+  measurePerfPhase("render", () => {
+    if (postfx.isActive && postfx.isActive()) {
+      let focusZ;
+      if (isAnyFP()) {
+        focusZ = 8;
+        camera.getWorldDirection(_focusDir);
+        _focusProj.copy(camera.position).addScaledVector(_focusDir, focusZ).project(camera);
+      } else {
+        _focusProj.copy(controls.target).project(camera);
+        focusZ = camera.position.distanceTo(controls.target);
+      }
+      // _focusProj.y is in NDC [-1, 1]; convert to UV [0, 1]. Three's UV origin
+      // is at bottom-left, so (.y * 0.5 + 0.5) gives the right vertical axis.
+      const focusY = _focusProj.y * 0.5 + 0.5;
+      postfx.updateTiltShiftFocus(focusY, focusZ);
+      postfx.render(scene, camera);
     } else {
-      _focusProj.copy(controls.target).project(camera);
-      focusZ = camera.position.distanceTo(controls.target);
+      renderer.render(scene, camera);
     }
-    // _focusProj.y is in NDC [-1, 1]; convert to UV [0, 1]. Three's UV origin
-    // is at bottom-left, so (.y * 0.5 + 0.5) gives the right vertical axis.
-    const focusY = _focusProj.y * 0.5 + 0.5;
-    postfx.updateTiltShiftFocus(focusY, focusZ);
-    postfx.render(scene, camera);
-  } else {
-    renderer.render(scene, camera);
-  }
+  });
   // Render photo review ON TOP of post-fx (not affected by outlines/tilt-shift)
-  const reviewGroup = getPhotoReviewGroup();
-  if (reviewGroup) {
-    renderer.autoClear = false;
-    renderer.clearDepth();
-    reviewGroup.updateMatrixWorld(true);
-    renderer.render(reviewGroup, camera);
-    renderer.autoClear = true;
-  }
+  measurePerfPhase("photoReviewRender", () => {
+    const reviewGroup = getPhotoReviewGroup();
+    if (reviewGroup) {
+      renderer.autoClear = false;
+      renderer.clearDepth();
+      reviewGroup.updateMatrixWorld(true);
+      renderer.render(reviewGroup, camera);
+      renderer.autoClear = true;
+    }
+  });
+  endPerfFrame();
 }
 
 if (!INSPECT) {

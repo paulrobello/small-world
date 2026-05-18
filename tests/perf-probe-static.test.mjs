@@ -12,7 +12,8 @@ assert(
 const perfProbeSource = readFileSync(perfProbeUrl, 'utf8');
 
 assert(
-  mainSource.includes('import { startPerfProbe } from "./src/perfProbe.js";')
+  mainSource.includes('from "./src/perfProbe.js";')
+    && mainSource.includes('startPerfProbe')
     && mainSource.includes('startPerfProbe({ state, scene, renderer });'),
   'main.js should wire the perf probe into the existing scene debug surface.'
 );
@@ -36,4 +37,24 @@ assert(
     && perfProbeSource.includes('shadowCastersByParentVariant')
     && perfProbeSource.includes('microFloraShadows'),
   'The perf report should expose a devtools object, console marker, shadow caster breakdown, and biome LOD flags.'
+);
+
+assert(
+  perfProbeSource.includes('beginPerfFrame')
+    && perfProbeSource.includes('measurePerfPhase')
+    && perfProbeSource.includes('phaseTimings')
+    && perfProbeSource.includes('summarizePhaseTimings'),
+  'The perf probe should capture CPU-side phase timings, not just render-adjacent scene counts.'
+);
+
+assert(
+  mainSource.includes('beginPerfFrame();')
+    && mainSource.includes('endPerfFrame();')
+    && mainSource.includes('measurePerfPhase("dynamicCollisionObstacles"')
+    && mainSource.includes('measurePerfPhase("creatureMovement"')
+    && mainSource.includes('measurePerfPhase("caterpillarMovement"')
+    && mainSource.includes('measurePerfPhase("airborneMovement"')
+    && mainSource.includes('measurePerfPhase("environmentAnimation"')
+    && mainSource.includes('measurePerfPhase("render"'),
+  'The animation loop should profile collision, movement, environment, and render buckets separately.'
 );

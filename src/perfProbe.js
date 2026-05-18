@@ -17,6 +17,35 @@ function waitForFrame() {
   return new Promise((resolve) => requestAnimationFrame(resolve));
 }
 
+let activeProbe = null;
+
+export function beginPerfFrame() {
+  if (!activeProbe?.collecting) return;
+  activeProbe.currentFrame = {
+    startedAt: performance.now(),
+    phases: {},
+  };
+}
+
+export function measurePerfPhase(name, fn) {
+  if (!activeProbe?.collecting || !activeProbe.currentFrame) return fn();
+  const startedAt = performance.now();
+  try {
+    return fn();
+  } finally {
+    const elapsed = performance.now() - startedAt;
+    const phases = activeProbe.currentFrame.phases;
+    phases[name] = (phases[name] ?? 0) + elapsed;
+  }
+}
+
+export function endPerfFrame() {
+  if (!activeProbe?.collecting || !activeProbe.currentFrame) return;
+  activeProbe.currentFrame.totalCpuMs = performance.now() - activeProbe.currentFrame.startedAt;
+  activeProbe.phaseFrames.push(activeProbe.currentFrame);
+  activeProbe.currentFrame = null;
+}
+
 function classifyShadowCaster(object) {
   let current = object;
   while (current) {
@@ -74,6 +103,28 @@ function summarizeTimings(timings) {
   };
 }
 
+function summarizePhaseTimings(phaseFrames) {
+  const phaseNames = new Set();
+  for (const frame of phaseFrames) {
+    for (const phaseName of Object.keys(frame.phases)) {
+      phaseNames.add(phaseName);
+    }
+  }
+
+  const phases = {};
+  for (const phaseName of phaseNames) {
+    phases[phaseName] = summarizeTimings(
+      phaseFrames.map((frame) => frame.phases[phaseName] ?? 0)
+    );
+  }
+
+  return {
+    frames: phaseFrames.length,
+    totalCpu: summarizeTimings(phaseFrames.map((frame) => frame.totalCpuMs ?? 0)),
+    phases,
+  };
+}
+
 async function waitForWorld(state, settleFrames) {
   while (state.isGeneratingWorld || !state.currentBiome) {
     await waitForFrame();
@@ -94,7 +145,7 @@ async function sampleFrameTimings(frameCount) {
   return timings;
 }
 
-function buildReport({ state, scene, renderer, timings }) {
+function buildReport({ state, scene, renderer, timings, phaseFrames }) {
   const biome = state.currentBiome;
   return {
     seed: state.currentSeed,
@@ -104,6 +155,18 @@ function buildReport({ state, scene, renderer, timings }) {
       microFloraShadows: biome?.shadowLod?.microFloraShadows ?? true,
     },
     timing: summarizeTimings(timings),
+    phaseTimings: summarizePhaseTimings(phaseFrames),
+    entityCounts: {
+      creatures: state.creatures.length,
+      caterpillars: state.caterpillars.length,
+      butterflies: state.butterflies.length,
+      bees: state.bees.length,
+      flocks: state.flocks.length,
+      willowisps: state.willowisps.length,
+      staticObstacles: state.obstacles.length,
+      dynamicObstacles: state.dynamicObstacles.length,
+      perchSpots: state.perchSpots.length,
+    },
     renderer: {
       pixelRatio: renderer.getPixelRatio(),
       width: renderer.domElement?.width ?? 0,
@@ -136,6 +199,12 @@ export function startPerfProbe({ state, scene, renderer }) {
   const settleFrames = readPositiveIntParam(params, "perfSettle", 60);
   const frameCount = readPositiveIntParam(params, "perfFrames", 240);
 
+  activeProbe = {
+    collecting: false,
+    currentFrame: null,
+    phaseFrames: [],
+  };
+
   window.__swPerf = {
     running: true,
     report: null,
@@ -143,14 +212,19 @@ export function startPerfProbe({ state, scene, renderer }) {
 
   (async () => {
     await waitForWorld(state, settleFrames);
+    activeProbe.phaseFrames = [];
+    activeProbe.collecting = true;
     const timings = await sampleFrameTimings(frameCount);
-    const report = buildReport({ state, scene, renderer, timings });
+    activeProbe.collecting = false;
+    const phaseFrames = activeProbe.phaseFrames;
+    const report = buildReport({ state, scene, renderer, timings, phaseFrames });
     window.__swPerf = {
       running: false,
       report,
     };
     console.log("[small-world:perf]", JSON.stringify(report));
   })().catch((error) => {
+    if (activeProbe) activeProbe.collecting = false;
     window.__swPerf = {
       running: false,
       error: error instanceof Error ? error.message : String(error),
