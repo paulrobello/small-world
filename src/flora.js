@@ -4,6 +4,7 @@ import { jitterGeo, applyWindSway, TRUNK, buildLeafGeo } from "./util.js";
 import { BLOOM_LAYER } from "./postfx.js";
 import { makePool } from "./pool.js";
 import {
+  makeDeadTreePBRMaterial,
   makeLeafballTreeLeafPBRMaterial,
   makeLeafballTreeTrunkPBRMaterial,
   makeMushroomCapPBRMaterial,
@@ -1521,10 +1522,10 @@ export const FLORA_BUILDERS = {
   deadtree(biome) {
     const g = new THREE.Group();
     const mat = pooled("deadtree.mat.smooth", () =>
-      new THREE.MeshStandardMaterial({
+      makeDeadTreePBRMaterial({
         color: new THREE.Color(biome.cliff).offsetHSL(0, -0.1, 0.05),
         flatShading: false,
-        roughness: 1,
+        roughness: 0.98,
       })
     );
     const trunkGeo = pooled("deadtree.trunk.geo", () => {

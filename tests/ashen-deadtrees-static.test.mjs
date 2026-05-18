@@ -5,6 +5,7 @@ import { BIOMES, FLOWER_DENSITY, WILDFLOWER_PALETTES } from '../src/biomes.js';
 const TREE_KINDS = new Set(['tree', 'leafballtree', 'pine', 'snowpine', 'balloontree']);
 const ashen = BIOMES.find((biome) => biome.id === 'ashen');
 const floraSource = readFileSync(new URL('../src/flora.js', import.meta.url), 'utf8');
+const pbrSource = readFileSync(new URL('../src/pbr.js', import.meta.url), 'utf8');
 
 assert(ashen, 'ashen wastes biome should exist.');
 assert(
@@ -56,4 +57,31 @@ assert(
     && deadTreeBlock.includes('flatShading: false')
     && deadTreeBlock.match(/computeVertexNormals\(\)/g)?.length >= 2,
   'Dead tree trunk and branches should use smooth-shaded normals/materials.'
+);
+
+assert(
+  floraSource.includes('makeDeadTreePBRMaterial')
+    && deadTreeBlock.includes('makeDeadTreePBRMaterial'),
+  'Dead tree flora should build its trunk and branch material through the dead-bark PBR helper.'
+);
+
+assert(
+  pbrSource.includes('export function makeDeadTreePBRMaterial')
+    && pbrSource.includes('buildDeadTreeBarkTextures')
+    && pbrSource.includes('cachedDetailTextures("deadtree-bark", buildDeadTreeBarkTextures)'),
+  'Dead tree PBR should expose a dedicated cached procedural bark texture helper.'
+);
+
+assert(
+  pbrSource.includes('deadTreeNormalCanvas')
+    && pbrSource.includes('deadWoodCrack')
+    && pbrSource.includes('charredRidge')
+    && pbrSource.includes('silveryAshGrain'),
+  'Dead tree bark PBR should generate cracked, charred, ashy normal/material texture detail.'
+);
+
+assert(
+  pbrSource.includes('specularIntensity: 0.34')
+    && pbrSource.includes('material.normalScale.set(1.18, 1.18)'),
+  'Dead tree bark PBR should have enough normal and subtle specular response to read under inspect lighting.'
 );

@@ -5,6 +5,7 @@ import { LOWFX } from "./lowfx.js";
 const TERRAIN_PBR_TEX_SIZE = 384;
 const LEAFBALL_BARK_TEX_SIZE = 256;
 const LEAFBALL_LEAF_TEX_SIZE = 128;
+const DEAD_TREE_BARK_TEX_SIZE = 256;
 const STONE_PBR_TEX_SIZE = 128;
 const PLAIN_ROCK_PBR_TEX_SIZE = 128;
 const MUSHROOM_CAP_TEX_SIZE = 256;
@@ -251,6 +252,61 @@ function buildLeafballLeafTextures() {
   return {
     normalTexture: configurePBRTexture(new THREE.CanvasTexture(leafNormalCanvas)),
     materialTexture: configurePBRTexture(new THREE.CanvasTexture(leafMaterialCanvas)),
+  };
+}
+
+function buildDeadTreeBarkTextures() {
+  const size = DEAD_TREE_BARK_TEX_SIZE;
+  const deadTreeNormalCanvas = makeCanvas(size);
+  const deadTreeMaterialCanvas = makeCanvas(size);
+  const normalCtx = deadTreeNormalCanvas.getContext("2d");
+  const materialCtx = deadTreeMaterialCanvas.getContext("2d");
+  const normalImage = normalCtx.createImageData(size, size);
+  const materialImage = materialCtx.createImageData(size, size);
+  const seed = state.currentSeed + 823;
+
+  for (let py = 0; py < size; py++) {
+    const v = py / (size - 1);
+    for (let px = 0; px < size; px++) {
+      const u = px / (size - 1);
+      const twist = Math.sin(v * Math.PI * 5.0 + smoothHashNoise(u * 3.0, v * 2.6, seed) * 1.7) * 0.07;
+      const warpedU = u + twist;
+      const verticalSplit =
+        Math.max(0, 1 - Math.abs(Math.sin((warpedU * 9.0 + v * 1.8) * Math.PI)) * 13) *
+        (0.45 + smoothHashNoise(warpedU * 20.0, v * 7.0, seed + 19) * 0.55);
+      const deadWoodCrack =
+        Math.max(0, 1 - Math.abs(Math.sin((warpedU * 17.0 - v * 3.1) * Math.PI)) * 19) *
+        Math.max(0, smoothHashNoise(warpedU * 8.0, v * 11.0, seed + 37) - 0.34);
+      const charredRidge =
+        Math.sin((warpedU * 39.0 + v * 10.0) * Math.PI) * 0.19 +
+        Math.sin((warpedU * 83.0 - v * 21.0) * Math.PI) * 0.10;
+      const silveryAshGrain = smoothHashNoise(warpedU * 54.0, v * 62.0, seed + 53);
+      const dryPits = Math.max(0, 0.57 - silveryAshGrain) * 0.36;
+      const splitDepth = verticalSplit + deadWoodCrack * 0.82;
+      const nx = charredRidge * 0.42 - splitDepth * 0.52 + dryPits * 0.18;
+      const ny = Math.sin(v * Math.PI * 23.0 + warpedU * 8.0) * 0.11 + deadWoodCrack * 0.22 - dryPits * 0.14;
+      const nz = Math.sqrt(Math.max(0.07, 1 - nx * nx - ny * ny));
+      const roughness = 0.88 + dryPits * 0.20 + splitDepth * 0.10;
+      const specular = 0.05 + Math.max(0, charredRidge) * 0.11 + silveryAshGrain * 0.06 - splitDepth * 0.035;
+      const index = (py * size + px) * 4;
+
+      normalImage.data[index + 0] = Math.round((nx * 0.5 + 0.5) * 255);
+      normalImage.data[index + 1] = Math.round((ny * 0.5 + 0.5) * 255);
+      normalImage.data[index + 2] = Math.round(nz * 255);
+      normalImage.data[index + 3] = 255;
+
+      materialImage.data[index + 0] = Math.round(clamp01(roughness) * 255);
+      materialImage.data[index + 1] = Math.round(clamp01(roughness) * 255);
+      materialImage.data[index + 2] = 0;
+      materialImage.data[index + 3] = Math.round(clamp01(specular) * 255);
+    }
+  }
+
+  normalCtx.putImageData(normalImage, 0, 0);
+  materialCtx.putImageData(materialImage, 0, 0);
+  return {
+    normalTexture: configurePBRTexture(new THREE.CanvasTexture(deadTreeNormalCanvas)),
+    materialTexture: configurePBRTexture(new THREE.CanvasTexture(deadTreeMaterialCanvas)),
   };
 }
 
@@ -638,6 +694,21 @@ export function makeLeafballTreeLeafPBRMaterial(params) {
   });
   const { normalTexture, materialTexture } = cachedDetailTextures("leafball-leaf", buildLeafballLeafTextures);
   material.normalScale.set(0.72, 0.72);
+  return applyDetailMaps(material, normalTexture, materialTexture);
+}
+
+export function makeDeadTreePBRMaterial(params) {
+  if (LOWFX || state.userSettings.pbrDetails === false) {
+    return new THREE.MeshStandardMaterial(params);
+  }
+  const material = new THREE.MeshPhysicalMaterial({
+    ...params,
+    reflectivity: 0.16,
+    specularIntensity: 0.34,
+    specularColor: new THREE.Color(params.color).lerp(new THREE.Color(0xd8d2c7), 0.34),
+  });
+  const { normalTexture, materialTexture } = cachedDetailTextures("deadtree-bark", buildDeadTreeBarkTextures);
+  material.normalScale.set(1.18, 1.18);
   return applyDetailMaps(material, normalTexture, materialTexture);
 }
 
