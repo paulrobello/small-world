@@ -36,6 +36,12 @@ make clean        # rm -rf dist
 
 Runtime dependencies (three.js, simplex-noise) are installed via npm and bundled by Vite — they're no longer loaded from CDN. `node_modules/` is gitignored; run `npm install` before `make dev` or `make build`.
 
+## Browser debugging
+
+When working from Codex Desktop, use the built-in browser debugging tools for local web app inspection, screenshots, console/network checks, and visual verification. Start the app with `make dev-start` if needed, open `http://localhost:2001` in the Codex browser tooling, and inspect the live app there.
+
+`agentchrome` is primarily for Codex CLI / Claude-style workflows. Do not use it from Codex Desktop for this repo unless the user explicitly asks for it or the built-in browser tooling cannot handle the task. If `agentchrome` is used as a fallback, shut it down with `agentchrome shutdown` when finished.
+
 ## Version
 
 The app version is defined in `package.json` (`"version"` field). It's injected into the app at build time via Vite's `define` config and appears in the header eyebrow as "vol. X.Y.Z".
@@ -181,7 +187,7 @@ If a change would make something look scary, sharp, realistic, or twitchy, it's 
 - **Cross-cutting per-biome behavior:** add a flag on the biome (see "Biome-flag pattern" above) and check it in the relevant builder, rather than branching on `biome.id`.
 - **Placement:** use `pickGroundPoint()` rather than raw XZ randomness so multi-island layouts work.
 - **Disposal:** `disposeGroup` walks geometries/materials when the world is rebuilt. New mesh-allocating code that lives on the `world` group is covered automatically; new top-level scene additions are not.
-- **Devtools handle:** `main.js` exposes `window.__sw = { state, controls, scene, camera, renderer }` for inspection from devtools / agentchrome. It's never read by the app itself — safe to leave, safe to remove. Useful for reading live uniform values, manipulating `state.grass.uniforms.uPushers`, or programmatically setting up tricky camera angles.
+- **Devtools handle:** `main.js` exposes `window.__sw = { state, controls, scene, camera, renderer }` for inspection from browser devtools. It's never read by the app itself — safe to leave, safe to remove. Useful for reading live uniform values, manipulating `state.grass.uniforms.uPushers`, or programmatically setting up tricky camera angles.
 
 ## Enhancement workflow
 
