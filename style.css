@@ -65,6 +65,41 @@ body {
   );
 }
 
+.world-loading {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  display: grid;
+  place-items: center;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.18s ease;
+  background:
+    radial-gradient(circle at center, rgba(255, 244, 206, 0.11), transparent 34%),
+    rgba(0, 0, 0, 0.54);
+}
+
+.world-loading.is-visible {
+  opacity: 1;
+}
+
+.world-loading-card {
+  padding: 18px 22px;
+  border: 1px solid rgba(245, 240, 230, 0.32);
+  background: rgba(0, 0, 0, 0.48);
+  box-shadow: var(--shadow);
+}
+
+.world-loading-title {
+  font-family: "Major Mono Display", monospace;
+  font-size: clamp(17px, 2vw, 25px);
+  line-height: 1.2;
+  letter-spacing: 0.08em;
+  color: var(--ink);
+  text-shadow: var(--shadow);
+  text-transform: lowercase;
+}
+
 /* ─── HUD shell ─── */
 .hud {
   position: fixed;

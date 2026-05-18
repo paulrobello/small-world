@@ -1037,8 +1037,12 @@ export function initUi({ camera, canvas, controls, renderer }) {
         opacity:0; transition:opacity .35s ease;`;
       document.body.appendChild(overlay);
       requestAnimationFrame(() => (overlay.style.opacity = "0.7"));
-      setTimeout(() => {
-        generateWorld(pickSeed());
+      setTimeout(async () => {
+        try {
+          await generateWorld(pickSeed());
+        } catch (error) {
+          console.error("World generation failed", error);
+        }
         overlay.style.opacity = "0";
         setTimeout(() => {
           overlay.remove();
@@ -1127,9 +1131,11 @@ export function initUi({ camera, canvas, controls, renderer }) {
       seed.textContent = formatSeed(bm.seed);
       text.appendChild(bn);
       text.appendChild(seed);
-      text.addEventListener("click", () => {
+      text.addEventListener("click", async () => {
         if (bm.seed === state.currentSeed) return;
-        generateWorld(bm.seed);
+        await generateWorld(bm.seed).catch((error) => {
+          console.error("World generation failed", error);
+        });
         syncBookmarkButton();
       });
       const remove = document.createElement("button");
@@ -1677,7 +1683,11 @@ export function initUi({ camera, canvas, controls, renderer }) {
   // Also regenerate when seed changes via back/forward navigation.
   window.addEventListener("popstate", () => {
     const s = readSeedFromUrl();
-    if (s !== null && s !== state.currentSeed) generateWorld(s);
+    if (s !== null && s !== state.currentSeed) {
+      void generateWorld(s).catch((error) => {
+        console.error("World generation failed", error);
+      });
+    }
   });
 
   function handleResize() {

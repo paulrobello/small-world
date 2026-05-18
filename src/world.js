@@ -61,6 +61,27 @@ import { LOWFX, LOWFX_DENSITY } from "./lowfx.js";
 let _scene = null;
 let _controls = null;
 let _releaseFollow = () => {};
+let _generationRunId = 0;
+
+const STALE_GENERATION = Symbol("stale-generation");
+const GENERATION_FRAME_BUDGET_MS = 8;
+
+function generationNow() {
+  return typeof performance !== "undefined" && performance.now
+    ? performance.now()
+    : Date.now();
+}
+
+function nextGenerationFrame() {
+  return new Promise((resolve) => requestAnimationFrame(resolve));
+}
+
+function setWorldLoading(active) {
+  const el = document.getElementById("world-loading");
+  if (!el) return;
+  el.classList.toggle("is-visible", active);
+  el.setAttribute("aria-hidden", active ? "false" : "true");
+}
 
 export function setSceneRef(scene) {
   _scene = scene;
@@ -171,19 +192,41 @@ export function updateDayNight(t) {
   }
 }
 
-export function generateWorld(seed) {
+export async function generateWorld(seed) {
+  const runId = ++_generationRunId;
+  state.isGeneratingWorld = true;
+  setWorldLoading(true);
+  await nextGenerationFrame();
+  if (runId !== _generationRunId) return;
+
   // Swap Math.random for the seeded PRNG so every Math.random() call
   // during world construction is deterministic. Per-frame animation
   // (stepCreature/stepFlock/stepParticles) runs after we restore, so it
   // keeps its natural variation.
   //
-  // WARNING — synchronous only. Anything scheduled via Promise.resolve(),
-  // setTimeout, requestAnimationFrame, or a microtask queue inside this
-  // function will run AFTER the restore at the bottom and silently observe
-  // the real Math.random, breaking determinism. All builders must run
-  // synchronously between the patch and the restore.
+  // Async generation yields restore Math.random first, then reinstall this
+  // same PRNG on resume. That lets the loading UI paint without letting
+  // unrelated animation frames consume seeded random values.
   const originalRandom = Math.random;
-  Math.random = mulberry32(seed);
+  const seededRandom = mulberry32(seed);
+  const installSeededRandom = () => {
+    Math.random = seededRandom;
+  };
+  const restoreRandom = () => {
+    Math.random = originalRandom;
+  };
+  let lastYieldAt = generationNow();
+  async function yieldIfNeeded(force = false) {
+    if (!force && generationNow() - lastYieldAt < GENERATION_FRAME_BUDGET_MS) return;
+    restoreRandom();
+    await nextGenerationFrame();
+    if (runId !== _generationRunId) throw STALE_GENERATION;
+    installSeededRandom();
+    lastYieldAt = generationNow();
+  }
+
+  installSeededRandom();
+  try {
 
   // Pick biome from the seed itself, so one number reproduces everything.
   const biome = BIOMES[Math.floor(Math.random() * BIOMES.length)];
@@ -342,6 +385,8 @@ export function generateWorld(seed) {
     fogDensity: biome.fogDensity,
   };
 
+  await yieldIfNeeded(true);
+
   // terrain
   const noise2D = createNoise2D();
   // Cloud islands should read as soft puffs rather than rocky mountains.
@@ -384,12 +429,15 @@ export function generateWorld(seed) {
     }
   }
 
+  await yieldIfNeeded(true);
+
   // measure max elevation for HUD — sample on actual ground
   state.maxElev = 0;
   for (let i = 0; i < 200; i++) {
     const p = pickGroundPoint(0.8);
     const h = state.heightFn(p.x, p.z);
     if (h > state.maxElev) state.maxElev = h;
+    if ((i & 31) === 31) await yieldIfNeeded();
   }
 
   // flora
@@ -604,6 +652,8 @@ export function generateWorld(seed) {
     }
   }
 
+  await yieldIfNeeded();
+
   // Patch heightFn to reflect fairy-ring flattening so all subsequent
   // flora placement and conformSurfaceChildren see the real mesh heights.
   if (fairyFlat.length) {
@@ -627,6 +677,7 @@ export function generateWorld(seed) {
   let verdantGiantPlaced = false;
   while (placed < floraTarget && attempts < floraTarget * 6) {
     attempts++;
+    if ((attempts & 7) === 0) await yieldIfNeeded();
     const kind = biome.flora[Math.floor(Math.random() * biome.flora.length)];
     // Reef corals grow on submerged shelves; reeds/seaweed prefer the shallow
     // waterline. Both sample the wider falloff band where heights dip below
@@ -841,6 +892,7 @@ export function generateWorld(seed) {
     }
     if (isReefCoral) coralPlaced++;
     placed++;
+    await yieldIfNeeded();
   }
 
   // Coral top-up — the main loop's attempt budget gets eaten by underwater
@@ -854,6 +906,7 @@ export function generateWorld(seed) {
     let coralAttempts = 0;
     while (coralPlaced < coralTarget && coralAttempts < coralTarget * 12) {
       coralAttempts++;
+      if ((coralAttempts & 7) === 0) await yieldIfNeeded();
       const kind = reefKinds[Math.floor(Math.random() * reefKinds.length)];
       const p = pickGroundPoint(1.0);
       const y0 = state.heightFn(p.x, p.z);
@@ -878,8 +931,11 @@ export function generateWorld(seed) {
       f.scale.setScalar(s);
       state.world.add(f);
       coralPlaced++;
+      await yieldIfNeeded();
     }
   }
+
+  await yieldIfNeeded(true);
 
   // ground cover — instanced grass / wildflowers / pebbles
   // Exclude fairy-ring circles from all ground cover placement.
@@ -888,16 +944,21 @@ export function generateWorld(seed) {
     .map(b => ({ x: b.x, z: b.z, r: b.r }));
   const grass = makeGrassField(biome, state.heightFn, coverExclusions);
   if (grass) state.world.add(grass);
+  await yieldIfNeeded(true);
   for (const m of makeWildflowerField(biome, state.heightFn, coverExclusions)) {
     state.world.add(m);
     if (m.userData.positions) state.flowerSpots.push(...m.userData.positions);
   }
+  await yieldIfNeeded(true);
   const groveDetails = makeVerdantGroveDetails(biome, state.heightFn, coverExclusions);
   if (groveDetails) state.world.add(groveDetails);
+  await yieldIfNeeded();
   const cloudPuffs = makeCloudPuffField(biome, state.heightFn, coverExclusions);
   if (cloudPuffs) state.world.add(cloudPuffs);
+  await yieldIfNeeded();
   const beachcomb = makeBeachcombField(biome, state.heightFn, coverExclusions);
   if (beachcomb) state.world.add(beachcomb);
+  await yieldIfNeeded();
   const pebbles = makePebbleField(biome, state.heightFn, coverExclusions);
   if (pebbles) state.world.add(pebbles);
   state.groundMarks = makeGroundMarks(biome);
@@ -969,6 +1030,7 @@ export function generateWorld(seed) {
   let creatureAttempts = 0;
   while (budget > 0 && creatureAttempts < ncreatures * 10) {
     creatureAttempts++;
+    if ((creatureAttempts & 3) === 0) await yieldIfNeeded();
     const r = Math.random();
     // budget rolls: family (parent + kids), sleeper, burrower, plain
     if (allowGroundVariants && budget >= 2 && r < 0.18) {
@@ -1024,6 +1086,7 @@ export function generateWorld(seed) {
     let anglerAttempts = 0;
     while (anglersPlaced < nAnglers && anglerAttempts < nAnglers * 20) {
       anglerAttempts++;
+      if ((anglerAttempts & 3) === 0) await yieldIfNeeded();
       const angler = makeCreature(biome, { angler: true });
       if (placeFishUnderwater(angler)) {
         anglersPlaced++;
@@ -1054,12 +1117,14 @@ export function generateWorld(seed) {
   const ncats = 1 + Math.floor(Math.random() * 3); // 1–3
   for (let i = 0; i < ncats; i++) {
     placeCrawler(() => makeCaterpillar(biome));
+    await yieldIfNeeded();
   }
   // snails — 0-2 per world (cute, slow). They live in the caterpillars array
   // so they get stepped and ray-picked alongside their cousins.
   const nsnails = Math.random() < 0.7 ? (Math.random() < 0.4 ? 2 : 1) : 0;
   for (let i = 0; i < nsnails; i++) {
     placeCrawler(() => makeCaterpillar(biome, { kind: "snail" }));
+    await yieldIfNeeded();
   }
 
   // butterflies — drift between flower positions. Skipped in arid biomes
@@ -1087,6 +1152,7 @@ export function generateWorld(seed) {
     }
     state.world.add(bf.group);
     state.butterflies.push(bf);
+    if ((i & 3) === 3) await yieldIfNeeded();
   }
 
   // bee swarms — 1-2 swarms of 4-8 bees, only if there are flowers to dance
@@ -1114,8 +1180,11 @@ export function generateWorld(seed) {
         state.world.add(bee.group);
         state.bees.push(bee);
       }
+      await yieldIfNeeded();
     }
   }
+
+  await yieldIfNeeded(true);
 
   // bird flocks
   const numFlocks = 1;
@@ -1166,9 +1235,6 @@ export function generateWorld(seed) {
 
   // restore the user's auto-rotate preference (regen shouldn't override it)
   if (_controls) _controls.autoRotate = state.userSettings.autoRotate;
-
-  // restore native Math.random so per-frame animation isn't deterministic
-  Math.random = originalRandom;
   writeSeedToUrl(seed);
 
   // Build the spatial grid for static obstacle queries so avoidObstacles()
@@ -1188,4 +1254,13 @@ export function generateWorld(seed) {
 
   // kick off the reveal animation — updateDayNight reads this timestamp
   state.revealStart = performance.now();
+  } catch (error) {
+    if (error !== STALE_GENERATION) throw error;
+  } finally {
+    restoreRandom();
+    if (runId === _generationRunId) {
+      state.isGeneratingWorld = false;
+      setWorldLoading(false);
+    }
+  }
 }

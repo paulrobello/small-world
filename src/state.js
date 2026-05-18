@@ -84,6 +84,7 @@ export const state = {
   heightFn: () => 0,
   currentBiome: null,
   currentSeed: 0,
+  isGeneratingWorld: false,
   maxElev: 0,
   sunLight: null,
   hemiLight: null,

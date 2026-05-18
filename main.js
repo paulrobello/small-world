@@ -162,7 +162,7 @@ function animate() {
   // funcs use sin(t*speed) for idle bobbing, which would still drift if t
   // kept advancing). Camera input and rendering keep running on the frozen
   // state so the user can still rotate and aim.
-  const paused = isSelectingCreature() || isManualPaused();
+  const paused = state.isGeneratingWorld || isSelectingCreature() || isManualPaused();
   if (!paused) state.lastSimT = rawT;
   const dt = paused ? 0 : rawDt;
   const t = paused ? (state.lastSimT ?? rawT) : rawT;
@@ -377,6 +377,8 @@ if (INSPECT) {
   setupInspect(scene, renderer, camera, controls);
 } else {
   const initialSeed = readSeedFromUrl() ?? newRandomSeed();
-  generateWorld(initialSeed);
+  void generateWorld(initialSeed).catch((error) => {
+    console.error("World generation failed", error);
+  });
 }
 animate();
