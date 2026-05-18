@@ -1,0 +1,24 @@
+{
+  "name": "a small world",
+  "short_name": "Small World",
+  "description": "A cute Three.js terrarium that grows a tiny floating-island world from a seed.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#83d2bd",
+  "theme_color": "#000000",
+  "icons": [
+    {
+      "src": "/icons/small-world-icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icons/small-world-icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}
