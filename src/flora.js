@@ -512,6 +512,11 @@ function makeMushroomUndersideGeometry(
   return geo;
 }
 
+function enableMushroomCapShadowUnderside(material) {
+  material.shadowSide = THREE.DoubleSide;
+  return material;
+}
+
 function addGroveMushroomFamily(group, biome, { radius = 0.44, count = 3, capY = 0.35 } = {}) {
   if (!biome.groveDetails?.mushroomFamilies) return;
   const stemGeo = pooled("grove.babyMushroom.stem.geo", () =>
@@ -547,10 +552,10 @@ function addGroveMushroomFamily(group, biome, { radius = 0.44, count = 3, capY =
       (Math.random() - 0.5) * 0.15,
       (Math.random() - 0.5) * 0.10
     );
-    const cap = new THREE.Mesh(capGeo, makeMushroomCapPBRMaterial({
+    const cap = new THREE.Mesh(capGeo, enableMushroomCapShadowUnderside(makeMushroomCapPBRMaterial({
       color: babyCapColor,
       roughness: 0.68,
-    }));
+    })));
     cap.position.set(x, 0, z);
     cap.scale.setScalar(scale);
     cap.rotation.y = Math.random() * Math.PI * 2;
@@ -1426,6 +1431,7 @@ export const FLORA_BUILDERS = {
       makeMushroomCapPBRMaterial({ color: capColor, roughness: 0.6 }),
       MUSH_WIND
     );
+    enableMushroomCapShadowUnderside(capMat);
     const cap = new THREE.Mesh(capGeo, capMat);
     cap.castShadow = true;
     g.add(cap);
@@ -1989,6 +1995,7 @@ export const FLORA_BUILDERS = {
       makeMushroomCapPBRMaterial({ color: capColor, roughness: 0.55 }),
       BIG_WIND
     );
+    enableMushroomCapShadowUnderside(capMat);
     const cap = new THREE.Mesh(capGeo, capMat);
     cap.castShadow = true;
     g.add(cap);
@@ -2102,10 +2109,10 @@ export const FLORA_BUILDERS = {
         (Math.random() - 0.5) * 0.15,
         (Math.random() - 0.5) * 0.10
       );
-      const cap = new THREE.Mesh(capGeo, makeMushroomCapPBRMaterial({
+      const cap = new THREE.Mesh(capGeo, enableMushroomCapShadowUnderside(makeMushroomCapPBRMaterial({
         color: capColor,
         roughness: 0.68,
-      }));
+      })));
       cap.position.set(x, 0, z);
       cap.rotation.y = a + Math.PI / 2;
       cap.scale.setScalar(scale);

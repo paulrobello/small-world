@@ -68,6 +68,14 @@ assert(
 );
 
 assert(
+  floraSource.includes('function enableMushroomCapShadowUnderside(material)')
+    && floraSource.includes('material.shadowSide = THREE.DoubleSide')
+    && floraSource.includes('enableMushroomCapShadowUnderside(makeMushroomCapPBRMaterial')
+    && floraSource.includes('enableMushroomCapShadowUnderside(capMat)'),
+  'Mushroom cap materials should keep front-side rendering but cast double-sided shadows so cap undersides affect the shadow map.'
+);
+
+assert(
   pbrSource.includes('MUSHROOM_CAP_DETAIL_BOOST')
     && pbrSource.includes('material.normalScale.set(1.22, 1.22)')
     && pbrSource.includes('specularIntensity: 0.70')
