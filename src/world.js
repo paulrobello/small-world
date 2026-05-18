@@ -410,10 +410,8 @@ export async function generateWorld(seed) {
   const terrain = makeTerrain(biome, state.heightFn);
   state.world.add(terrain);
   state.terrainMesh = terrain;
-  if (state.userSettings.terrainSmoothShading) {
-    terrain.material.flatShading = false;
-    terrain.material.needsUpdate = true;
-  }
+  terrain.material.flatShading = false;
+  terrain.material.needsUpdate = true;
 
   // water plane (biomes that opt in)
   if (biome.water) {

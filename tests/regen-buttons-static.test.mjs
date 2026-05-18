@@ -10,8 +10,8 @@ assert(
   'HUD should include a same-biome regenerate button.'
 );
 assert(
-  htmlSource.includes('id="regen-random-biome"') && htmlSource.includes('random biome'),
-  'HUD should include a random-biome regenerate button.'
+  htmlSource.includes('id="regen-random-biome"') && htmlSource.includes('next biome'),
+  'HUD should include a next-biome regenerate button.'
 );
 assert(
   !htmlSource.includes('id="regen"'),
@@ -24,8 +24,10 @@ assert(
 );
 assert(
   uiSource.includes('function pickRandomBiomeSeed()')
-    && uiSource.includes('excludeBiomeId: state.currentBiome?.id'),
-  'Random-biome regeneration should preserve the existing avoid-current-biome behavior.'
+    && uiSource.includes('function nextEnabledBiomeId(currentBiomeId)')
+    && uiSource.includes('const nextId = nextEnabledBiomeId(state.currentBiome?.id);')
+    && uiSource.includes('allowedBiomeIds: nextId ? [nextId] : undefined'),
+  'Next-biome regeneration should step through enabled biomes in BIOMES order and wrap.'
 );
 assert(
   uiSource.includes('wireRegenButton("regen-same-biome", pickSameBiomeSeed)')
@@ -34,16 +36,17 @@ assert(
 );
 assert(
   uiSource.includes('document.getElementById("regen-random-biome").click()'),
-  'Keyboard and auto-regenerate flows should keep the old full-random behavior.'
+  'Keyboard and auto-regenerate flows should use the ordered next-biome button behavior.'
 );
 assert(
-  htmlSource.includes('random biome picks from enabled biomes; same biome stays current'),
-  'Biome filter hint should explain that only random-biome regeneration uses enabled biome filters.'
+  htmlSource.includes('next biome steps through enabled biomes; same biome stays current'),
+  'Biome filter hint should explain that next-biome regeneration steps through enabled biome filters.'
 );
 assert(
   htmlSource.includes('stays in the current biome, ignoring biome-filter chips')
-    && htmlSource.includes('pick from enabled biome-filter chips'),
-  'Help panel should explain how same-biome and random-biome regeneration differ.'
+    && htmlSource.includes('steps to the next enabled biome')
+    && htmlSource.includes('regenerate with the next-biome button behavior'),
+  'Help panel should explain how same-biome, next-biome, and keyboard regeneration differ.'
 );
 assert(
   styleSource.includes('.regen-label { display: none; }'),

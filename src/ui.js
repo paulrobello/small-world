@@ -52,9 +52,7 @@ const PERSISTED_KEYS = [
   "grassDensity",
   "grassHeight",
   "groundMarkLifeScale",
-  "grassEdgeDiscs",
   "grassPanelOpen",
-  "terrainSmoothShading",
   "musicEnabled",
   "musicVolume",
 ];
@@ -689,7 +687,6 @@ export function initUi({ camera, canvas, controls, renderer }) {
   // the per-vertex Y in the grass shader via a uniform.
   const grassDetailsEl = document.getElementById("setting-grass-details");
   const grassEnabledEl = document.getElementById("setting-grass-enabled");
-  const grassEdgeDiscsEl = document.getElementById("setting-grass-edge-discs");
   const grassDensityEl = document.getElementById("setting-grass-density");
   const grassDensityValueEl = document.getElementById("setting-grass-density-value");
   const grassHeightEl = document.getElementById("setting-grass-height");
@@ -727,11 +724,6 @@ export function initUi({ camera, canvas, controls, renderer }) {
   const HEIGHT_BASE = 0.96;
   grassDetailsEl.open = !!state.userSettings.grassPanelOpen;
   grassEnabledEl.checked = state.userSettings.grassEnabled !== false;
-  if (state.userSettings.grassEdgeDiscs === undefined) state.userSettings.grassEdgeDiscs = !LOWFX;
-  if (LOWFX) state.userSettings.grassEdgeDiscs = false;
-  grassEdgeDiscsEl.checked = state.userSettings.grassEdgeDiscs !== false;
-  grassEdgeDiscsEl.disabled = LOWFX;
-  grassEdgeDiscsEl.parentElement.style.opacity = LOWFX ? "0.45" : "";
   grassDensityEl.value = String(
     Math.round(((state.userSettings.grassDensity ?? DENSITY_BASE) / DENSITY_BASE) * 100)
   );
@@ -750,10 +742,6 @@ export function initUi({ camera, canvas, controls, renderer }) {
     state.userSettings.grassEnabled = grassEnabledEl.checked;
     syncGrassSliderEnabledState();
     applyGrassSettings();
-    saveSettings();
-  });
-  grassEdgeDiscsEl.addEventListener("change", () => {
-    state.userSettings.grassEdgeDiscs = LOWFX ? false : grassEdgeDiscsEl.checked;
     saveSettings();
   });
   grassDensityEl.addEventListener("input", () => {
@@ -796,7 +784,6 @@ export function initUi({ camera, canvas, controls, renderer }) {
   const outlineEl = document.getElementById("setting-outline");
   const aoEl = document.getElementById("setting-ao");
   const depthFogEl = document.getElementById("setting-depthfog");
-  const terrainSmoothEl = document.getElementById("setting-terrain-smooth");
   const bloomRadiusEl = document.getElementById("setting-bloom-radius");
   const bloomRadiusValueEl = document.getElementById("setting-bloom-radius-value");
   const lowfxHint = document.getElementById("setting-lowfx-hint");
@@ -816,7 +803,12 @@ export function initUi({ camera, canvas, controls, renderer }) {
   outlineEl.checked = state.userSettings.outline;
   aoEl.checked = state.userSettings.ao;
   depthFogEl.checked = state.userSettings.depthFog;
-  terrainSmoothEl.checked = state.userSettings.terrainSmoothShading;
+  function syncBiomeOverrideSettings() {
+    const bloomOverridden = state.currentBiome?.bloom === false;
+    bloomEl.parentElement.hidden = bloomOverridden;
+    bloomRadiusEl.parentElement.hidden = bloomOverridden;
+  }
+  syncBiomeOverrideSettings();
 
   if (LOWFX) {
     // The depth pre-pass and composer are stubbed out under LOWFX, so every
@@ -903,15 +895,6 @@ export function initUi({ camera, canvas, controls, renderer }) {
   depthFogEl.addEventListener("change", () => {
     state.userSettings.depthFog = depthFogEl.checked;
     if (state.postfx) state.postfx.setDepthFog(depthFogEl.checked);
-    saveSettings();
-  });
-  terrainSmoothEl.addEventListener("change", () => {
-    state.userSettings.terrainSmoothShading = terrainSmoothEl.checked;
-    const mesh = state.terrainMesh;
-    if (mesh) {
-      mesh.material.flatShading = !terrainSmoothEl.checked;
-      mesh.material.needsUpdate = true;
-    }
     saveSettings();
   });
 
@@ -1008,13 +991,18 @@ export function initUi({ camera, canvas, controls, renderer }) {
     renderBiomeFilter();
   });
 
+  function nextEnabledBiomeId(currentBiomeId) {
+    const enabled = BIOMES.filter((biome) => biomeFilter.has(biome.id));
+    if (enabled.length === 0) return null;
+    const currentIdx = enabled.findIndex((biome) => biome.id === currentBiomeId);
+    const nextIdx = currentIdx < 0 ? 0 : (currentIdx + 1) % enabled.length;
+    return enabled[nextIdx].id;
+  }
+
   function pickRandomBiomeSeed() {
-    // If every biome is enabled, the filter is a no-op — keep the old
-    // "avoid same biome twice" behaviour. Otherwise constrain to the set.
-    const all = biomeFilter.size === BIOMES.length;
+    const nextId = nextEnabledBiomeId(state.currentBiome?.id);
     return newRandomSeed({
-      excludeBiomeId: state.currentBiome?.id,
-      allowedBiomeIds: all ? undefined : [...biomeFilter],
+      allowedBiomeIds: nextId ? [nextId] : undefined,
     });
   }
 
@@ -1190,6 +1178,7 @@ export function initUi({ camera, canvas, controls, renderer }) {
       // and re-apply user wind/grass settings so they survive across worlds.
       if (state._reapplyWindSettings) state._reapplyWindSettings();
       if (state._reapplyGrassSettings) state._reapplyGrassSettings();
+      syncBiomeOverrideSettings();
       // Close the locator on regen — entity references are stale.
       if (_locatorOpen) setLocatorOpen(false);
       _locatorCycle = null;

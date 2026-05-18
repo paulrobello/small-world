@@ -85,9 +85,9 @@
           <span class="regen-glyph">↻</span>
           <span class="regen-label">same biome</span>
         </button>
-        <button class="regen" id="regen-random-biome" title="regenerate random biome">
+        <button class="regen" id="regen-random-biome" title="regenerate next biome">
           <span class="regen-glyph">⇄</span>
-          <span class="regen-label">random biome</span>
+          <span class="regen-label">next biome</span>
         </button>
       </div>
     </div>
@@ -113,8 +113,8 @@
       <dl class="help-list">
         <dt>same biome</dt>
         <dd><span aria-hidden="true">↻</span> rolls a fresh seed that stays in the current biome, ignoring biome-filter chips.</dd>
-        <dt>random biome</dt>
-        <dd><span aria-hidden="true">⇄</span> or <kbd>r</kbd> keeps the old regenerate behavior: pick from enabled biome-filter chips and avoid repeating the current biome when possible.</dd>
+        <dt>next biome</dt>
+        <dd><span aria-hidden="true">⇄</span> or <kbd>r</kbd> steps to the next enabled biome, looping back to the first after the last.</dd>
         <dt>locator</dt>
         <dd><kbd>l</kbd> opens the entity locator panel. Click a type to fly the camera to the nearest instance. Creatures enter follow mode. <kbd>tab</kbd> cycles through all instances of the selected type. <kbd>esc</kbd> closes the panel.</dd>
         <dt>follow creature</dt>
@@ -138,7 +138,7 @@
         <dt>hover a sleeper</dt><dd>gently wakes drowsing creatures.</dd>
         <dt><kbd>l</kbd></dt><dd>open entity locator.</dd>
         <dt><kbd>tab</kbd></dt><dd>cycle instances of last located type.</dd>
-        <dt><kbd>r</kbd></dt><dd>regenerate with the random-biome button behavior.</dd>
+        <dt><kbd>r</kbd></dt><dd>regenerate with the next-biome button behavior.</dd>
         <dt><kbd>p</kbd></dt><dd>toggle photo mode.</dd>
         <dt><kbd>s</kbd></dt><dd>save the current frame as a png (photo mode only).</dd>
         <dt><kbd>f</kbd></dt><dd>enter or exit first-person stroll.</dd>
@@ -180,7 +180,7 @@
       <div class="settings-section-label">buttons</div>
       <dl class="help-list">
         <dt>↻ same biome</dt><dd>roll a new seed while staying in this biome.</dd>
-        <dt>⇄ random biome</dt><dd>roll from enabled biome filters; same as pressing <kbd>r</kbd>.</dd>
+        <dt>⇄ next biome</dt><dd>step through enabled biome filters; same as pressing <kbd>r</kbd>.</dd>
         <dt>? help</dt><dd>open this panel.</dd>
         <dt>⚙ settings</dt><dd>open settings — follow mode, photo mode, biome filters, and more.</dd>
       </dl>
@@ -308,11 +308,6 @@
           <span class="setting-label">grass enabled</span>
         </label>
 
-        <label class="setting setting-checkbox">
-          <input type="checkbox" id="setting-grass-edge-discs" checked />
-          <span class="setting-label">grass edge discs</span>
-        </label>
-
         <label class="setting">
           <span class="setting-label">density</span>
           <input type="range" id="setting-grass-density" min="0" max="300" step="1" value="100" />
@@ -371,11 +366,6 @@
         <label class="setting setting-checkbox">
           <input type="checkbox" id="setting-depthfog" checked />
           <span class="setting-label">depth fog</span>
-        </label>
-
-        <label class="setting setting-checkbox">
-          <input type="checkbox" id="setting-terrain-smooth" checked />
-          <span class="setting-label">smooth terrain shading</span>
         </label>
       </details>
 
@@ -439,7 +429,7 @@
         </div>
       </div>
       <div class="biome-filter" id="biome-filter"></div>
-      <div class="biome-filter-hint">tap to toggle. random biome picks from enabled biomes; same biome stays current.</div>
+      <div class="biome-filter-hint">tap to toggle. next biome steps through enabled biomes; same biome stays current.</div>
     </section>
   </aside>
 

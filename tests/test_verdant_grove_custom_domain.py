@@ -59,16 +59,16 @@ class VerdantGroveCustomDomainTest(unittest.TestCase):
         self.assertNotIn("new THREE.SphereGeometry(0.026, 6, 5)", flora)
         self.assertNotIn("new THREE.SphereGeometry(0.032, 6, 5)", flora)
 
-    def test_grass_edge_discs_can_be_disabled_and_default_off_in_lowfx(self) -> None:
+    def test_grass_edge_discs_are_biome_defined_and_only_lowfx_disabled(self) -> None:
         state = (ROOT / "src" / "state.js").read_text()
         sky = (ROOT / "src" / "sky.js").read_text()
         ui = (ROOT / "src" / "ui.js").read_text()
         html = (ROOT / "index.html").read_text()
 
-        self.assertIn("grassEdgeDiscs", state)
-        self.assertIn("grassEdgeDiscs", ui)
-        self.assertIn("setting-grass-edge-discs", html)
-        self.assertIn("if (isGrassAura && (LOWFX || state.userSettings.grassEdgeDiscs === false)) return null;", sky)
+        self.assertNotIn("grassEdgeDiscs", state)
+        self.assertNotIn("grassEdgeDiscs", ui)
+        self.assertNotIn("setting-grass-edge-discs", html)
+        self.assertIn("if (isGrassAura && LOWFX) return null;", sky)
 
     def test_only_bare_biome_grass_density_overrides_are_present(self) -> None:
         biomes = (ROOT / "src" / "biomes.js").read_text()

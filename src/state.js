@@ -131,17 +131,14 @@ export const state = {
     grassDensity: 12.5,
     grassHeight: 0.96,
     groundMarkLifeScale: 2.0,
-    grassEdgeDiscs: true,
     grassPanelOpen: false,
-    terrainSmoothShading: true,
     foliageWindEnabled: true,
     bloomRadius: 1.0,
     pbrDetails: true,
     musicEnabled: false,
     musicVolume: 0.5,
   },
-  // Set by world.js after makeTerrain. Used by the smooth-shading toggle in
-  // ui.js to flip mat.flatShading at runtime without rebuilding geometry.
+  // Set by world.js after makeTerrain.
   terrainMesh: null,
   // Set by initPostFX; environment.js reads it to enable soft-particle depth
   // testing. Null under LOWFX (no composer, no depth capture).
