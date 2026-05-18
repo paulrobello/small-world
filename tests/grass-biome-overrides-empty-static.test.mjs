@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { FLOWER_DENSITY, GRASS_DENSITY, GRASS_HEIGHT } from '../src/biomes.js';
+import { FLOWER_DENSITY, GRASS_DENSITY, GRASS_HEIGHT, WILDFLOWER_PALETTES } from '../src/biomes.js';
 
 assert.deepEqual(
   GRASS_DENSITY,
@@ -9,6 +9,12 @@ assert.deepEqual(
 
 assert.equal(FLOWER_DENSITY.frozen, 0, 'frozen vale should not spawn wildflower ground cover.');
 assert.equal(FLOWER_DENSITY.coral, 0, 'coral atoll should not spawn wildflower ground cover.');
+assert.equal(FLOWER_DENSITY.cloud, 0, 'cloud island should not spawn wildflower ground cover.');
+assert.equal(
+  Object.hasOwn(WILDFLOWER_PALETTES, 'cloud'),
+  false,
+  'cloud island should not keep a wildflower palette when flowers are disabled.'
+);
 
 assert.deepEqual(
   GRASS_HEIGHT,

@@ -4,12 +4,12 @@
  * Streams one MP3 at a time via a single <audio> element.
  * Biome name → filename mapping: PascalCase the biome's `name`, look for
  *   `/music/<Name>.mp3`.  Falls back to `Default.mp3`.
- * Volume is kept low (≈ 15 %) and the toggle is persisted via userSettings.
+ * Volume is capped low (15 %) and scaled by the persisted musicVolume setting.
  */
 
 import { state } from "./state.js";
 
-const VOLUME = 0.15;
+const MAX_VOLUME = 0.15;
 const FADE_MS = 800;
 
 // Static map: PascalCase name → filename.  Add entries as new tracks land.
@@ -22,6 +22,7 @@ const DEFAULT_TRACK = "Default.mp3";
 
 let _audio = null; // lazy-created <audio> element
 let _currentSrc = null; // currently-loaded track path (avoid redundant loads)
+let _fadeId = 0;
 
 // ---------------------------------------------------------------------------
 // Internal helpers
@@ -49,15 +50,26 @@ function ensureAudio() {
   return _audio;
 }
 
+function targetVolume() {
+  const volume = state.userSettings.musicVolume ?? 0.5;
+  return MAX_VOLUME * Math.max(0, Math.min(1, volume));
+}
+
+function clampAudioVolume(volume) {
+  return Math.max(0, Math.min(1, volume));
+}
+
 function fadeTo(targetVol, duration) {
   const el = ensureAudio();
+  const fadeId = ++_fadeId;
   const start = el.volume;
   const diff = targetVol - start;
   if (Math.abs(diff) < 0.001) return; // already there
   const t0 = performance.now();
   function step(now) {
+    if (fadeId !== _fadeId) return;
     const p = Math.min((now - t0) / duration, 1);
-    el.volume = start + diff * p;
+    el.volume = clampAudioVolume(start + diff * p);
     if (p < 1) requestAnimationFrame(step);
   }
   requestAnimationFrame(step);
@@ -84,7 +96,7 @@ export function switchMusic(biome) {
 
   // Same track already playing — just ensure volume if enabled.
   if (_currentSrc === src && _audio && !_audio.paused) {
-    if (state.userSettings.musicEnabled) fadeTo(VOLUME, FADE_MS);
+    if (state.userSettings.musicEnabled) fadeTo(targetVolume(), FADE_MS);
     return;
   }
 
@@ -98,13 +110,13 @@ export function switchMusic(biome) {
       el.src = src;
       el.load(); // start streaming new track
       playIfEnabled();
-      if (state.userSettings.musicEnabled) fadeTo(VOLUME, FADE_MS);
+      if (state.userSettings.musicEnabled) fadeTo(targetVolume(), FADE_MS);
     }, FADE_MS);
   } else {
     el.src = src;
     el.load();
     playIfEnabled();
-    if (state.userSettings.musicEnabled) fadeTo(VOLUME, FADE_MS);
+    if (state.userSettings.musicEnabled) fadeTo(targetVolume(), FADE_MS);
   }
 }
 
@@ -115,13 +127,21 @@ export function setMusicEnabled(enabled) {
   if (!el || !el.src) return;
   if (enabled) {
     el.play().catch(() => {});
-    fadeTo(VOLUME, FADE_MS);
+    fadeTo(targetVolume(), FADE_MS);
   } else {
     fadeTo(0, FADE_MS);
     setTimeout(() => {
       if (el && !state.userSettings.musicEnabled) el.pause();
     }, FADE_MS + 50);
   }
+}
+
+/** Set the music volume multiplier from the settings slider. */
+export function setMusicVolume(volume) {
+  state.userSettings.musicVolume = Math.max(0, Math.min(1, volume));
+  if (!_audio || !state.userSettings.musicEnabled) return;
+  _fadeId++;
+  _audio.volume = clampAudioVolume(targetVolume());
 }
 
 /**

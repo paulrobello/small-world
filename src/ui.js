@@ -8,7 +8,7 @@ import { BIOMES } from "./biomes.js";
 import { LOWFX } from "./lowfx.js";
 import { INSPECT } from "./inspect.js";
 import { APP_VERSION } from "./state.js";
-import { setMusicEnabled, tryResumeOnGesture } from "./music.js";
+import { setMusicEnabled, setMusicVolume, tryResumeOnGesture } from "./music.js";
 
 let followTarget = null;
 let selectingCreature = false;
@@ -56,6 +56,7 @@ const PERSISTED_KEYS = [
   "grassPanelOpen",
   "terrainSmoothShading",
   "musicEnabled",
+  "musicVolume",
 ];
 const BOOKMARKS_KEY = "smallworld:bookmarks:v1";
 const BIOME_FILTER_KEY = "smallworld:biomefilter:v1";
@@ -851,16 +852,26 @@ export function initUi({ camera, canvas, controls, renderer }) {
     saveSettings();
   });
 
-  // ── Music toggle (button in controls row, not a settings checkbox) ──────
+  // ── Music controls ------------------------------------------------------
   const musicBtn = document.getElementById("music-toggle");
+  const musicVolumeEl = document.getElementById("setting-music-volume");
+  const musicVolumeValueEl = document.getElementById("setting-music-volume-value");
   function updateMusicButton() {
     musicBtn.classList.toggle("active", !!state.userSettings.musicEnabled);
   }
   updateMusicButton();
+  musicVolumeEl.value = String(Math.round((state.userSettings.musicVolume ?? 0.5) * 100));
+  musicVolumeValueEl.textContent = musicVolumeEl.value + "%";
   musicBtn.addEventListener("click", () => {
     state.userSettings.musicEnabled = !state.userSettings.musicEnabled;
     setMusicEnabled(state.userSettings.musicEnabled);
     updateMusicButton();
+    saveSettings();
+  });
+  musicVolumeEl.addEventListener("input", () => {
+    const v = Number(musicVolumeEl.value);
+    setMusicVolume(v / 100);
+    musicVolumeValueEl.textContent = v + "%";
     saveSettings();
   });
   // Resume audio on first user gesture (autoplay policy).

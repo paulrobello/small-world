@@ -496,7 +496,6 @@ export const WILDFLOWER_PALETTES = {
   ashen:   ["#e63946", "#f77f00", "#fcbf49"],
   golden:  ["#fefae0", "#f1c890", "#dda15e", "#bc8a45"],
   mossy:   ["#cdef8f", "#fff2b3", "#a8d8a3"],
-  cloud:   ["#ffffff", "#e3eaff", "#fff2b3"],
   grove:   ["#ff90c0", "#fff2b3", "#9c84d4"],
   obsidian:["#ff7a2a", "#ffb060", "#fcbf49"],
 };
@@ -525,7 +524,7 @@ export const FLOWER_DENSITY = {
   verdant: 180, desert: 0, frozen: 0,
   marsh:   220, ashen:  50, golden: 200,
   mossy:   140, twilight: 240, coral: 0,
-  cloud:   80,  grove:   170, obsidian: 0,
+  cloud:   0,   grove:   170, obsidian: 0,
 };
 // Per-biome cloud count for the sky-backdrop. 0 / undefined = no clouds
 // (overcast deserts, smoky biomes). Cloud island gets the most by far.
