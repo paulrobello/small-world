@@ -10,6 +10,8 @@ const STONE_PBR_TEX_SIZE = 128;
 const PLAIN_ROCK_PBR_TEX_SIZE = 128;
 const MUSHROOM_CAP_TEX_SIZE = 256;
 const MUSHROOM_UNDERSIDE_TEX_SIZE = 256;
+const PLAIN_ROCK_DETAIL_BOOST = 1.55;
+const PLAIN_ROCK_NORMAL_SCALE = 0.82;
 const MUSHROOM_CAP_DETAIL_BOOST = 1.28;
 const UNDERSIDE_GILL_BANDS = 38;
 const UNDERSIDE_GILL_LINE_WIDTH = 0.026;
@@ -376,8 +378,9 @@ function rockDetailHeight(u, v, seed) {
   const crackField = smoothHashNoise(wu * 4.6 + fineMottle * 0.52, wv * 4.1 - broadMottle * 0.45, seed + 1531);
   const crackMask = smoothHashNoise(wu * 8.3, wv * 7.7, seed + 1543);
   const irregularCracks = Math.max(0, 1 - Math.abs(crackField - 0.52) * 25) * Math.max(0, crackMask - 0.47);
-  const pits = Math.max(0, 0.56 - poreNoise) * 0.42;
-  return (broadMottle - 0.5) * 0.30 + (fineMottle - 0.5) * 0.13 - pits - irregularCracks * 0.55;
+  const pittedGrain = Math.max(0, 0.60 - poreNoise) * 0.58;
+  const baseHeight = (broadMottle - 0.5) * 0.36 + (fineMottle - 0.5) * 0.18;
+  return (baseHeight - pittedGrain - irregularCracks * 0.72) * PLAIN_ROCK_DETAIL_BOOST;
 }
 
 function buildPlainRockTextures() {
@@ -401,11 +404,12 @@ function buildPlainRockTextures() {
       const hU = rockDetailHeight(u, Math.min(1, v + step), seed);
       const h = rockDetailHeight(u, v, seed);
       const pore = Math.max(0, -h);
-      const nx = (hL - hR) * 0.86;
-      const ny = (hD - hU) * 0.86;
+      const nx = (hL - hR) * 1.04;
+      const ny = (hD - hU) * 1.04;
       const nz = Math.sqrt(Math.max(0.12, 1 - nx * nx - ny * ny));
-      const roughness = 0.84 + pore * 0.16 + smoothHashNoise(u * 19.0, v * 17.0, seed + 61) * 0.05;
-      const specular = 0.07 + Math.max(0, h) * 0.06;
+      const grain = smoothHashNoise(u * 19.0, v * 17.0, seed + 61);
+      const roughness = 0.80 + pore * 0.22 + grain * 0.08;
+      const specular = 0.06 + Math.max(0, h) * 0.10 + (1 - grain) * 0.04;
       const index = (py * size + px) * 4;
 
       normalImage.data[index + 0] = Math.round((nx * 0.5 + 0.5) * 255);
@@ -734,11 +738,11 @@ export function makePlainRockPBRMaterial(params) {
   const material = new THREE.MeshPhysicalMaterial({
     ...params,
     reflectivity: 0.12,
-    specularIntensity: 0.24,
+    specularIntensity: 0.34,
     specularColor: new THREE.Color(params.color).lerp(new THREE.Color(0xffffff), 0.18),
   });
   const { normalTexture, materialTexture } = cachedDetailTextures("plain-rock", buildPlainRockTextures);
-  material.normalScale.set(0.42, 0.42);
+  material.normalScale.set(PLAIN_ROCK_NORMAL_SCALE, PLAIN_ROCK_NORMAL_SCALE);
   return applyDetailMaps(material, normalTexture, materialTexture);
 }
 

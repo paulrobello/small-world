@@ -147,6 +147,16 @@ assert(
 );
 
 assert(
+  pbrSource.includes('PLAIN_ROCK_DETAIL_BOOST')
+    && pbrSource.includes('PLAIN_ROCK_NORMAL_SCALE')
+    && pbrSource.includes('pittedGrain')
+    && pbrSource.includes('irregularCracks * 0.72')
+    && pbrSource.includes('material.normalScale.set(PLAIN_ROCK_NORMAL_SCALE, PLAIN_ROCK_NORMAL_SCALE)')
+    && pbrSource.includes('specularIntensity: 0.34'),
+  'Plain rock PBR should keep visibly stronger pits, cracks, normals, and specular variation.'
+);
+
+assert(
   utilSource.includes('sphericalUvs = false')
     && utilSource.includes('welded.setAttribute("uv", new THREE.Float32BufferAttribute(uvs, 2))'),
   'jitterGeo should support opt-in spherical UV restoration for procedural detail maps.'
