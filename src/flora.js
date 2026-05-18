@@ -1810,7 +1810,7 @@ export const FLORA_BUILDERS = {
       const yLocal = Math.sqrt(Math.max(0, capA2 - r * r)) * capSY;
       const n = new THREE.Vector3(x / capA2, yLocal / capB2, z / capA2).normalize();
       const sink = 0.02;
-      const spotGeo = new THREE.SphereGeometry(spotRadius, 6, 5);
+      const spotGeo = new THREE.SphereGeometry(spotRadius, 20, 12);
       spotGeo.scale(1, 0.35, 1);
       tmpQuat.setFromUnitVectors(up, n);
       tmpMat.makeRotationFromQuaternion(tmpQuat);

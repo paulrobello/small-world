@@ -18,6 +18,7 @@ export default {
     outDir: "dist",
     emptyOutDir: true,
     assetsInlineLimit: 0,
+    chunkSizeWarningLimit: 950,
     rollupOptions: {
       output: {
         entryFileNames: "assets/[name]-[hash].js",

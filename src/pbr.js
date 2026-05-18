@@ -364,12 +364,15 @@ function mushroomCapHeight(u, v, seed) {
   const angle = Math.atan2(dy, dx);
   const capBody = clamp01(1 - radius);
   const rimBand = clamp01((radius - 0.58) * 2.7) * capBody;
+  const softCapMottle =
+    (smoothHashNoise(u * 5.5, v * 5.5, seed + 17) - 0.5) * 0.42 +
+    (smoothHashNoise(u * 11.0, v * 10.5, seed + 23) - 0.5) * 0.24;
   const capRidges =
-    Math.max(0, Math.sin(angle * 22 + radius * 9.0)) * capBody * 0.72 +
-    Math.max(0, Math.sin(angle * 37 - radius * 12.0)) * capBody * 0.24;
+    Math.max(0, softCapMottle + 0.24) * capBody * 0.46 +
+    Math.max(0, Math.sin(radius * 18.0 + softCapMottle * 2.4)) * rimBand * 0.22;
   const rimLobes = Math.max(0, Math.sin(angle * 9 + smoothHashNoise(u * 4.0, v * 4.0, seed + 29) * 2.8)) * rimBand;
   const capFreckles = Math.max(0, 0.62 - smoothHashNoise(u * 42.0, v * 39.0, seed + 43)) * capBody;
-  const gillPleats = Math.max(0, Math.sin(angle * 34 + radius * 18.0)) * rimBand * 0.75;
+  const gillPleats = Math.max(0, Math.sin(radius * 32.0 + softCapMottle * 3.0)) * rimBand * 0.42;
   const poreDimples = Math.max(0, 0.56 - smoothHashNoise(u * 28.0, v * 31.0, seed + 61)) * capBody;
   return (
     capRidges * 0.17 +
@@ -408,14 +411,17 @@ function buildMushroomCapTextures() {
       const hD = mushroomCapHeight(u, Math.max(0, v - step), seed);
       const hU = mushroomCapHeight(u, Math.min(1, v + step), seed);
       const h = mushroomCapHeight(u, v, seed);
+      const softCapMottle =
+        (smoothHashNoise(u * 5.5, v * 5.5, seed + 17) - 0.5) * 0.42 +
+        (smoothHashNoise(u * 11.0, v * 10.5, seed + 23) - 0.5) * 0.24;
       const capRidges =
-        Math.max(0, Math.sin(angle * 22 + radius * 9.0)) * capBody * 0.72 +
-        Math.max(0, Math.sin(angle * 37 - radius * 12.0)) * capBody * 0.24;
+        Math.max(0, softCapMottle + 0.24) * capBody * 0.46 +
+        Math.max(0, Math.sin(radius * 18.0 + softCapMottle * 2.4)) * rimBand * 0.22;
       const capFreckles = Math.max(0, 0.62 - smoothHashNoise(u * 42.0, v * 39.0, seed + 43)) * capBody;
       const dampSpeckle = smoothHashNoise(u * 86.0, v * 79.0, seed + 79) * capBody;
       const pores = Math.max(0, 0.56 - smoothHashNoise(u * 28.0, v * 31.0, seed + 61)) * capBody;
-      const nx = (hL - hR) * 1.75 + Math.cos(angle) * (rimBand * 0.070 + pores * 0.060);
-      const ny = (hD - hU) * 1.75 + Math.sin(angle) * (rimBand * 0.070 + pores * 0.060);
+      const nx = (hL - hR) * 1.18 + Math.cos(angle) * (rimBand * 0.050 + pores * 0.040);
+      const ny = (hD - hU) * 1.18 + Math.sin(angle) * (rimBand * 0.050 + pores * 0.040);
       const nz = Math.sqrt(Math.max(0.12, 1 - nx * nx - ny * ny));
       const roughness = 0.54 + pores * 0.24 + capFreckles * 0.18 + radius * 0.08 - Math.max(0, h) * 0.10;
       const specular = 0.14 + dampSpeckle * 0.24 + capRidges * 0.11 + rimBand * 0.07;
@@ -426,8 +432,8 @@ function buildMushroomCapTextures() {
       normalImage.data[index + 2] = Math.round(nz * 255);
       normalImage.data[index + 3] = 255;
 
-      const radialStain = clamp01(0.82 + capRidges * 0.16 + capFreckles * 0.12 - pores * 0.12);
-      const rimShade = 1 - rimBand * 0.10;
+      const radialStain = clamp01(0.92 + softCapMottle * 0.10 + capFreckles * 0.07 - pores * 0.07);
+      const rimShade = 1 - rimBand * 0.06;
       const colorDetail = clamp01(radialStain * rimShade);
       colorImage.data[index + 0] = Math.round(colorDetail * 255);
       colorImage.data[index + 1] = Math.round((0.88 + colorDetail * 0.12) * 255);

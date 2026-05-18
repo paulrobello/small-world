@@ -61,6 +61,7 @@ assert(
     && pbrSource.includes('material.normalScale.set(1.22, 1.22)')
     && pbrSource.includes('specularIntensity: 0.70')
     && pbrSource.includes('capColorCanvas')
+    && pbrSource.includes('softCapMottle')
     && pbrSource.includes('material.map = colorTexture'),
   'Mushroom cap PBR should be strong enough for top texture to read under inspect lighting.'
 );
@@ -102,7 +103,8 @@ assert(
     && floraSource.includes('const bulbBase')
     && floraSource.includes('const verticalRidge')
     && floraSource.includes('makeMushroomStemGeometry(0.35')
-    && floraSource.includes('makeMushroomStemGeometry(stemH'),
+    && floraSource.includes('makeMushroomStemGeometry(stemH')
+    && floraSource.includes('new THREE.SphereGeometry(spotRadius, 20, 12)'),
   'Small and large mushrooms should use an S-curved stem geometry with a wider bulb base.'
 );
 
