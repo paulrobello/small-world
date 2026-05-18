@@ -135,7 +135,7 @@ export const state = {
     grassPanelOpen: false,
     terrainSmoothShading: true,
     foliageWindEnabled: true,
-    bloomRadius: 0.15,
+    bloomRadius: 1.0,
     pbrDetails: true,
     musicEnabled: false,
     musicVolume: 0.5,

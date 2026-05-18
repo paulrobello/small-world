@@ -177,7 +177,7 @@ export const BIOMES = [
     sun: "#ff8866",
     flora: [
       "lavafissure", "lavafissure", "lavafissure", "lavafissure",
-      "deadtree", "dandylion", "rock", "skull", "crystal",
+      "deadtree", "rock", "rock", "skull", "crystal", "crystal",
     ],
     floraCount: 58,
     leafballTreePalette: {
@@ -190,7 +190,7 @@ export const BIOMES = [
     darkBiome: true,
     edgeAura: {
       pattern: "mist",
-      colors: ["#0c0a12", "#5a3a4a", "#e63946"],
+      colors: ["#1a1b2e", "#2b2d42", "#4a4e69"],
       alpha: 0.95,
       innerSoft: 0.24,
       outerSoft: 10.5,
@@ -493,7 +493,6 @@ export const WILDFLOWER_PALETTES = {
 
   // Tighter biome palettes — stay close to the local material range.
   frozen:  ["#cad2ff", "#f1faee", "#e0c3fc"],
-  ashen:   ["#e63946", "#f77f00", "#fcbf49"],
   golden:  ["#fefae0", "#f1c890", "#dda15e", "#bc8a45"],
   mossy:   ["#cdef8f", "#fff2b3", "#a8d8a3"],
   grove:   ["#ff90c0", "#fff2b3", "#9c84d4"],
@@ -522,7 +521,7 @@ export const BALD_THRESHOLD = {
 };
 export const FLOWER_DENSITY = {
   verdant: 180, desert: 0, frozen: 0,
-  marsh:   220, ashen:  50, golden: 200,
+  marsh:   220, ashen:   0, golden: 200,
   mossy:   140, twilight: 240, coral: 0,
   cloud:   0,   grove:   170, obsidian: 0,
 };

@@ -7,6 +7,9 @@ const floraSource = readFileSync(new URL('../src/flora.js', import.meta.url), 'u
 const inspectSource = readFileSync(new URL('../src/inspect.js', import.meta.url), 'utf8');
 const uiSource = readFileSync(new URL('../src/ui.js', import.meta.url), 'utf8');
 const worldSource = readFileSync(new URL('../src/world.js', import.meta.url), 'utf8');
+const fissureStart = floraSource.indexOf('lavafissure(biome)');
+const fissureEnd = floraSource.indexOf('obsidianglass()', fissureStart);
+const fissureBlock = floraSource.slice(fissureStart, fissureEnd);
 
 assert(obsidian, 'volcanic glass biome should exist.');
 assert(
@@ -55,4 +58,10 @@ assert(
   inspectSource.includes('"lavafissure", "obsidianshard", "obsidianglass"')
     && uiSource.includes('obsidianglass: "Obsidian Glass"'),
   'shift-click and locator UI should treat obsidian glass as a dedicated inspectable flora variant.'
+);
+
+assert(fissureStart >= 0 && fissureEnd > fissureStart, 'Lava fissure builder should live before obsidian glass flora.');
+assert(
+  fissureBlock.includes('float redBand = smoothstep(0.0084375, 0.285, vAcross);'),
+  'Lava fissure bright center should be 25% thinner than the previous 0.01125/0.38 band.'
 );

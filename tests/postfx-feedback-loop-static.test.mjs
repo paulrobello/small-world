@@ -21,3 +21,14 @@ assert(
     && postfxSource.includes('particleSoftUniform.value = prevParticleSoft'),
   'Particle depth uniforms should be restored even if the depth pre-pass render exits early.'
 );
+
+const inputAdd = postfxSource.indexOf('composer.addPass(inputPass)');
+const depthFXAdd = postfxSource.indexOf('composer.addPass(depthFXPass)');
+const bloomAdd = postfxSource.indexOf('composer.addPass(bloomCompositePass)');
+
+assert(
+  inputAdd >= 0
+    && depthFXAdd > inputAdd
+    && bloomAdd > depthFXAdd,
+  'Depth outlines/AO/fog should be composited before bloom so bloom can soften bright edges instead of outlines drawing over the halo.'
+);

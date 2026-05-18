@@ -13,7 +13,7 @@ assert(
 
 for (const biome of BIOMES) {
   const flowerDensity = FLOWER_DENSITY[biome.id] ?? 100;
-  if (flowerDensity > 0) {
+  if (flowerDensity > 0 && biome.id !== 'ashen') {
     assert(
       biome.flora.includes('dandylion'),
       `${biome.id} should spawn dandy lions anywhere wildflowers are enabled.`

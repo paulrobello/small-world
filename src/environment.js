@@ -28,6 +28,19 @@ const PARTICLE_KIND_ID = {
   sand: 11, cinder: 12,
 };
 
+function cinderFissureLiftAt(x, z) {
+  let lift = 0;
+  for (const obstacle of state.obstacles) {
+    if (obstacle.kind !== "lavafissure") continue;
+    const dx = x - obstacle.x;
+    const dz = z - obstacle.z;
+    const radius = Math.max(0.35, (obstacle.r ?? 0.24) * 3.8);
+    const influence = Math.max(0, 1 - Math.sqrt(dx * dx + dz * dz) / radius);
+    lift = Math.max(lift, influence * influence * (3 - 2 * influence));
+  }
+  return lift;
+}
+
 const _particleVS = `
 attribute float aSeed;
 attribute float aLife;
@@ -153,7 +166,7 @@ export function makeParticles(biome) {
   const baseCount = {
     pollen: 240, dust: 320, snow: 500, firefly: 90, ember: 180,
     lichenmote: 140, feather: 120, bubble: 140, leaf: 120, spark: 240, rain: 520,
-    sand: 3120, cinder: 520,
+    sand: 3120, cinder: 260,
   }[kind] || 200;
   const count = _lowfxScale(baseCount);
 
@@ -171,7 +184,7 @@ export function makeParticles(biome) {
       const groundY = state.heightFn ? state.heightFn(positions[i * 3 + 0], positions[i * 3 + 2]) : 0;
       positions[i * 3 + 1] = Math.max(0.05, groundY + 0.08) + Math.random() * 0.38;
     } else {
-      positions[i * 3 + 1] = kind === "cinder" ? 0.1 + Math.random() * 2.8 : Math.random() * 14;
+      positions[i * 3 + 1] = kind === "cinder" ? 0.1 + Math.random() * 5.6 : Math.random() * 14;
     }
     positions[i * 3 + 2] = Math.sin(a) * r;
     velocities[i * 3 + 0] = (Math.random() - 0.5) * 0.4;
@@ -217,7 +230,7 @@ export function makeParticles(biome) {
     dust: 0.09,
     ember: 0.12,
     sand: 0.28,
-    cinder: 0.19,
+    cinder: 0.95,
   };
   const opacityMap = {
     dust: 0.35, feather: 0.7, bubble: 0.55, leaf: 0.85, spark: 0.95, rain: 0.55,
@@ -232,14 +245,15 @@ export function makeParticles(biome) {
   // Soft particles require the depth pre-pass — null under LOWFX, in which
   // case uSoftParticles stays 0 and the shader skips the depth-fade branch.
   const softOn = kind !== "sand" && !!(state.depthTexture && state.userSettings.softParticles);
+  const cinderBloomBoost = kind === "cinder" ? 3.2 : 1.0;
 
   const mat = new THREE.ShaderMaterial({
     uniforms: {
       uTime: { value: 0 },
       uPixelRatio: { value: pixelRatio },
       uBaseSize: { value: sizeMap[kind] ?? 0.07 },
-      uColor: { value: new THREE.Color(colorMap[kind]) },
-      uColor2: { value: new THREE.Color(color2Map[kind] ?? colorMap[kind]) },
+      uColor: { value: new THREE.Color(colorMap[kind]).multiplyScalar(cinderBloomBoost) },
+      uColor2: { value: new THREE.Color(color2Map[kind] ?? colorMap[kind]).multiplyScalar(cinderBloomBoost) },
       uOpacity: { value: opacityMap[kind] ?? 0.85 },
       tDepth: { value: state.depthTexture },
       uResolution: { value: new THREE.Vector2(window.innerWidth, window.innerHeight) },
@@ -258,6 +272,7 @@ export function makeParticles(biome) {
 
   const points = new THREE.Points(geo, mat);
   points.userData = { kind, velocities, seeds, lifes, count };
+  if (kind === "cinder") points.layers.enable(BLOOM_LAYER);
   return points;
 }
 
@@ -361,25 +376,21 @@ export function stepParticles(points, dt, t) {
         z = -Math.sign(z) * state.ISLAND_RADIUS * 1.05;
       }
     } else if (kind === "cinder") {
-      // Glowing ash blown low across the wastes: sand-like wind, but slower,
-      // floatier, and capped close to the terrain so it stays cute/subtle.
-      const gust = 0.75 + 0.45 * Math.sin(t * 0.32 + s * 0.06);
-      const cross = 0.22 * Math.sin(t * 0.48 + s * 0.11);
-      x += (4.2 * gust + Math.sin(t * 1.25 + s) * 0.5) * dt;
-      z += (cross + Math.cos(t * 0.82 + s * 1.2) * 0.34) * dt;
-      y += (0.08 + Math.sin(t * 1.7 + s * 1.6) * 0.22) * dt;
+      // Glowing ash: loose horizontal drift, rising over hot fissures and
+      // settling elsewhere.
+      const fissureLift = cinderFissureLiftAt(x, z);
+      const wander = 0.26 + fissureLift * 0.16;
+      x += (Math.sin(t * 0.55 + s * 1.7) + Math.sin(t * 0.21 + s * 0.31) * 0.5) * wander * dt;
+      z += (Math.cos(t * 0.48 + s * 1.3) + Math.sin(t * 0.27 + s * 0.47) * 0.45) * wander * dt;
+      const verticalDrift = -0.18 + fissureLift * 0.74;
+      y += (verticalDrift + Math.sin(t * 1.1 + s * 1.6) * 0.12) * dt;
       const groundY = state.heightFn ? state.heightFn(x, z) : 0;
-      const floor = groundY + 0.12;
-      const ceil = groundY + 3.0;
-      if (y < floor) y = floor + Math.random() * 0.18;
-      else if (y > ceil) y = ceil;
-      if (x > state.ISLAND_RADIUS * 1.1) {
-        x = -state.ISLAND_RADIUS * 1.05 + Math.random() * 1.0;
-        z = (Math.random() - 0.5) * state.ISLAND_RADIUS * 2.0;
-        const gy = state.heightFn ? state.heightFn(x, z) : 0;
-        y = gy + 0.12 + Math.random() * 1.15;
-      } else if (Math.abs(z) > state.ISLAND_RADIUS * 1.15) {
-        z = -Math.sign(z) * state.ISLAND_RADIUS * 1.05;
+      const ceil = groundY + 5.8;
+      if (y > ceil) y = ceil;
+      const rr = Math.sqrt(x * x + z * z);
+      if (rr > state.ISLAND_RADIUS * 1.12) {
+        x *= 0.92;
+        z *= 0.92;
       }
     } else if (kind === "bubble") {
       // slow upward drift with a soft wobble — pops at the top
@@ -451,8 +462,12 @@ export function stepParticles(points, dt, t) {
   // progress. We treat all kinds identically here (cheap one-pass loop).
   for (let i = 0; i < count; i++) {
     const s = seeds[i];
-    if (kind === "ember" || kind === "spark" || kind === "cinder") {
+    if (kind === "ember" || kind === "spark") {
       lifes[i] = Math.min(1, (lifes[i] ?? 0) + dt * 0.6);
+      if (lifes[i] >= 1) lifes[i] = 0;
+    } else if (kind === "cinder") {
+      const cinderLifeRate = 0.16;
+      lifes[i] = Math.min(1, (lifes[i] ?? 0) + dt * cinderLifeRate);
       if (lifes[i] >= 1) lifes[i] = 0;
     } else if (kind === "firefly" || kind === "lichenmote") {
       lifes[i] = (t * 0.3 + s * 0.01) % 1.0;

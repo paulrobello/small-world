@@ -1520,19 +1520,22 @@ export const FLORA_BUILDERS = {
 
   deadtree(biome) {
     const g = new THREE.Group();
-    const mat = pooled("deadtree.mat", () =>
+    const mat = pooled("deadtree.mat.smooth", () =>
       new THREE.MeshStandardMaterial({
         color: new THREE.Color(biome.cliff).offsetHSL(0, -0.1, 0.05),
-        flatShading: true,
+        flatShading: false,
         roughness: 1,
       })
     );
-    const trunkGeo = pooled("deadtree.trunk.geo", () =>
-      new THREE.CylinderGeometry(0.06, 0.13, 1.2, 5)
-    );
+    const trunkGeo = pooled("deadtree.trunk.geo", () => {
+      const geo = new THREE.CylinderGeometry(0.06, 0.13, 1.2, 5);
+      geo.computeVertexNormals();
+      return geo;
+    });
     const branchGeo = pooled("deadtree.branch.geo", () => {
       const geo = new THREE.CylinderGeometry(0.025, 0.04, 0.45, 4);
       geo.translate(0, 0.225, 0);
+      geo.computeVertexNormals();
       return geo;
     });
     const trunk = new THREE.Mesh(trunkGeo, mat);
@@ -2478,7 +2481,7 @@ export const FLORA_BUILDERS = {
           float hash(float n) { return fract(sin(n) * 43758.5453123); }
           void main() {
             float edge = smoothstep(0.62, 0.92, vAcross);
-            float redBand = smoothstep(0.01125, 0.38, vAcross);
+            float redBand = smoothstep(0.0084375, 0.285, vAcross);
             float coreMask = 1.0 - smoothstep(0.00625, 0.01875, vAcross);
             float flicker = 0.82 + 0.18 * hash(floor(vAlong * 34.0) + vHeat * 19.0);
             vec3 redGlow = uLava * vec3(0.95, 0.28, 0.16);

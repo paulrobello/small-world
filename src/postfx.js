@@ -614,7 +614,6 @@ export function initPostFX(renderer, scene, camera) {
   // Skip the composite pass entirely when bloom is off — one fewer
   // fullscreen pass and ping-pong copy every frame.
   bloomCompositePass.enabled = !!state.userSettings.bloom;
-  composer.addPass(bloomCompositePass);
 
   const depthFXPass = new ShaderPass(_depthFXShader);
   depthFXPass.uniforms.tDepth.value = depthTexture;
@@ -631,6 +630,10 @@ export function initPostFX(renderer, scene, camera) {
     state.userSettings.ao ||
     state.userSettings.depthFog;
   composer.addPass(depthFXPass);
+
+  // Bloom composites after the depth-FX pass so depth outlines are part of
+  // the base image below the halo instead of drawing over bright bloom.
+  composer.addPass(bloomCompositePass);
 
   const tiltShiftPass = new ShaderPass(_tiltShiftShader);
   tiltShiftPass.uniforms.tDepth.value = depthTexture;
