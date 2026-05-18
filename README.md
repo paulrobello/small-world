@@ -8,14 +8,20 @@ Every world is deterministic from its seed (visible in the URL as `?seed=0x____`
 
 ## Screenshots
 
-A handful of seeds across different biomes — click any image to load that exact world.
+All twelve biomes — click any image to load that exact world.
 
 |   |   |
 |---|---|
-| [![verdant grove (0xcfff)](https://raw.githubusercontent.com/paulrobello/small-world/main/screenshots/small-world-verdant-cfff.png)](https://small-world.pardev.net/?seed=0xcfff) | [![coral atoll (0x0ac5)](https://raw.githubusercontent.com/paulrobello/small-world/main/screenshots/small-world-coral-0ac5.png)](https://small-world.pardev.net/?seed=0x0ac5) |
-| [![lavender marsh (0xe480)](https://raw.githubusercontent.com/paulrobello/small-world/main/screenshots/small-world-marsh-e480.png)](https://small-world.pardev.net/?seed=0xe480) | [![twilight meadow (0x07de)](https://raw.githubusercontent.com/paulrobello/small-world/main/screenshots/small-world-twilight-07de.png)](https://small-world.pardev.net/?seed=0x07de) |
-| [![golden steppe (0xc32c)](https://raw.githubusercontent.com/paulrobello/small-world/main/screenshots/small-world-golden-c32c.png)](https://small-world.pardev.net/?seed=0xc32c) | [![cloud island (0x3f2a)](https://raw.githubusercontent.com/paulrobello/small-world/main/screenshots/small-world-cloud-3f2a.png)](https://small-world.pardev.net/?seed=0x3f2a) |
-| [![frozen vale (0x7462)](https://raw.githubusercontent.com/paulrobello/small-world/main/screenshots/small-world-frozen-7462.png)](https://small-world.pardev.net/?seed=0x7462) | |
+| [![verdant grove (0x2676)](https://raw.githubusercontent.com/paulrobello/small-world/main/screenshots/small-world-verdant-2676.png)](https://small-world.pardev.net/?seed=0x2676) | [![coral atoll (0x160d)](https://raw.githubusercontent.com/paulrobello/small-world/main/screenshots/small-world-coral-160d.png)](https://small-world.pardev.net/?seed=0x160d) |
+| [![twilight meadow (0x5766)](https://raw.githubusercontent.com/paulrobello/small-world/main/screenshots/small-world-twilight-5766.png)](https://small-world.pardev.net/?seed=0x5766) | [![lavender marsh (0xd246)](https://raw.githubusercontent.com/paulrobello/small-world/main/screenshots/small-world-marsh-d246.png)](https://small-world.pardev.net/?seed=0xd246) |
+| [![golden steppe (0x3bf3)](https://raw.githubusercontent.com/paulrobello/small-world/main/screenshots/small-world-golden-3bf3.png)](https://small-world.pardev.net/?seed=0x3bf3) | [![cloud island (0xc8f6)](https://raw.githubusercontent.com/paulrobello/small-world/main/screenshots/small-world-cloud-c8f6.png)](https://small-world.pardev.net/?seed=0xc8f6) |
+| [![ashen wastes (0x79d1)](https://raw.githubusercontent.com/paulrobello/small-world/main/screenshots/small-world-ashen-79d1.png)](https://small-world.pardev.net/?seed=0x79d1) | [![frozen vale (0xed6e)](https://raw.githubusercontent.com/paulrobello/small-world/main/screenshots/small-world-frozen-ed6e.png)](https://small-world.pardev.net/?seed=0xed6e) |
+| [![crimson dunes (0x4f1f)](https://raw.githubusercontent.com/paulrobello/small-world/main/screenshots/small-world-desert-4f1f.png)](https://small-world.pardev.net/?seed=0x4f1f) | [![mushroom grove (0x9708)](https://raw.githubusercontent.com/paulrobello/small-world/main/screenshots/small-world-grove-9708.png)](https://small-world.pardev.net/?seed=0x9708) |
+| [![mossy ruins (0x19ea)](https://raw.githubusercontent.com/paulrobello/small-world/main/screenshots/small-world-mossy-19ea.png)](https://small-world.pardev.net/?seed=0x19ea) | [![volcanic glass (0x589a)](https://raw.githubusercontent.com/paulrobello/small-world/main/screenshots/small-world-obsidian-589a.png)](https://small-world.pardev.net/?seed=0x589a) |
+
+A fairy ring in the verdant grove:
+
+[![fairy ring — verdant grove (0xaf5e)](https://raw.githubusercontent.com/paulrobello/small-world/main/screenshots/small-world-verdant-af5e-fairy_ring.png)](https://small-world.pardev.net/?seed=0xaf5e)
 
 ## Features
 
