@@ -301,7 +301,7 @@ function addGroveMushroomFamily(group, biome, { radius = 0.44, count = 3, capY =
       (Math.random() - 0.5) * 0.15,
       (Math.random() - 0.5) * 0.10
     );
-    const cap = new THREE.Mesh(capGeo, new THREE.MeshStandardMaterial({
+    const cap = new THREE.Mesh(capGeo, makeMushroomCapPBRMaterial({
       color: babyCapColor,
       roughness: 0.68,
     }));
@@ -1509,7 +1509,7 @@ export const FLORA_BUILDERS = {
         (Math.random() - 0.5) * 0.15,
         (Math.random() - 0.5) * 0.10
       );
-      const cap = new THREE.Mesh(capGeo, new THREE.MeshStandardMaterial({
+      const cap = new THREE.Mesh(capGeo, makeMushroomCapPBRMaterial({
         color: capColor,
         roughness: 0.68,
       }));

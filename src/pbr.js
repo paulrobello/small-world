@@ -7,7 +7,7 @@ const LEAFBALL_BARK_TEX_SIZE = 256;
 const LEAFBALL_LEAF_TEX_SIZE = 128;
 const STONE_PBR_TEX_SIZE = 128;
 const PLAIN_ROCK_PBR_TEX_SIZE = 128;
-const MUSHROOM_CAP_TEX_SIZE = 128;
+const MUSHROOM_CAP_TEX_SIZE = 256;
 
 function clamp01(value) {
   return Math.max(0, Math.min(1, value));
@@ -336,6 +336,23 @@ function buildPlainRockTextures() {
   };
 }
 
+function mushroomCapHeight(u, v, seed) {
+  const dx = u - 0.5;
+  const dy = v - 0.5;
+  const radius = Math.sqrt(dx * dx + dy * dy) * 2;
+  const angle = Math.atan2(dy, dx);
+  const capBody = clamp01(1 - radius);
+  const rimBand = clamp01((radius - 0.58) * 2.7) * capBody;
+  const capRidges =
+    Math.max(0, Math.sin(angle * 22 + radius * 9.0)) * capBody * 0.72 +
+    Math.max(0, Math.sin(angle * 37 - radius * 12.0)) * capBody * 0.24;
+  const rimLobes = Math.max(0, Math.sin(angle * 9 + smoothHashNoise(u * 4.0, v * 4.0, seed + 29) * 2.8)) * rimBand;
+  const capFreckles = Math.max(0, 0.62 - smoothHashNoise(u * 42.0, v * 39.0, seed + 43)) * capBody;
+  const gillPleats = Math.max(0, Math.sin(angle * 34 + radius * 18.0)) * rimBand * 0.75;
+  const poreDimples = Math.max(0, 0.56 - smoothHashNoise(u * 28.0, v * 31.0, seed + 61)) * capBody;
+  return capRidges * 0.12 + rimLobes * 0.10 + capFreckles * 0.045 + gillPleats * 0.075 - poreDimples * 0.070;
+}
+
 function buildMushroomCapTextures() {
   const size = MUSHROOM_CAP_TEX_SIZE;
   const capNormalCanvas = makeCanvas(size);
@@ -344,6 +361,7 @@ function buildMushroomCapTextures() {
   const materialCtx = capMaterialCanvas.getContext("2d");
   const normalImage = normalCtx.createImageData(size, size);
   const materialImage = materialCtx.createImageData(size, size);
+  const seed = state.currentSeed + 1139;
   for (let py = 0; py < size; py++) {
     const v = py / (size - 1);
     for (let px = 0; px < size; px++) {
@@ -353,14 +371,24 @@ function buildMushroomCapTextures() {
       const radius = Math.sqrt(dx * dx + dy * dy) * 2;
       const angle = Math.atan2(dy, dx);
       const capBody = clamp01(1 - radius);
-      const capRidges = Math.max(0, Math.sin(angle * 18 + radius * 8.0)) * capBody;
-      const pores = Math.max(0, 0.58 - hashNoise(px * 4, py * 4, state.currentSeed + 1171)) * capBody;
-      const dampSpeckle = hashNoise(px, py, state.currentSeed + 1193) * capBody;
-      const nx = Math.cos(angle) * (capRidges * 0.12 + pores * 0.10) + (dampSpeckle - 0.5) * 0.045;
-      const ny = Math.sin(angle) * (capRidges * 0.12 + pores * 0.10) + (dampSpeckle - 0.5) * 0.045;
-      const nz = Math.sqrt(Math.max(0.10, 1 - nx * nx - ny * ny));
-      const roughness = 0.58 + pores * 0.18 + radius * 0.10 - dampSpeckle * 0.08;
-      const specular = 0.14 + dampSpeckle * 0.20 + capRidges * 0.08;
+      const rimBand = clamp01((radius - 0.58) * 2.7) * capBody;
+      const step = 1 / size;
+      const hL = mushroomCapHeight(Math.max(0, u - step), v, seed);
+      const hR = mushroomCapHeight(Math.min(1, u + step), v, seed);
+      const hD = mushroomCapHeight(u, Math.max(0, v - step), seed);
+      const hU = mushroomCapHeight(u, Math.min(1, v + step), seed);
+      const h = mushroomCapHeight(u, v, seed);
+      const capRidges =
+        Math.max(0, Math.sin(angle * 22 + radius * 9.0)) * capBody * 0.72 +
+        Math.max(0, Math.sin(angle * 37 - radius * 12.0)) * capBody * 0.24;
+      const capFreckles = Math.max(0, 0.62 - smoothHashNoise(u * 42.0, v * 39.0, seed + 43)) * capBody;
+      const dampSpeckle = smoothHashNoise(u * 86.0, v * 79.0, seed + 79) * capBody;
+      const pores = Math.max(0, 0.56 - smoothHashNoise(u * 28.0, v * 31.0, seed + 61)) * capBody;
+      const nx = (hL - hR) * 1.35 + Math.cos(angle) * (rimBand * 0.055 + pores * 0.045);
+      const ny = (hD - hU) * 1.35 + Math.sin(angle) * (rimBand * 0.055 + pores * 0.045);
+      const nz = Math.sqrt(Math.max(0.12, 1 - nx * nx - ny * ny));
+      const roughness = 0.56 + pores * 0.20 + capFreckles * 0.14 + radius * 0.09 - Math.max(0, h) * 0.08;
+      const specular = 0.13 + dampSpeckle * 0.20 + capRidges * 0.08 + rimBand * 0.05;
       const index = (py * size + px) * 4;
 
       normalImage.data[index + 0] = Math.round((nx * 0.5 + 0.5) * 255);
@@ -485,11 +513,11 @@ export function makeMushroomCapPBRMaterial(params) {
   }
   const material = new THREE.MeshPhysicalMaterial({
     ...params,
-    reflectivity: 0.22,
-    specularIntensity: 0.50,
+    reflectivity: 0.26,
+    specularIntensity: 0.58,
     specularColor: new THREE.Color(params.color).lerp(new THREE.Color(0xffffff), 0.36),
   });
   const { normalTexture, materialTexture } = buildMushroomCapTextures();
-  material.normalScale.set(0.52, 0.52);
+  material.normalScale.set(0.78, 0.78);
   return applyDetailMaps(material, normalTexture, materialTexture);
 }

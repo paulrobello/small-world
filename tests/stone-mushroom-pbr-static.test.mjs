@@ -4,6 +4,14 @@ import { readFileSync } from 'node:fs';
 const floraSource = readFileSync(new URL('../src/flora.js', import.meta.url), 'utf8');
 const pbrSource = readFileSync(new URL('../src/pbr.js', import.meta.url), 'utf8');
 const utilSource = readFileSync(new URL('../src/util.js', import.meta.url), 'utf8');
+const groveFamilyBlock = floraSource.slice(
+  floraSource.indexOf('function addGroveMushroomFamily'),
+  floraSource.indexOf('function addPillarSurfaceMarks')
+);
+const fairyRingBlock = floraSource.slice(
+  floraSource.indexOf('fairyring(biome)'),
+  floraSource.indexOf('berrybush(biome)')
+);
 
 assert(
   pbrSource.includes('export function makeStonePBRMaterial')
@@ -30,6 +38,20 @@ assert(
     && floraSource.includes('makeMushroomCapPBRMaterial')
     && floraSource.includes('addPillarSurfaceMarks'),
   'Flora builders should wire stone and mushroom caps through the PBR helpers.'
+);
+
+assert(
+  pbrSource.includes('mushroomCapHeight')
+    && pbrSource.includes('rimLobes')
+    && pbrSource.includes('capFreckles')
+    && pbrSource.includes('gillPleats'),
+  'Mushroom cap PBR should add height-derived ridges, rim lobes, freckles, and pleat detail.'
+);
+
+assert(
+  groveFamilyBlock.includes('makeMushroomCapPBRMaterial')
+    && fairyRingBlock.includes('makeMushroomCapPBRMaterial'),
+  'Grove baby mushrooms and fairy-ring caps should use the mushroom PBR material helper.'
 );
 
 assert(
