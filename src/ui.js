@@ -813,8 +813,10 @@ export function initUi({ camera, canvas, controls, renderer }) {
   depthFogEl.checked = state.userSettings.depthFog;
   function syncBiomeOverrideSettings() {
     const bloomOverridden = state.currentBiome?.bloom === false;
+    const softParticlesOverridden = state.currentBiome?.softParticles === false;
     bloomEl.parentElement.hidden = bloomOverridden;
     bloomRadiusEl.parentElement.hidden = bloomOverridden;
+    softParticlesEl.parentElement.hidden = softParticlesOverridden;
   }
   syncBiomeOverrideSettings();
 
@@ -886,8 +888,9 @@ export function initUi({ camera, canvas, controls, renderer }) {
     // shader recompile). Only live particle systems need the update.
     const p = state.particles;
     if (p && p.material.uniforms.uSoftParticles && state.depthTexture) {
+      const biomeAllowsSoftParticles = state.currentBiome?.softParticles !== false;
       p.material.uniforms.uSoftParticles.value =
-        softParticlesEl.checked && p.userData.softParticlesSupported ? 1.0 : 0.0;
+        softParticlesEl.checked && p.userData.softParticlesSupported && biomeAllowsSoftParticles ? 1.0 : 0.0;
     }
     saveSettings();
   });

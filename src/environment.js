@@ -249,7 +249,8 @@ export function makeParticles(biome) {
   const camera = state.camera;
   // Soft particles require the depth pre-pass — null under LOWFX, in which
   // case uSoftParticles stays 0 and the shader skips the depth-fade branch.
-  const softOn = SOFT_PARTICLE_KINDS.has(kind) && !!(state.depthTexture && state.userSettings.softParticles);
+  const softParticlesSupported = SOFT_PARTICLE_KINDS.has(kind) && biome.softParticles !== false;
+  const softOn = softParticlesSupported && !!(state.depthTexture && state.userSettings.softParticles);
   const cinderBloomBoost = kind === "cinder" ? 3.2 : 1.0;
 
   const mat = new THREE.ShaderMaterial({
@@ -282,7 +283,7 @@ export function makeParticles(biome) {
     seeds,
     lifes,
     count,
-    softParticlesSupported: SOFT_PARTICLE_KINDS.has(kind),
+    softParticlesSupported,
   };
   if (kind === "cinder") points.layers.enable(BLOOM_LAYER);
   return points;

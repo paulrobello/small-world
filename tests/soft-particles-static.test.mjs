@@ -20,18 +20,19 @@ assert(
 );
 
 assert(
-  environmentSource.includes('const softOn = SOFT_PARTICLE_KINDS.has(kind) && !!(state.depthTexture && state.userSettings.softParticles);'),
-  'Particle materials should enable uSoftParticles only for particle kinds that benefit from depth fading.'
+  environmentSource.includes('const softParticlesSupported = SOFT_PARTICLE_KINDS.has(kind) && biome.softParticles !== false;')
+    && environmentSource.includes('const softOn = softParticlesSupported && !!(state.depthTexture && state.userSettings.softParticles);'),
+  'Particle materials should enable uSoftParticles only for particle kinds and biomes that benefit from depth fading.'
 );
 
 assert(
-  environmentSource.includes('softParticlesSupported: SOFT_PARTICLE_KINDS.has(kind)'),
+  environmentSource.includes('softParticlesSupported,'),
   'Particle instances should expose whether their kind supports depth softening.'
 );
 
 assert(
   uiSource.includes('p.material.uniforms.uSoftParticles.value =')
-    && uiSource.includes('softParticlesEl.checked && p.userData.softParticlesSupported ? 1.0 : 0.0'),
+    && uiSource.includes('softParticlesEl.checked && p.userData.softParticlesSupported && biomeAllowsSoftParticles ? 1.0 : 0.0'),
   'The FX-panel toggle should not re-enable soft particles for unsupported particle kinds like leaves.'
 );
 
