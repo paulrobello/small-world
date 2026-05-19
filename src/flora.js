@@ -912,23 +912,25 @@ export const FLORA_BUILDERS = {
     const topMotionTuckAngle = -(0.045 + THREE.MathUtils.degToRad(2));
     const firstTopRowBackoffAngle = THREE.MathUtils.degToRad(2);
     addLeafRing({ count: 6, phi: 0.07, shell: 0.54, scale: 0.72, matIndex: 2, phase: 0.18, lift: 0.32, yOffset: 0.40, pitchOffset: topMotionTuckAngle });
-    let staggerPhase = 0;
+    const earlyRowPhaseOffsets = [0.16, 0.48, -0.08, 0.31];
+    let staggerPhase = earlyRowPhaseOffsets[earlyRowPhaseOffsets.length - 1] + Math.PI / rowCounts[earlyRowPhaseOffsets.length - 1];
     for (let row = 0; row < rowCounts.length; row++) {
       const t = row / (rowCounts.length - 1);
       const phi = 0.18 + t * 2.50;
       const rowScale = 0.76 + Math.sin((1 - t) * Math.PI * 0.5) * 0.16;
       const matIndex = row < topHighlightRows ? 2 : row > 6 ? 0 : 1;
+      const rowPhase = row < earlyRowPhaseOffsets.length ? earlyRowPhaseOffsets[row] : staggerPhase;
       addLeafRing({
         count: rowCounts[row],
         phi,
         shell: 1.09 - t * 0.15 + (Math.random() - 0.5) * 0.01,
         scale: rowScale,
         matIndex,
-        phase: staggerPhase,
+        phase: rowPhase,
         lift: row === rowCounts.length - 2 ? 0.48 - t * 0.08 : row === rowCounts.length - 1 ? 0.35 - t * 0.08 : 0.22 - t * 0.10,
         pitchOffset: row === 0 ? topMotionTuckAngle + firstTopRowBackoffAngle : row < topMotionTuckRows ? topMotionTuckAngle : 0,
       });
-      staggerPhase += Math.PI / rowCounts[row];
+      if (row >= earlyRowPhaseOffsets.length) staggerPhase += Math.PI / rowCounts[row];
     }
 
     for (let i = 0; i < leafBuckets.length; i++) {

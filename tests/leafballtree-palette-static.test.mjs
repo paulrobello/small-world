@@ -112,6 +112,13 @@ assert(
     && floraSource.includes('pitchOffset: row === 0 ? topMotionTuckAngle + firstTopRowBackoffAngle : row < topMotionTuckRows ? topMotionTuckAngle : 0,'),
   'leafballtree first top row should back off two degrees while the cap and next top rows keep the stronger tuck.'
 );
+assert(
+  floraSource.includes('const earlyRowPhaseOffsets = [0.16, 0.48, -0.08, 0.31];')
+    && floraSource.includes('const rowPhase = row < earlyRowPhaseOffsets.length ? earlyRowPhaseOffsets[row] : staggerPhase;')
+    && floraSource.includes('phase: rowPhase,')
+    && floraSource.includes('if (row >= earlyRowPhaseOffsets.length) staggerPhase += Math.PI / rowCounts[row];'),
+  'leafballtree rows 0-3 should use explicit non-cumulative phase offsets so their first leaves do not form a visible seam.'
+);
 
 const verdantBlock = extractObjectBlock(biomesSource, 'id: "verdant"');
 assert(
