@@ -278,6 +278,8 @@ const _depthFXShader = {
     uFogColor: { value: new THREE.Color(0x9fb6c4) },
     uFogNear: { value: 30.0 },           // world units — sharp here
     uFogFar: { value: 160.0 },           // fully fogged here
+    uUnderwaterColor: { value: new THREE.Color(0x3f9fb5) },
+    uUnderwaterStrength: { value: 0.0 },
   },
   vertexShader: `
     varying vec2 vUv;
@@ -301,6 +303,8 @@ const _depthFXShader = {
     uniform vec3  uFogColor;
     uniform float uFogNear;
     uniform float uFogFar;
+    uniform vec3  uUnderwaterColor;
+    uniform float uUnderwaterStrength;
     varying vec2 vUv;
 
     float linDepth(vec2 uv) {
@@ -367,6 +371,10 @@ const _depthFXShader = {
       if (uFogStrength > 0.001 && skyMask > 0.5) {
         float f = smoothstep(uFogNear, uFogFar, depth) * uFogStrength;
         base.rgb = mix(base.rgb, uFogColor, f);
+      }
+
+      if (uUnderwaterStrength > 0.001) {
+        base.rgb = mix(base.rgb, uUnderwaterColor, uUnderwaterStrength);
       }
 
       gl_FragColor = base;
@@ -443,6 +451,7 @@ export function initPostFX(renderer, scene, camera) {
       setAo: () => {},
       setDepthFog: () => {},
       setDepthFogColor: () => {},
+      setUnderwaterTint: () => {},
       updateTiltShiftFocus: () => {},
       setBloomRadius: () => {},
     };
@@ -628,7 +637,8 @@ export function initPostFX(renderer, scene, camera) {
   depthFXPass.enabled =
     state.userSettings.outline ||
     state.userSettings.ao ||
-    state.userSettings.depthFog;
+    state.userSettings.depthFog ||
+    depthFXPass.uniforms.uUnderwaterStrength.value > 0.001;
   composer.addPass(depthFXPass);
 
   // Bloom composites after the depth-FX pass so depth outlines are part of
@@ -649,7 +659,8 @@ export function initPostFX(renderer, scene, camera) {
     depthFXPass.enabled =
       depthFXPass.uniforms.uOutlineStrength.value > 0.001 ||
       depthFXPass.uniforms.uAoStrength.value > 0.001 ||
-      depthFXPass.uniforms.uFogStrength.value > 0.001;
+      depthFXPass.uniforms.uFogStrength.value > 0.001 ||
+      depthFXPass.uniforms.uUnderwaterStrength.value > 0.001;
   }
 
   function particlesUseSoftDepth() {
@@ -765,6 +776,11 @@ export function initPostFX(renderer, scene, camera) {
     // Match the biome's atmosphere — called from world.js on every regen.
     setDepthFogColor: (color) => {
       depthFXPass.uniforms.uFogColor.value.copy(color);
+    },
+    setUnderwaterTint: (color, strength) => {
+      depthFXPass.uniforms.uUnderwaterColor.value.copy(color);
+      depthFXPass.uniforms.uUnderwaterStrength.value = THREE.MathUtils.clamp(strength, 0, 1);
+      refreshDepthFXEnabled();
     },
     updateTiltShiftFocus: (focusY, focusZ) => {
       tiltShiftPass.uniforms.uFocus.value = focusY;

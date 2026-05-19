@@ -706,14 +706,16 @@ export async function generateWorld(seed) {
   };
   const CORAL_SUBMERGE_MARGIN = 0.08;
   const CORAL_MIN_SCALE = 0.55;
-  // Reeds and seaweed want wet roots but visible stalks, so place them only
-  // where terrain sits below the water plane rather than on dry sand.
-  const SHALLOW_WATER_FLORA = new Set(["reed", "seaweed"]);
+  // Reeds want wet roots near the waterline; seaweed belongs farther down on
+  // submerged shelves where its height can scale toward the surface.
+  const SHALLOW_WATER_FLORA = new Set(["reed"]);
+  const MEDIUM_DEEP_WATER_FLORA = new Set(["seaweed"]);
   const WATER_FLORA_MARGIN = 0.02;
-  const WATER_FLORA_MAX_DEPTH = {
-    reed: 0.45,
-    seaweed: 0.75,
+  const WATER_FLORA_DEPTH_RANGE = {
+    reed: [WATER_FLORA_MARGIN, 0.45],
+    seaweed: [0.85, 1.65],
   };
+  const WATER_FLORA_SURFACE_CLEARANCE = 0.10;
 
   if (biome.groveDetails?.fairyRing) {
     let choice = null;
@@ -790,20 +792,25 @@ export async function generateWorld(seed) {
     attempts++;
     if ((attempts & 7) === 0) await yieldIfNeeded();
     const kind = biome.flora[Math.floor(Math.random() * biome.flora.length)];
-    // Reef corals grow on submerged shelves; reeds/seaweed prefer the shallow
-    // waterline. Both sample the wider falloff band where heights dip below
-    // sea level, while normal flora stays on dry/near-dry ground.
+    // Reef corals and water-rooted flora sample the wider falloff band where
+    // heights dip below sea level, while normal flora stays on dry/near-dry
+    // ground.
     const isReefCoral = biome.water && kind in REEF_CORAL_TOP_LOCAL;
     const isShallowWaterFlora = biome.water && SHALLOW_WATER_FLORA.has(kind);
+    const isMediumDeepWaterFlora = biome.water && MEDIUM_DEEP_WATER_FLORA.has(kind);
+    const waterFloraDepthRange = isShallowWaterFlora || isMediumDeepWaterFlora
+      ? WATER_FLORA_DEPTH_RANGE[kind]
+      : null;
     const normalFloraRadius = biome.id === "golden" && (kind === "tree" || kind === "leafballtree") ? 0.98 : 0.88;
-    let p = pickGroundPoint(isReefCoral || isShallowWaterFlora ? 1.0 : normalFloraRadius);
+    let p = pickGroundPoint(isReefCoral || waterFloraDepthRange ? 1.0 : normalFloraRadius);
     let y0 = state.heightFn(p.x, p.z);
     if (isReefCoral) {
       if (y0 > WATER_SURFACE_Y - 0.05) continue; // not submerged enough
       if (y0 < -1.8) continue; // void / extreme depth
-    } else if (isShallowWaterFlora) {
-      if (y0 > WATER_SURFACE_Y - WATER_FLORA_MARGIN) continue; // dry bank
-      if (y0 < WATER_SURFACE_Y - WATER_FLORA_MAX_DEPTH[kind]) continue; // too deep
+    } else if (waterFloraDepthRange) {
+      const depth = WATER_SURFACE_Y - y0;
+      if (depth < waterFloraDepthRange[0]) continue;
+      if (depth > waterFloraDepthRange[1]) continue;
     } else if (biome.water && y0 < WATER_SURFACE_Y + 0.04) {
       continue; // keep beach flora and limestone above the waterline
     } else if (y0 < -0.3) {
@@ -852,6 +859,15 @@ export async function generateWorld(seed) {
       const maxScale = (WATER_SURFACE_Y - CORAL_SUBMERGE_MARGIN - y) / REEF_CORAL_TOP_LOCAL[kind];
       if (maxScale < CORAL_MIN_SCALE) continue;
       s = Math.min(s, maxScale);
+    } else if (waterFloraDepthRange && f.userData.surfaceReachRange) {
+      const depth = WATER_SURFACE_Y - y;
+      const surfaceReach = f.userData.surfaceReachRange;
+      const targetReach = surfaceReach[0] + Math.random() * (surfaceReach[1] - surfaceReach[0]);
+      const maxHeight = Math.max(0, depth - WATER_FLORA_SURFACE_CLEARANCE);
+      const targetHeight = Math.min(depth * targetReach, maxHeight);
+      const baseHeight = f.userData.baseHeight ?? 1;
+      if (targetHeight <= 0) continue;
+      s = targetHeight / baseHeight;
     }
     f.position.set(p.x, y, p.z);
     const yaw = Math.random() * Math.PI * 2;

@@ -156,9 +156,19 @@ let _fpsLastUpdate = 0;
 // Reused per-frame scratch vectors for projecting the active focus point into NDC.
 const _focusProj = new THREE.Vector3();
 const _focusDir = new THREE.Vector3();
+const _underwaterColor = new THREE.Color();
 function shouldApplyTiltShift() {
   if (isPhotoFP()) return state.userSettings.tiltShift;
   return state.userSettings.tiltShift && !isStrolling() && !getFollowTarget();
+}
+function updateUnderwaterTint() {
+  if (!postfx.setUnderwaterTint) return;
+  const WATER_SURFACE_Y = -0.12 * (state.userSettings.worldScale || 1);
+  const underwater = !!state.waterMesh && !!state.currentBiome?.water && camera.position.y < WATER_SURFACE_Y;
+  const depth = underwater ? WATER_SURFACE_Y - camera.position.y : 0;
+  const strength = underwater ? THREE.MathUtils.clamp(0.18 + depth * 0.18, 0, 0.42) : 0;
+  const waterColor = _underwaterColor.set(state.currentBiome?.water || state.currentBiome?.fog || 0x3f9fb5);
+  postfx.setUnderwaterTint(waterColor, strength);
 }
 function animate() {
   requestAnimationFrame(animate);
@@ -390,6 +400,7 @@ function animate() {
   // screen-Y for the sharp band, and measure camera→focus distance for the
   // depth focus.
   measurePerfPhase("render", () => {
+    updateUnderwaterTint();
     postfx.setTiltShift(shouldApplyTiltShift());
     if (postfx.isActive && postfx.isActive()) {
       let focusZ;

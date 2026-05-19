@@ -1783,6 +1783,8 @@ export const FLORA_BUILDERS = {
 
   seaweed(biome) {
     const g = new THREE.Group();
+    const SEAWEED_BASE_HEIGHT = 0.8;
+    const SEAWEED_SEGMENTS = 6;
     const base = new THREE.Color(biome.underside || "#3aa8b8");
     const matA = pooled("seaweed.mat.a", () =>
       applyWindSway(
@@ -1808,16 +1810,31 @@ export const FLORA_BUILDERS = {
     );
     const count = 4 + Math.floor(Math.random() * 4);
     for (let i = 0; i < count; i++) {
-      const h = 0.45 + Math.random() * 0.45;
+      const h = SEAWEED_BASE_HEIGHT * (0.78 + Math.random() * 0.22);
       const w = 0.055 + Math.random() * 0.035;
-      const geo = new THREE.PlaneGeometry(w, h, 1, 3);
+      const geo = new THREE.PlaneGeometry(w, h, 1, SEAWEED_SEGMENTS);
+      const position = geo.attributes.position;
+      const bow = (Math.random() - 0.5) * 2;
+      for (let i = 0; i < position.count; i++) {
+        const y = position.getY(i) + h / 2;
+        const t = y / h;
+        const x = position.getX(i);
+        const z = position.getZ(i);
+        position.setX(i, x + bow * 0.025 * Math.sin(t * Math.PI * 1.5));
+        position.setZ(i, z + bow * 0.018 * Math.sin(t * Math.PI * 2.0 + 0.6));
+      }
+      position.needsUpdate = true;
+      geo.translate(0, h / 2, 0);
+      geo.computeVertexNormals();
       const blade = new THREE.Mesh(geo, i % 2 ? matA : matB);
       const a = (i / count) * Math.PI * 2 + Math.random() * 0.5;
-      blade.position.set(Math.cos(a) * 0.08, h / 2, Math.sin(a) * 0.08);
+      blade.position.set(Math.cos(a) * 0.08, 0, Math.sin(a) * 0.08);
       blade.rotation.y = a + Math.PI / 2;
       blade.rotation.z = (Math.random() - 0.5) * 0.45;
       g.add(blade);
     }
+    g.userData.surfaceReachRange = [0.5, 0.95];
+    g.userData.baseHeight = SEAWEED_BASE_HEIGHT;
     return g;
   },
 
