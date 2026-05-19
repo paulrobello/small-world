@@ -15,3 +15,20 @@ assert(
   mainSource.includes('_focusProj.copy(camera.position).addScaledVector(_focusDir, focusZ).project(camera)'),
   'Photo-mode tilt-shift focus should project the point along the camera focus direction.'
 );
+
+assert(
+  mainSource.includes('function shouldApplyTiltShift()'),
+  'Tilt-shift should be gated by the current camera/view mode each frame.'
+);
+assert(
+  mainSource.includes('if (isPhotoFP()) return state.userSettings.tiltShift;'),
+  'Photo mode should keep tilt-shift available.'
+);
+assert(
+  mainSource.includes('return state.userSettings.tiltShift && !isStrolling() && !getFollowTarget();'),
+  'Tilt-shift should be disabled in first-person stroll and creature-follow views.'
+);
+assert(
+  mainSource.includes('postfx.setTiltShift(shouldApplyTiltShift());\n    if (postfx.isActive && postfx.isActive())'),
+  'The tilt-shift pass should be disabled before checking whether post-FX is active.'
+);

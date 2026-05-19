@@ -58,11 +58,7 @@ body {
   inset: 0;
   pointer-events: none;
   z-index: 5;
-  background: radial-gradient(
-    ellipse at center,
-    transparent 45%,
-    rgba(0, 0, 0, 0.55) 100%
-  );
+  background: none;
 }
 
 .world-loading {

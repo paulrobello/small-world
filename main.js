@@ -156,6 +156,10 @@ let _fpsLastUpdate = 0;
 // Reused per-frame scratch vectors for projecting the active focus point into NDC.
 const _focusProj = new THREE.Vector3();
 const _focusDir = new THREE.Vector3();
+function shouldApplyTiltShift() {
+  if (isPhotoFP()) return state.userSettings.tiltShift;
+  return state.userSettings.tiltShift && !isStrolling() && !getFollowTarget();
+}
 function animate() {
   requestAnimationFrame(animate);
   timer.update();
@@ -386,6 +390,7 @@ function animate() {
   // screen-Y for the sharp band, and measure camera→focus distance for the
   // depth focus.
   measurePerfPhase("render", () => {
+    postfx.setTiltShift(shouldApplyTiltShift());
     if (postfx.isActive && postfx.isActive()) {
       let focusZ;
       if (isAnyFP()) {

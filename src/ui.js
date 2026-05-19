@@ -1276,12 +1276,22 @@ export function initUi({ camera, canvas, controls, renderer }) {
     group.scale.set(screenScale, screenScale, screenScale);
     // Don't add to scene during main render — see main.js post-fx overlay
 
-    // Dim overlay
-    const dim = document.createElement("div");
-    dim.style.cssText =
-      "position:fixed;inset:0;background:rgba(0,0,0,0);z-index:15;pointer-events:none;transition:background .3s ease;";
-    document.body.appendChild(dim);
-    requestAnimationFrame(() => (dim.style.background = "rgba(0,0,0,0.45)"));
+    const dimH = (2 * dist * Math.tan(THREE.MathUtils.degToRad(camera.fov) / 2)) / screenScale;
+    const dimW = dimH * aspect;
+    const dimGeo = new THREE.PlaneGeometry(dimW, dimH);
+    const dimMat = new THREE.MeshBasicMaterial({
+      color: 0x000000,
+      side: THREE.DoubleSide,
+      transparent: true,
+      opacity: 0,
+      depthTest: false,
+      depthWrite: false,
+    });
+    const dimMesh = new THREE.Mesh(dimGeo, dimMat);
+    dimMesh.position.z = -0.03;
+    dimMesh.renderOrder = 998;
+    group.add(dimMesh);
+    dimMat.opacity = 0.45;
 
     // Save / Discard buttons
     const actions = document.createElement("div");
@@ -1293,7 +1303,21 @@ export function initUi({ camera, canvas, controls, renderer }) {
     document.body.appendChild(actions);
 
     photoHudEl.setAttribute("aria-hidden", "true");
-    _photoReview = { group, mesh, borderMesh, tex, mat, borderMat, dim, actions, biomeTag, seedTag, dataUrl, screenScale };
+    _photoReview = {
+      group,
+      mesh,
+      borderMesh,
+      dimMesh,
+      tex,
+      mat,
+      borderMat,
+      dimMat,
+      actions,
+      biomeTag,
+      seedTag,
+      dataUrl,
+      screenScale,
+    };
 
     // Animate photo in
     const start = performance.now();
@@ -1323,9 +1347,10 @@ export function initUi({ camera, canvas, controls, renderer }) {
 
   function closePhotoReview({ resumePhotoFp = true } = {}) {
     if (!_photoReview) return;
-    const { group, mesh, borderMesh, tex, mat, borderMat, dim, actions } = _photoReview;
+    const { group, mesh, borderMesh, dimMesh, tex, mat, borderMat, dimMat, actions } = _photoReview;
     mat.opacity = 0;
     borderMat.opacity = 0;
+    dimMat.opacity = 0;
     const ss = _photoReview.screenScale;
     group.scale.set(0.9 * ss, 0.9 * ss, 0.9 * ss);
     setTimeout(() => {
@@ -1334,10 +1359,10 @@ export function initUi({ camera, canvas, controls, renderer }) {
       mat.dispose();
       borderMesh.geometry.dispose();
       borderMat.dispose();
+      dimMesh.geometry.dispose();
+      dimMat.dispose();
       tex.dispose();
     }, 50);
-    dim.style.background = "rgba(0,0,0,0)";
-    setTimeout(() => dim.remove(), 300);
     actions.remove();
     _photoReview = null;
     if (_photoFP) {
