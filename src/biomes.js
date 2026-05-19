@@ -107,6 +107,7 @@ export const BIOMES = [
     creatureColors: ["#1d3557", "#457b9d", "#a8dadc", "#f1faee"],
     creatureCount: [8, 13],
     furProbability: 0.85,
+    noFlyerNests: true,
     groundMarks: { color: "#8090a0", opacity: 0.30, life: 7.0, softness: 1.1, poof: "snow" },
     dusk: { sky: "#a6b0d0", fog: "#8a98b6", sun: "#d8c8e8", ground: "#3a4258" },
     night: { sky: "#0a1024", fog: "#070b1e", sun: "#a0b0d8", ground: "#0a0e1a" },

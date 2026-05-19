@@ -14,6 +14,7 @@ const baseCountBlock = environmentSource.slice(baseCountStart, baseCountEnd);
 
 assert(frozen, 'frozen vale biome should exist.');
 assert.equal(frozen.particle, 'snow', 'frozen vale should use snow particles.');
+assert.equal(frozen.noFlyerNests, true, 'frozen vale should not spawn flyer nests.');
 assert.equal(
   frozen.flora.filter((kind) => kind === 'snowpine').length,
   3,
