@@ -393,7 +393,7 @@ export async function generateWorld(seed) {
   const noise2D = createNoise2D();
   // Cloud islands should read as soft puffs rather than rocky mountains.
   // Lowering the amplitude keeps the silhouette pillowy while preserving the
-  // seeded terrain function for creature placement and HUD elevation.
+  // seeded terrain function for creature placement.
   const terrainAmp = biome.cloudlike ? 2.15 : 3.2;
   const baseHeightFn = makeHeightFn(noise2D, layout, terrainAmp);
   state.heightFn = biome.water
@@ -431,15 +431,6 @@ export async function generateWorld(seed) {
 
   await yieldIfNeeded(true);
 
-  // measure max elevation for HUD — sample on actual ground
-  state.maxElev = 0;
-  for (let i = 0; i < 200; i++) {
-    const p = pickGroundPoint(0.8);
-    const h = state.heightFn(p.x, p.z);
-    if (h > state.maxElev) state.maxElev = h;
-    if ((i & 31) === 31) await yieldIfNeeded();
-  }
-
   // flora
   let placed = 0;
   let attempts = 0;
@@ -467,7 +458,7 @@ export async function generateWorld(seed) {
     bigmushroom: 0.45, fairyring: 1.15, lantern: 0.18, pillar: 0.30, archstone: 0.55,
     balloontree: 0.22, crystal: 0.30, obsidianshard: 0.28, obsidianglass: 0.34, skull: 0.22,
     berrybush: 0.30, coral: 0.25, braincoral: 0.26, cupcoral: 0.22,
-    fern: 0.18, dandylion: 0.16, rock: 0.30, limestonerock: 0.30, reed: 0.10,
+    fern: 0.18, dandylion: 0.16, flyer_nest: 0.612, rock: 0.30, limestonerock: 0.30, reed: 0.10,
     seaweed: 0.12, beachsucculent: 0.20, lavafissure: 1.45,
   };
   const FLORA_FOOTPRINT_DEFAULT = 0.20;
@@ -480,6 +471,7 @@ export async function generateWorld(seed) {
     "tree", "leafballtree", "pine", "snowpine", "deadtree", "mushroom", "bigmushroom",
     "fairyring", "cactus", "pillar", "archstone", "balloontree", "crystal",
     "lantern", "obsidianshard", "obsidianglass", "skull", "lavafissure", "berrybush",
+    "flyer_nest",
   ]);
   // Per-kind canopy top height (local Y of the highest visible mass at
   // scale=1). Fliers below ground + top * scale must route around the
@@ -488,7 +480,7 @@ export async function generateWorld(seed) {
     tree: 2.3, leafballtree: 2.25, pine: 2.2, snowpine: 1.95, deadtree: 1.8, mushroom: 1.1,
     bigmushroom: 2.6, fairyring: 0.9, cactus: 1.2, pillar: 2.8, archstone: 2.6, balloontree: 3.2,
     crystal: 1.6, lantern: 1.7, obsidianshard: 2.2, obsidianglass: 1.6, skull: 1.5,
-    lavafissure: 0.16, berrybush: 0.58,
+    lavafissure: 0.16, berrybush: 0.58, flyer_nest: 0.40,
   };
   const OBSTACLE_TOP_DEFAULT = 2.0;
   // Extra pad on top of the slope-plant footprint so creature bodies don't
@@ -498,6 +490,8 @@ export async function generateWorld(seed) {
   // and big mushrooms can have small bases but broad crowns/caps, so they need
   // a separate placement radius to prevent silhouettes from intersecting.
   const CANOPY_SPACING_KINDS = new Set(["tree", "leafballtree", "pine", "snowpine", "deadtree", "bigmushroom", "fairyring", "berrybush"]);
+  const NEST_HOST_KINDS = new Set(["tree", "leafballtree", "pine", "snowpine", "balloontree", "bigmushroom"]);
+  const biomeHasNestHosts = biome.flora.some((kind) => NEST_HOST_KINDS.has(kind));
   const CANOPY_SPACING_PAD = 2.8;
   const GRASS_SHORTEN_PAD = 2.6;
   const GRASS_SHORTEN_MIN_RADIUS = 0.42;
@@ -506,6 +500,7 @@ export async function generateWorld(seed) {
   const PLACEMENT_BLOCK_KINDS = new Set(["lavafissure"]);
   const GROUND_CREATURE_BLOCK_KINDS = new Set(["lavafissure", "fairyring"]);
   const floraPlacementBlocks = [];
+  const nestHosts = [];
   // Track fairy-ring flatten zones so heightFn can be patched afterward.
   const fairyFlat = []; // { cx, cz, r, flatY }
   function flattenTerrainCircle(cx, cz, r, flatY) {
@@ -548,6 +543,117 @@ export async function generateWorld(seed) {
       if (dx * dx + dz * dz < minD * minD) return true;
     }
     return false;
+  }
+  function blocksNestPlacement(x, z, r, allowedHostBlock = null) {
+    for (const block of floraPlacementBlocks) {
+      if (block === allowedHostBlock) continue;
+      const minD = block.r + r;
+      const dx = x - block.x;
+      const dz = z - block.z;
+      if (dx * dx + dz * dz < minD * minD) return true;
+    }
+    return false;
+  }
+  function nestTouchesWater(x, z, r) {
+    if (!biome.water) return false;
+    const minY = WATER_SURFACE_Y + 0.04;
+    const diagonal = r * Math.SQRT1_2;
+    const samples = [
+      [0, 0],
+      [r, 0], [-r, 0], [0, r], [0, -r],
+      [diagonal, diagonal], [-diagonal, diagonal],
+      [diagonal, -diagonal], [-diagonal, -diagonal],
+    ];
+    for (const [dx, dz] of samples) {
+      if (state.heightFn(x + dx, z + dz) < minY) return true;
+    }
+    return false;
+  }
+  function pickNestHost(r) {
+    const choices = [];
+    for (const host of nestHosts) {
+      if (host.nestOccupied) continue;
+      if (blocksNestPlacement(host.x, host.z, r * 1.2, host.block)) continue;
+      if (nestTouchesWater(host.x, host.z, r * 1.2)) continue;
+      choices.push(host);
+    }
+    if (!choices.length) return null;
+    const host = choices[Math.floor(Math.random() * choices.length)];
+    host.nestOccupied = true;
+    return host;
+  }
+  function placeFlyerNest() {
+    const kind = "flyer_nest";
+    let s = Math.max(1.05, 0.7 + Math.random() * 0.7);
+    const fp = FLORA_FOOTPRINT.flyer_nest * s;
+    let nestHost = biomeHasNestHosts ? pickNestHost(fp) : null;
+    let p = null;
+    let y0 = 0;
+
+    if (nestHost) {
+      p = { x: nestHost.x, z: nestHost.z };
+      y0 = nestHost.groundY;
+    } else {
+      if (biomeHasNestHosts) return false;
+      for (let tries = 0; tries < 80; tries++) {
+        const candidate = pickGroundPoint(0.88);
+        const candidateY = state.heightFn(candidate.x, candidate.z);
+        if (biome.water && candidateY < WATER_SURFACE_Y + 0.04) continue;
+        if (candidateY < -0.3) continue;
+        if (blocksNestPlacement(candidate.x, candidate.z, fp * 1.2)) continue;
+        if (nestTouchesWater(candidate.x, candidate.z, fp * 1.2)) continue;
+        p = candidate;
+        y0 = candidateY;
+        break;
+      }
+    }
+    if (!p) return false;
+
+    const f = FLORA_BUILDERS.flyer_nest(biome);
+    f.userData.inspect = { category: "flora", variant: kind };
+    const hXp = state.heightFn(p.x + fp, p.z);
+    const hXm = state.heightFn(p.x - fp, p.z);
+    const hZp = state.heightFn(p.x, p.z + fp);
+    const hZm = state.heightFn(p.x, p.z - fp);
+    let y = Math.min(y0, hXp, hXm, hZp, hZm) - FLORA_BURY;
+    if (kind === "flyer_nest" && nestHost) y = nestHost.y - 0.08 * s;
+    f.position.set(p.x, y, p.z);
+    f.rotation.y = Math.random() * Math.PI * 2;
+    f.scale.setScalar(s);
+    state.world.add(f);
+
+    const grassShortenRadius = Math.min(
+      GRASS_SHORTEN_MAX_RADIUS,
+      Math.max(GRASS_SHORTEN_MIN_RADIUS, fp * GRASS_SHORTEN_PAD)
+    );
+    const floraBlock = {
+      kind,
+      x: p.x,
+      z: p.z,
+      grassRadius: grassShortenRadius,
+      r: fp * 1.2,
+    };
+    floraPlacementBlocks.push(floraBlock);
+    const topLocal = f.userData.obstacleTopY ?? OBSTACLE_TOP.flyer_nest;
+    const topY = kind === "flyer_nest" && nestHost ? y + topLocal * s : y0 + topLocal * s;
+    state.obstacles.push({
+      kind,
+      x: p.x,
+      z: p.z,
+      r: fp * OBSTACLE_PAD,
+      top: topY,
+    });
+    const capLocal = f.userData.capTopY ?? f.userData.obstacleTopY ?? OBSTACLE_TOP.flyer_nest;
+    state.perchSpots.push({
+      x: p.x,
+      z: p.z,
+      y: y + capLocal * s,
+      perchKind: "flyer_nest",
+      perchRadius: (f.userData.perchRadius ?? 0.4) * s,
+      perchWind: null,
+    });
+    placed++;
+    return true;
   }
   function conformSurfaceChildrenToTerrain(group) {
     const c = Math.cos(group.rotation.y);
@@ -690,8 +796,8 @@ export async function generateWorld(seed) {
     const isReefCoral = biome.water && kind in REEF_CORAL_TOP_LOCAL;
     const isShallowWaterFlora = biome.water && SHALLOW_WATER_FLORA.has(kind);
     const normalFloraRadius = biome.id === "golden" && (kind === "tree" || kind === "leafballtree") ? 0.98 : 0.88;
-    const p = pickGroundPoint(isReefCoral || isShallowWaterFlora ? 1.0 : normalFloraRadius);
-    const y0 = state.heightFn(p.x, p.z);
+    let p = pickGroundPoint(isReefCoral || isShallowWaterFlora ? 1.0 : normalFloraRadius);
+    let y0 = state.heightFn(p.x, p.z);
     if (isReefCoral) {
       if (y0 > WATER_SURFACE_Y - 0.05) continue; // not submerged enough
       if (y0 < -1.8) continue; // void / extreme depth
@@ -715,13 +821,23 @@ export async function generateWorld(seed) {
     // Double the scale for tree types
     if (kind === "tree" || kind === "leafballtree" || kind === "pine" || kind === "snowpine" || kind === "deadtree" || kind === "balloontree") s *= 2;
     if (kind === "berrybush") s *= 1 + Math.random() * 0.25;
+    if (kind === "flyer_nest") s = Math.max(s, 1.05);
     const fp = (FLORA_FOOTPRINT[kind] ?? FLORA_FOOTPRINT_DEFAULT) * s;
+    let nestHost = null;
+    if (kind === "flyer_nest") {
+      nestHost = pickNestHost(fp);
+      if (nestHost) {
+        p = { x: nestHost.x, z: nestHost.z };
+        y0 = nestHost.groundY;
+      }
+    }
     const grassShortenRadius = Math.min(
       GRASS_SHORTEN_MAX_RADIUS,
       Math.max(GRASS_SHORTEN_MIN_RADIUS, fp * GRASS_SHORTEN_PAD)
     );
     const placementBlockKinds = kind === "lavafissure" ? null : PLACEMENT_BLOCK_KINDS;
-    if (blocksFloraPlacement(p.x, p.z, fp * 1.2, placementBlockKinds)) continue;
+    if (kind === "flyer_nest" && !nestHost && blocksNestPlacement(p.x, p.z, fp * 1.2)) continue;
+    if (kind !== "flyer_nest" && blocksFloraPlacement(p.x, p.z, fp * 1.2, placementBlockKinds)) continue;
     if (CANOPY_SPACING_KINDS.has(kind) && blocksFloraPlacement(p.x, p.z, fp * CANOPY_SPACING_PAD, CANOPY_SPACING_KINDS)) continue;
     const f = FLORA_BUILDERS[kind](biome);
     f.userData.inspect = { category: "flora", variant: kind };
@@ -729,7 +845,8 @@ export async function generateWorld(seed) {
     const hXm = state.heightFn(p.x - fp, p.z);
     const hZp = state.heightFn(p.x, p.z + fp);
     const hZm = state.heightFn(p.x, p.z - fp);
-    const y = Math.min(y0, hXp, hXm, hZp, hZm) - FLORA_BURY;
+    let y = Math.min(y0, hXp, hXm, hZp, hZm) - FLORA_BURY;
+    if (kind === "flyer_nest" && nestHost) y = nestHost.y - 0.08 * s;
     if (isReefCoral) {
       // Clamp scale so the tallest tip stays below the water surface.
       const maxScale = (WATER_SURFACE_Y - CORAL_SUBMERGE_MARGIN - y) / REEF_CORAL_TOP_LOCAL[kind];
@@ -836,13 +953,26 @@ export async function generateWorld(seed) {
     if (kind === "berrybush" || kind === "dandylion") {
       state.flowerSpots.push({ x: p.x, y: y + (f.userData.flowerSpotY ?? 0.3) * s, z: p.z });
     }
-    floraPlacementBlocks.push({
+    const floraBlock = {
       kind,
       x: p.x,
       z: p.z,
       grassRadius: grassShortenRadius,
       r: fp * (CANOPY_SPACING_KINDS.has(kind) ? CANOPY_SPACING_PAD : 1.2),
-    });
+    };
+    floraPlacementBlocks.push(floraBlock);
+    if (NEST_HOST_KINDS.has(kind)) {
+      const hostTopLocal = f.userData.capTopY ?? f.userData.obstacleTopY ?? OBSTACLE_TOP[kind] ?? OBSTACLE_TOP_DEFAULT;
+      nestHosts.push({
+        hostKind: kind,
+        x: p.x,
+        z: p.z,
+        y: y + hostTopLocal * s,
+        groundY: y0,
+        block: floraBlock,
+        nestOccupied: false,
+      });
+    }
     if (OBSTACLE_KINDS.has(kind)) {
       const topLocal = (f.userData.obstacleTopY ?? OBSTACLE_TOP[kind] ?? OBSTACLE_TOP_DEFAULT) * s;
       const fissurePts = kind === "lavafissure" ? f.userData.fissureObstaclePoints : null;
@@ -863,7 +993,7 @@ export async function generateWorld(seed) {
           });
         }
       } else {
-        const topY = y0 + topLocal;
+        const topY = kind === "flyer_nest" && nestHost ? y + topLocal : y0 + topLocal;
         state.obstacles.push({
           kind,
           x: p.x,
@@ -872,17 +1002,19 @@ export async function generateWorld(seed) {
           top: topY,
         });
       }
-      // Mushrooms (and big-mushrooms) double as landing pads for fliers —
+      // Mushrooms, leafball canopies, and flyer nests double as landing pads for fliers —
       // record the cap top so the perch-aware flier landing code can steer
       // toward it. Use the builder-supplied local cap-top (accurate to the
       // per-instance random stemH on bigmushroom) rather than the coarse
       // OBSTACLE_TOP estimate, so fliers actually touch the cap.
-      if (kind === "mushroom" || kind === "bigmushroom" || kind === "leafballtree") {
+      if (kind === "mushroom" || kind === "bigmushroom" || kind === "leafballtree" || kind === "flyer_nest") {
         const capLocal = f.userData.capTopY ?? f.userData.obstacleTopY ?? OBSTACLE_TOP[kind] ?? OBSTACLE_TOP_DEFAULT;
         state.perchSpots.push({
           x: p.x,
           z: p.z,
           y: y + capLocal * s,
+          perchKind: kind,
+          perchRadius: (f.userData.perchRadius ?? 0.4) * s,
           perchWind: f.userData.perchWind
             ? { ...f.userData.perchWind, scale: s, rotationY: f.rotation.y, baseX: p.x, baseZ: p.z }
             : null,
@@ -1109,6 +1241,16 @@ export async function generateWorld(seed) {
     }
   }
 
+  const flyerCount = state.creatures.filter((c) => c.flies && !c.isFish && !c.isBee).length;
+  const flyerNestTarget = flyerCount < 4 ? flyerCount : Math.ceil(flyerCount / 2);
+  let flyerNestPlaced = 0;
+  let flyerNestAttempts = 0;
+  while (flyerNestPlaced < flyerNestTarget && flyerNestAttempts < flyerNestTarget * 80) {
+    flyerNestAttempts++;
+    if (placeFlyerNest()) flyerNestPlaced++;
+    if ((flyerNestAttempts & 7) === 0) await yieldIfNeeded();
+  }
+
   // caterpillars — multi-segment crawlers, occasionally swapped for snails
   // Crawlers also avoid spawning inside fairy rings (large obstacle discs
   // that the "turn" avoidance response can't escape from).
@@ -1218,30 +1360,34 @@ export async function generateWorld(seed) {
   state.world.add(state.shadowDisks);
 
   // HUD
+  const padStat = (n) => String(n).padStart(2, "0");
+  const groundCreatureCount = state.creatures.filter((c) => !c.flies && !c.isFish).length + state.caterpillars.length;
+  const flyCreatureCount = state.creatures.filter((c) => c.flies && !c.isFish).length;
+  const swimCreatureCount = state.creatures.filter((c) => c.isFish).length;
   document.getElementById("biome-name").textContent = biome.name;
   document.getElementById("biome-sub").textContent = biome.sub;
-  document.getElementById("creature-count").textContent = String(
-    state.creatures.length + state.caterpillars.length
-  ).padStart(2, "0");
-  document.getElementById("flora-count").textContent = String(placed).padStart(2, "0");
-  document.getElementById("bird-count").textContent = String(totalBirds).padStart(2, "0");
+  document.getElementById("ground-creature-count").textContent = padStat(groundCreatureCount);
+  document.getElementById("fly-creature-count").textContent = padStat(flyCreatureCount);
+  document.getElementById("swim-creature-count").textContent = padStat(swimCreatureCount);
+  document.getElementById("flora-count").textContent = padStat(placed);
+  document.getElementById("bird-count").textContent = padStat(totalBirds);
   document.getElementById("seed").textContent = formatSeed(seed);
-  document.getElementById("elevation").textContent =
-    Math.round(state.maxElev * 120) + "m";
 
   // Mobile help panel — mirror the same stats
   const hBiome = document.getElementById("help-biome");
   if (hBiome) hBiome.textContent = biome.name;
   const hSeed = document.getElementById("help-seed");
   if (hSeed) hSeed.textContent = formatSeed(seed);
-  const hCr = document.getElementById("help-creatures");
-  if (hCr) hCr.textContent = String(state.creatures.length + state.caterpillars.length).padStart(2, "0");
+  const hGround = document.getElementById("help-ground-creatures");
+  if (hGround) hGround.textContent = padStat(groundCreatureCount);
+  const hFly = document.getElementById("help-fly-creatures");
+  if (hFly) hFly.textContent = padStat(flyCreatureCount);
+  const hSwim = document.getElementById("help-swim-creatures");
+  if (hSwim) hSwim.textContent = padStat(swimCreatureCount);
   const hFl = document.getElementById("help-flora");
-  if (hFl) hFl.textContent = String(placed).padStart(2, "0");
+  if (hFl) hFl.textContent = padStat(placed);
   const hBi = document.getElementById("help-birds");
-  if (hBi) hBi.textContent = String(totalBirds).padStart(2, "0");
-  const hEl = document.getElementById("help-elevation");
-  if (hEl) hEl.textContent = Math.round(state.maxElev * 120) + "m";
+  if (hBi) hBi.textContent = padStat(totalBirds);
 
   // Notify mobile UI that world is ready (triggers header auto-hide)
   window.dispatchEvent(new CustomEvent("world-ready"));

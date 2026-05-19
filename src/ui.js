@@ -298,6 +298,7 @@ export function initUi({ camera, canvas, controls, renderer }) {
   _followBanner = document.getElementById("follow-banner");
   _followButton = document.getElementById("setting-follow");
   _locatorPanel = document.getElementById("locator-panel");
+  const locatorEyebrow = document.getElementById("locator-eyebrow");
   const settingsToggle = document.getElementById("settings-toggle");
   const settingsClose = document.getElementById("settings-close");
   const settingsResetDefaults = document.getElementById("setting-reset-defaults");
@@ -1668,6 +1669,7 @@ export function initUi({ camera, canvas, controls, renderer }) {
   }
 
   document.getElementById("locator-close").addEventListener("click", () => setLocatorOpen(false));
+  locatorEyebrow?.addEventListener("click", () => setLocatorOpen(!_locatorOpen));
 
   // Also regenerate when seed changes via back/forward navigation.
   window.addEventListener("popstate", () => {

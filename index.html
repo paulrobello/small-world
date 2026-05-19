@@ -38,7 +38,7 @@
   <header class="hud hud-top">
     <div class="title-block">
       <div class="eyebrow">
-        field notes &nbsp;·&nbsp; vol. <span id="app-version">…</span> &nbsp;·&nbsp;
+        <button class="eyebrow-button" id="locator-eyebrow" type="button">field notes</button> &nbsp;·&nbsp; vol. <span id="app-version">…</span> &nbsp;·&nbsp;
         <a class="eyebrow-link" href="https://github.com/paulrobello/small-world" target="_blank" rel="noopener">source ↗</a>
       </div>
       <h1 class="title"><em>a small</em> world</h1>
@@ -57,8 +57,16 @@
         <span class="value" id="seed">0x0000</span>
       </div>
       <div class="stat">
-        <span class="label">creatures</span>
-        <span class="value" id="creature-count">00</span>
+        <span class="label">ground</span>
+        <span class="value" id="ground-creature-count">00</span>
+      </div>
+      <div class="stat">
+        <span class="label">fly</span>
+        <span class="value" id="fly-creature-count">00</span>
+      </div>
+      <div class="stat">
+        <span class="label">swim</span>
+        <span class="value" id="swim-creature-count">00</span>
       </div>
       <div class="stat">
         <span class="label">flora</span>
@@ -67,10 +75,6 @@
       <div class="stat">
         <span class="label">birds</span>
         <span class="value" id="bird-count">00</span>
-      </div>
-      <div class="stat">
-        <span class="label">elevation</span>
-        <span class="value" id="elevation">000m</span>
       </div>
     </div>
 
@@ -163,10 +167,11 @@
       <dl class="help-list help-world-info">
         <dt>biome</dt><dd id="help-biome">—</dd>
         <dt>seed</dt><dd id="help-seed">0x0000</dd>
-        <dt>creatures</dt><dd id="help-creatures">00</dd>
+        <dt>ground</dt><dd id="help-ground-creatures">00</dd>
+        <dt>fly</dt><dd id="help-fly-creatures">00</dd>
+        <dt>swim</dt><dd id="help-swim-creatures">00</dd>
         <dt>flora</dt><dd id="help-flora">00</dd>
         <dt>birds</dt><dd id="help-birds">00</dd>
-        <dt>elevation</dt><dd id="help-elevation">000m</dd>
       </dl>
     </section>
 

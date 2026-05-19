@@ -137,15 +137,34 @@ body {
   font-size: 9px;
   letter-spacing: 0.45em;
   text-transform: uppercase;
-  color: var(--ink-dim);
+  color: var(--ink);
+  opacity: 1;
   text-shadow: var(--shadow);
 }
+.eyebrow-button {
+  appearance: none;
+  border: 0;
+  border-bottom: 1px solid transparent;
+  padding: 0;
+  background: transparent;
+  font: inherit;
+  letter-spacing: inherit;
+  text-transform: inherit;
+  cursor: pointer;
+  transition: color 0.4s ease, border-color 0.4s ease;
+}
+.eyebrow,
+.eyebrow-button,
 .eyebrow-link {
-  color: var(--ink-faint);
+  color: var(--ink);
+  opacity: 1;
+}
+.eyebrow-link {
   text-decoration: none;
   border-bottom: 1px solid transparent;
   transition: color 0.4s ease, border-color 0.4s ease;
 }
+.eyebrow-button:hover,
 .eyebrow-link:hover {
   color: var(--ink);
   border-bottom-color: var(--ink-dim);
@@ -214,6 +233,13 @@ body {
   flex-direction: column;
   gap: 4px;
   min-width: 54px;
+}
+
+.stats .label,
+.stats .value {
+  color: var(--ink);
+  opacity: 1;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.9);
 }
 
 .value {

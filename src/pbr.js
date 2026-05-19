@@ -6,6 +6,7 @@ const TERRAIN_PBR_TEX_SIZE = 384;
 const LEAFBALL_BARK_TEX_SIZE = 256;
 const LEAFBALL_LEAF_TEX_SIZE = 128;
 const DEAD_TREE_BARK_TEX_SIZE = 256;
+const FLYER_NEST_TWIG_TEX_SIZE = 192;
 const STONE_PBR_TEX_SIZE = 128;
 const PLAIN_ROCK_PBR_TEX_SIZE = 128;
 const MUSHROOM_CAP_TEX_SIZE = 256;
@@ -309,6 +310,56 @@ function buildDeadTreeBarkTextures() {
   return {
     normalTexture: configurePBRTexture(new THREE.CanvasTexture(deadTreeNormalCanvas)),
     materialTexture: configurePBRTexture(new THREE.CanvasTexture(deadTreeMaterialCanvas)),
+  };
+}
+
+function buildFlyerNestTwigTextures() {
+  const size = FLYER_NEST_TWIG_TEX_SIZE;
+  const nestNormalCanvas = makeCanvas(size);
+  const nestMaterialCanvas = makeCanvas(size);
+  const normalCtx = nestNormalCanvas.getContext("2d");
+  const materialCtx = nestMaterialCanvas.getContext("2d");
+  const normalImage = normalCtx.createImageData(size, size);
+  const materialImage = materialCtx.createImageData(size, size);
+  const seed = state.currentSeed + 1249;
+
+  for (let py = 0; py < size; py++) {
+    const v = py / (size - 1);
+    for (let px = 0; px < size; px++) {
+      const u = px / (size - 1);
+      const warp = smoothHashNoise(u * 8.0, v * 7.0, seed) * 0.12;
+      const twigStrand =
+        Math.max(0, 1 - Math.abs(Math.sin((u * 22.0 + v * 5.0 + warp) * Math.PI)) * 7.5) +
+        Math.max(0, 1 - Math.abs(Math.sin((u * 36.0 - v * 11.0 - warp) * Math.PI)) * 12.0) * 0.55;
+      const crossWeave =
+        Math.max(0, 1 - Math.abs(Math.sin((u * 7.0 - v * 28.0 + warp * 0.6) * Math.PI)) * 8.0) * 0.72 +
+        Math.max(0, 1 - Math.abs(Math.sin((u * 13.0 + v * 19.0 - warp) * Math.PI)) * 11.0) * 0.36;
+      const barkFuzz = smoothHashNoise(u * 62.0, v * 54.0, seed + 17);
+      const raised = clamp01(twigStrand * 0.68 + crossWeave * 0.48 + barkFuzz * 0.22);
+      const nx = (twigStrand - crossWeave) * 0.40 + (barkFuzz - 0.5) * 0.20;
+      const ny = Math.sin((u * 17.0 + v * 31.0) * Math.PI) * 0.10 + (crossWeave - 0.3) * 0.22;
+      const nz = Math.sqrt(Math.max(0.08, 1 - nx * nx - ny * ny));
+      const roughness = 0.84 + raised * 0.13;
+      const specular = 0.06 + (1 - raised) * 0.10 + barkFuzz * 0.05;
+      const index = (py * size + px) * 4;
+
+      normalImage.data[index + 0] = Math.round((nx * 0.5 + 0.5) * 255);
+      normalImage.data[index + 1] = Math.round((ny * 0.5 + 0.5) * 255);
+      normalImage.data[index + 2] = Math.round(nz * 255);
+      normalImage.data[index + 3] = 255;
+
+      materialImage.data[index + 0] = Math.round(clamp01(roughness) * 255);
+      materialImage.data[index + 1] = Math.round(clamp01(roughness) * 255);
+      materialImage.data[index + 2] = 0;
+      materialImage.data[index + 3] = Math.round(clamp01(specular) * 255);
+    }
+  }
+
+  normalCtx.putImageData(normalImage, 0, 0);
+  materialCtx.putImageData(materialImage, 0, 0);
+  return {
+    normalTexture: configurePBRTexture(new THREE.CanvasTexture(nestNormalCanvas)),
+    materialTexture: configurePBRTexture(new THREE.CanvasTexture(nestMaterialCanvas)),
   };
 }
 
@@ -713,6 +764,21 @@ export function makeDeadTreePBRMaterial(params) {
   });
   const { normalTexture, materialTexture } = cachedDetailTextures("deadtree-bark", buildDeadTreeBarkTextures);
   material.normalScale.set(1.18, 1.18);
+  return applyDetailMaps(material, normalTexture, materialTexture);
+}
+
+export function makeFlyerNestPBRMaterial(params) {
+  if (LOWFX || state.userSettings.pbrDetails === false) {
+    return new THREE.MeshStandardMaterial(params);
+  }
+  const material = new THREE.MeshPhysicalMaterial({
+    ...params,
+    reflectivity: 0.14,
+    specularIntensity: 0.28,
+    specularColor: new THREE.Color(params.color).lerp(new THREE.Color(0xe6d4b0), 0.30),
+  });
+  const { normalTexture, materialTexture } = cachedDetailTextures("flyer-nest-twigs", buildFlyerNestTwigTextures);
+  material.normalScale.set(1.05, 1.05);
   return applyDetailMaps(material, normalTexture, materialTexture);
 }
 

@@ -159,6 +159,9 @@ const PERSONALITIES = {
 const PERSONALITY_NAMES = Object.keys(PERSONALITIES);
 
 const FISH_MIN_GROUND_Y = -4.2;
+const PERCHED_WING_DOWN_Z = -0.42;
+const PERCHED_WING_BACK_Y = 0.42;
+const PERCHED_WING_RELAX_X = -0.12;
 
 function fishMaxGroundY(scale) {
   // Water plane is around y=-0.12 and can wave downward; keep the fish body's
@@ -202,6 +205,21 @@ function currentPerchPoint(perch) {
   _perchCachePerch = perch;
   _perchCacheResult = result;
   return result;
+}
+
+function releasePerchForFlier(c) {
+  if (!c?.perchTarget) return;
+  const perch = c.perchTarget;
+  if (perch.occupant === c) perch.occupant = null;
+}
+
+function claimPerchForFlier(c, perch) {
+  if (!perch) return false;
+  if (c.perchTarget && c.perchTarget !== perch) releasePerchForFlier(c);
+  if (perch.occupant && perch.occupant !== c && perch.occupant.group?.parent) return false;
+  perch.occupant = c;
+  c.perchTarget = perch;
+  return true;
 }
 
 // Per-regen creature resource pool — shared eye/pupil materials and the
@@ -738,6 +756,7 @@ export function makeCreature(biome, opts = {}) {
     eyeParts,
     flies,
     isFish,
+    isBee: isBumblebee,
     scale,
     role: opts.role || null,         // "parent" | "kid" | null
     parent: opts.parent || null,     // reference to parent creature (kids only)
@@ -1018,30 +1037,38 @@ export function wakeCreature(c) {
   c.wakeProgress = 0;
 }
 
-// Pick a mushroom cap within reach as the next landing target. Called
-// when a flier transitions flying→descending. Probability gate is per-call
-// so most descents still land normally on the ground; the rest steer to a
-// mushroom. Search radius is small so fliers don't fly across the island
-// just to perch — feels more natural for a perch they spot mid-cruise.
+// Pick a perch target when a flier transitions flying→descending. Probability
+// gate is per-call so most descents still land normally on the ground; nest
+// perches are preferred before other caps unless every nest is occupied.
 function pickPerchForFlier(c) {
+  if (c.isFish || c.isBee) return;
   const perches = state.perchSpots;
   if (!perches || perches.length === 0) return;
   if (Math.random() >= 0.55) return;
   const pos = c.group.position;
-  let nearest = null;
-  let nearestD2 = 36; // within 6 units
+  let nearestNest = null;
+  let nearestNestD2 = Infinity;
+  let nearestOther = null;
+  let nearestOtherD2 = 36; // non-nest perches stay local
   for (let i = 0; i < perches.length; i++) {
     const p = perches[i];
+    if (p.occupant && p.occupant !== c && p.occupant.group?.parent) continue;
     const perchPoint = currentPerchPoint(p);
     const dx = perchPoint.x - pos.x;
     const dz = perchPoint.z - pos.z;
     const d2 = dx * dx + dz * dz;
-    if (d2 < nearestD2) {
-      nearestD2 = d2;
-      nearest = p;
+    if (p.perchKind === "flyer_nest") {
+      if (d2 < nearestNestD2) {
+        nearestNestD2 = d2;
+        nearestNest = p;
+      }
+    } else if (d2 < nearestOtherD2) {
+      nearestOtherD2 = d2;
+      nearestOther = p;
     }
   }
-  if (nearest) c.perchTarget = nearest;
+  const nearest = nearestNest ?? nearestOther;
+  if (nearest) claimPerchForFlier(c, nearest);
 }
 
 export function stepCreature(c, dt, t, heightFn) {
@@ -1320,6 +1347,7 @@ export function stepCreature(c, dt, t, heightFn) {
     if (overWater && c.landState !== "flying") {
       c.landState = "flying";
       c.landTimer = 4 + Math.random() * 8;
+      releasePerchForFlier(c);
       c.perchTarget = null;
       c.perchOffsetX = 0;
       c.perchOffsetZ = 0;
@@ -1377,7 +1405,8 @@ export function stepCreature(c, dt, t, heightFn) {
         const perchPoint = currentPerchPoint(c.perchTarget);
         const dxp = perchPoint.x - c.group.position.x;
         const dzp = perchPoint.z - c.group.position.z;
-        canLand = dxp * dxp + dzp * dzp < 0.16;
+        const perchRadius = c.perchTarget.perchRadius ?? 0.4;
+        canLand = dxp * dxp + dzp * dzp < perchRadius * perchRadius;
         if (canLand) {
           c.perchOffsetX = c.group.position.x - perchPoint.x;
           c.perchOffsetZ = c.group.position.z - perchPoint.z;
@@ -1408,6 +1437,7 @@ export function stepCreature(c, dt, t, heightFn) {
       c.landState === "flying" &&
       c.perchFloorWeight < 0.02
     ) {
+      releasePerchForFlier(c);
       c.perchTarget = null;
       c.perchFloorWeight = 0;
       c.perchOffsetX = 0;
@@ -1811,15 +1841,17 @@ export function stepCreature(c, dt, t, heightFn) {
         c.lureOrb.scale.setScalar(1 + Math.sin(t * 3.1 + c.flapPhase) * 0.12);
       }
     } else if (grounded) {
-      // Wings mostly tucked, but with a small idle twitch so the bird never
-      // looks completely lifeless. Period ~2s, amplitude small.
+      // Perched wings hang down and sweep back, with a tiny idle twitch so the
+      // flier still feels alive while settled.
       const k = Math.min(1, dt * 5);
       const twitch = Math.sin(t * 3.0 + c.flapPhase) * 0.06;
       for (let i = 0; i < c.wings.length; i++) {
         const sign = i === 0 ? -1 : 1;
-        const restRot = sign * (0.55 + twitch);
-        c.wings[i].rotation.z += (restRot - c.wings[i].rotation.z) * k;
-        c.wings[i].rotation.x += (0 - c.wings[i].rotation.x) * k;
+        const restRotZ = sign * PERCHED_WING_DOWN_Z + twitch * 0.45;
+        const restRotY = sign * PERCHED_WING_BACK_Y;
+        c.wings[i].rotation.z += (restRotZ - c.wings[i].rotation.z) * k;
+        c.wings[i].rotation.y += (restRotY - c.wings[i].rotation.y) * k;
+        c.wings[i].rotation.x += (PERCHED_WING_RELAX_X - c.wings[i].rotation.x) * k;
       }
       c.body.rotation.z += (0 - c.body.rotation.z) * k;
     } else {
@@ -1835,6 +1867,7 @@ export function stepCreature(c, dt, t, heightFn) {
         const sign = i === 0 ? -1 : 1;
         c.wings[i].rotation.z = sign * (0.15 + flap * 1.2 * flapStrength);
         c.wings[i].rotation.x = Math.cos(phase) * 0.18 * flapStrength;
+        c.wings[i].rotation.y = 0;
       }
       c.body.rotation.z = -flap * 0.06 * flapStrength;
     }

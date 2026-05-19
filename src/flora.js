@@ -5,6 +5,7 @@ import { BLOOM_LAYER } from "./postfx.js";
 import { makePool } from "./pool.js";
 import {
   makeDeadTreePBRMaterial,
+  makeFlyerNestPBRMaterial,
   makeLeafballTreeLeafPBRMaterial,
   makeLeafballTreeTrunkPBRMaterial,
   makeMushroomCapPBRMaterial,
@@ -1798,6 +1799,79 @@ export const FLORA_BUILDERS = {
     bud.scale.set(1.1, 0.75, 1.1);
     bud.castShadow = true;
     g.add(bud);
+    return g;
+  },
+
+  flyer_nest(biome) {
+    const g = new THREE.Group();
+    const FLYER_NEST_PERCH_RADIUS = 0.612;
+    const nestColor = new THREE.Color(TRUNK).lerp(new THREE.Color(biome.cliff), 0.28);
+    const mat = makeFlyerNestPBRMaterial({
+      color: nestColor,
+      flatShading: false,
+      roughness: 0.96,
+    });
+    const lightTwigColor = nestColor.clone().lerp(new THREE.Color(0xc99a63), 0.72);
+    const twigLightMat = makeFlyerNestPBRMaterial({
+      color: lightTwigColor,
+      flatShading: false,
+      roughness: 0.94,
+    });
+    const outerRingGeo = pooled("flyer_nest.outerRing.geo", () => {
+      const geo = new THREE.TorusGeometry(0.558, 0.252, 8, 24);
+      geo.rotateX(Math.PI / 2);
+      geo.scale(1.12, 0.62, 0.92);
+      geo.computeVertexNormals();
+      return geo;
+    });
+    const innerBowlGeo = pooled("flyer_nest.innerBowl.geo", () => {
+      const geo = new THREE.CircleGeometry(0.558, 28);
+      geo.rotateX(-Math.PI / 2);
+      const pos = geo.attributes.position;
+      for (let i = 0; i < pos.count; i++) {
+        const x = pos.getX(i);
+        const z = pos.getZ(i);
+        const r = Math.min(1, Math.sqrt(x * x + z * z) / 0.558);
+        pos.setY(i, 0.117 + r * r * 0.108);
+      }
+      pos.needsUpdate = true;
+      geo.computeVertexNormals();
+      return geo;
+    });
+    const bowl = new THREE.Mesh(innerBowlGeo, mat);
+    bowl.castShadow = true;
+    bowl.receiveShadow = true;
+    g.add(bowl);
+    const ring = new THREE.Mesh(outerRingGeo, mat);
+    ring.position.y = 0.225;
+    ring.castShadow = true;
+    ring.receiveShadow = true;
+    g.add(ring);
+
+    const twigGeo = pooled("flyer_nest.twig.geo", () => {
+      const geo = new THREE.CylinderGeometry(0.0432, 0.0612, 1, 5);
+      geo.computeVertexNormals();
+      return geo;
+    });
+    const up = new THREE.Vector3(0, 1, 0);
+    for (let i = 0; i < 18; i++) {
+      const a = (i / 18) * Math.PI * 2 + (Math.random() - 0.5) * 0.20;
+      const len = 0.342 + Math.random() * 0.306;
+      const radius = 0.378 + Math.random() * 0.162;
+      const tangent = new THREE.Vector3(-Math.sin(a), 0.10 + Math.random() * 0.10, Math.cos(a)).normalize();
+      const twig = new THREE.Mesh(twigGeo, i % 4 === 1 || i % 7 === 3 ? twigLightMat : mat);
+      twig.position.set(Math.cos(a) * radius, 0.207 + Math.random() * 0.072, Math.sin(a) * radius);
+      twig.quaternion.setFromUnitVectors(up, tangent);
+      twig.rotateY((Math.random() - 0.5) * 0.65);
+      twig.scale.setScalar(0.9 + Math.random() * 0.25);
+      twig.scale.y = len;
+      twig.castShadow = true;
+      g.add(twig);
+    }
+
+    g.userData.capTopY = 0.387;
+    g.userData.obstacleTopY = 0.432;
+    g.userData.perchRadius = FLYER_NEST_PERCH_RADIUS;
     return g;
   },
 
