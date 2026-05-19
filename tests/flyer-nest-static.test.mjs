@@ -29,6 +29,11 @@ assert(
   nestBlock.includes('makeFlyerNestPBRMaterial')
     && nestBlock.includes('FLYER_NEST_PERCH_RADIUS = 0.612')
     && nestBlock.includes('new THREE.TorusGeometry(0.558, 0.252, 8, 24)')
+    && nestBlock.includes('geo.scale(1, 0.62, 1)')
+    && !nestBlock.includes('flatShading: false')
+    && nestBlock.includes('flatShading: true')
+    && nestBlock.includes('side: THREE.DoubleSide')
+    && nestBlock.includes('const bowl = new THREE.Mesh(innerBowlGeo, bowlMat)')
     && nestBlock.includes('new THREE.CylinderGeometry(0.0432, 0.0612, 1, 5)')
     && nestBlock.includes('const lightTwigColor = nestColor.clone().lerp(new THREE.Color(0xc99a63), 0.72)')
     && nestBlock.includes('const twigLightMat = makeFlyerNestPBRMaterial')
@@ -44,10 +49,20 @@ assert(
   pbrSource.includes('export function makeFlyerNestPBRMaterial')
     && pbrSource.includes('buildFlyerNestTwigTextures')
     && pbrSource.includes('cachedDetailTextures("flyer-nest-twigs", buildFlyerNestTwigTextures)')
+    && pbrSource.includes('const nestColorCanvas = makeCanvas(size)')
+    && pbrSource.includes('const ringFlow = v +')
+    && pbrSource.includes('const bowlSwirl =')
+    && pbrSource.includes('bowlAngle * 2.4 + bowlRadius * 18.0')
+    && pbrSource.includes('v * 34.0 + u * 0.65')
+    && pbrSource.includes('v * 52.0 - u * 1.0')
+    && pbrSource.includes('const lightTwigSwirl = clamp01(raised * 0.58 + twigStrand * 0.36 + bowlSwirl * 0.52')
+    && pbrSource.includes('colorTexture: configureColorTexture(new THREE.CanvasTexture(nestColorCanvas))')
+    && pbrSource.includes('const { colorTexture, normalTexture, materialTexture } = cachedDetailTextures("flyer-nest-twigs", buildFlyerNestTwigTextures)')
+    && pbrSource.includes('material.color.set(0xffffff)')
     && pbrSource.includes('twigStrand')
     && pbrSource.includes('crossWeave')
     && pbrSource.includes('material.normalScale.set(1.05, 1.05)'),
-  'flyer_nest PBR should expose cached procedural twig normal/material detail.'
+  'flyer_nest PBR should expose cached procedural twig normal/material detail with light-brown color swirls aligned to raised twig bumps.'
 );
 
 assert(

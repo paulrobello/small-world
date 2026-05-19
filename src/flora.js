@@ -1806,21 +1806,27 @@ export const FLORA_BUILDERS = {
     const g = new THREE.Group();
     const FLYER_NEST_PERCH_RADIUS = 0.612;
     const nestColor = new THREE.Color(TRUNK).lerp(new THREE.Color(biome.cliff), 0.28);
+    const bowlMat = makeFlyerNestPBRMaterial({
+      color: nestColor,
+      flatShading: true,
+      roughness: 0.96,
+      side: THREE.DoubleSide,
+    });
     const mat = makeFlyerNestPBRMaterial({
       color: nestColor,
-      flatShading: false,
+      flatShading: true,
       roughness: 0.96,
     });
     const lightTwigColor = nestColor.clone().lerp(new THREE.Color(0xc99a63), 0.72);
     const twigLightMat = makeFlyerNestPBRMaterial({
       color: lightTwigColor,
-      flatShading: false,
+      flatShading: true,
       roughness: 0.94,
     });
     const outerRingGeo = pooled("flyer_nest.outerRing.geo", () => {
       const geo = new THREE.TorusGeometry(0.558, 0.252, 8, 24);
       geo.rotateX(Math.PI / 2);
-      geo.scale(1.12, 0.62, 0.92);
+      geo.scale(1, 0.62, 1);
       geo.computeVertexNormals();
       return geo;
     });
@@ -1838,7 +1844,7 @@ export const FLORA_BUILDERS = {
       geo.computeVertexNormals();
       return geo;
     });
-    const bowl = new THREE.Mesh(innerBowlGeo, mat);
+    const bowl = new THREE.Mesh(innerBowlGeo, bowlMat);
     bowl.castShadow = true;
     bowl.receiveShadow = true;
     g.add(bowl);
