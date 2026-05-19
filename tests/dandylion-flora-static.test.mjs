@@ -37,7 +37,7 @@ assert(
     && builderBlock.includes('baseLeafCount')
     && builderBlock.includes('applyWindSway')
     && builderBlock.includes('flowerSpotY')
-    && builderBlock.includes('sporeCount = 384'),
+    && builderBlock.includes('sporeCount = 288'),
   'Dandy lion should have a long wind-swaying stem, broad leaves, and a dense procedural fuzz ball.'
 );
 

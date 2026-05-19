@@ -1279,7 +1279,7 @@ export const FLORA_BUILDERS = {
     core.castShadow = castMicroShadow;
     g.add(core);
 
-    const sporeCount = 384;
+    const sporeCount = 288;
     const goldenAngle = Math.PI * (3 - Math.sqrt(5));
     const fuzzInnerRadius = 0.050;
     const fuzzOuterRadius = 0.152;
