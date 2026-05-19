@@ -1176,6 +1176,7 @@ export function stepCreature(c, dt, t, heightFn) {
       const p = c.group.position;
       const ds = 0.25 * c.scale;
       const slopes = sampleSlopes(p.x, p.z, c.heading, ds, heightFn);
+      c.group.rotation.y = -c.heading + Math.PI / 2;
       c.group.rotation.x = slopes.pitchTarget;
       c.group.rotation.z = slopes.rollTarget;
     }
@@ -1243,6 +1244,7 @@ export function stepCreature(c, dt, t, heightFn) {
         const p = c.group.position;
         const ds = 0.25 * c.scale;
         const slopes = sampleSlopes(p.x, p.z, c.heading, ds, heightFn);
+        c.group.rotation.y = -c.heading + Math.PI / 2;
         c.group.rotation.x = slopes.pitchTarget;
         c.group.rotation.z = slopes.rollTarget;
       }
