@@ -15,27 +15,47 @@ dev-start:
 	else \
 		pid=`lsof -ti:$(PORT) 2>/dev/null`; \
 		if [ -n "$$pid" ]; then \
-			echo "port $(PORT) is already in use (pid $$pid)"; \
-		else \
-			rm -f $(DEV_PID_FILE); \
-			nohup npx vite --host 0.0.0.0 --port $(PORT) > $(DEV_LOG_FILE) 2>&1 & echo $$! > $(DEV_PID_FILE); \
-			sleep 0.8; \
-			echo "Vite dev server started (pid `cat $(DEV_PID_FILE)`) at http://localhost:$(PORT)"; \
-			sed -n 's/^/    /p' $(DEV_LOG_FILE); \
+			echo "port $(PORT) held by pid $$pid — killing"; \
+			kill $$pid 2>/dev/null; \
+			for i in 1 2 3 4 5 6 7 8 9 10; do \
+				sleep 0.2; \
+				if ! lsof -ti:$(PORT) >/dev/null 2>&1; then break; fi; \
+			done; \
+			if lsof -ti:$(PORT) >/dev/null 2>&1; then \
+				echo "pid $$pid did not exit; sending SIGKILL"; \
+				kill -9 `lsof -ti:$(PORT) 2>/dev/null` 2>/dev/null; \
+				sleep 0.3; \
+			fi; \
 		fi; \
+		rm -f $(DEV_PID_FILE); \
+		nohup npx vite --host 0.0.0.0 --port $(PORT) > $(DEV_LOG_FILE) 2>&1 & echo $$! > $(DEV_PID_FILE); \
+		sleep 0.8; \
+		echo "Vite dev server started (pid `cat $(DEV_PID_FILE)`) at http://localhost:$(PORT)"; \
+		sed -n 's/^/    /p' $(DEV_LOG_FILE); \
 	fi
 
 dev-stop:
-	@if [ -f $(DEV_PID_FILE) ] && kill -0 `cat $(DEV_PID_FILE)` 2>/dev/null; then \
-		kill `cat $(DEV_PID_FILE)` && echo "Vite dev server stopped (pid `cat $(DEV_PID_FILE)`)"; \
+	@pid=""; \
+	if [ -f $(DEV_PID_FILE) ] && kill -0 `cat $(DEV_PID_FILE)` 2>/dev/null; then \
+		pid=`cat $(DEV_PID_FILE)`; \
+	fi; \
+	port_pid=`lsof -ti:$(PORT) 2>/dev/null`; \
+	if [ -z "$$pid" ] && [ -z "$$port_pid" ]; then \
+		echo "Vite dev server is not running"; \
 		rm -f $(DEV_PID_FILE); \
 	else \
-		pid=`lsof -ti:$(PORT) 2>/dev/null`; \
-		if [ -n "$$pid" ]; then \
-			kill $$pid && echo "stopped process on :$(PORT) (pid $$pid)"; \
-		else \
-			echo "Vite dev server is not running"; \
+		kill_pids="$$pid $$port_pid"; \
+		for p in $$kill_pids; do kill $$p 2>/dev/null; done; \
+		for i in 1 2 3 4 5 6 7 8 9 10; do \
+			sleep 0.2; \
+			if ! lsof -ti:$(PORT) >/dev/null 2>&1; then break; fi; \
+		done; \
+		if lsof -ti:$(PORT) >/dev/null 2>&1; then \
+			echo "port $(PORT) still held; sending SIGKILL"; \
+			kill -9 `lsof -ti:$(PORT) 2>/dev/null` 2>/dev/null; \
+			sleep 0.3; \
 		fi; \
+		echo "stopped processes on :$(PORT) ($$kill_pids)"; \
 		rm -f $(DEV_PID_FILE); \
 	fi
 
