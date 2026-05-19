@@ -2079,10 +2079,11 @@ export const FLORA_BUILDERS = {
       roughness: 1,
     });
     const segments = 2 + Math.floor(Math.random() * 3); // 2–4 stacked drums
+    const pillarHorizontalScale = biome.id === "desert" ? 1 + Math.random() : 1;
     let y = 0;
     for (let i = 0; i < segments; i++) {
       const h = 0.45 + Math.random() * 0.25;
-      const r = 0.22 - i * 0.015;
+      const r = (0.22 - i * 0.015) * pillarHorizontalScale;
       // lichen-tinted on the first segment ~half the time
       const useLichen = i === 0 && Math.random() < 0.5;
       const drum = new THREE.Mesh(
@@ -2097,6 +2098,8 @@ export const FLORA_BUILDERS = {
       g.add(drum);
       y += h - 0.02;
     }
+    let capTopY = y;
+    const capRadius = 0.22 * 1.1 * pillarHorizontalScale;
     // broken cap — jittered chunk
     if (Math.random() < 0.7) {
       const cap = new THREE.Mesh(
@@ -2104,11 +2107,14 @@ export const FLORA_BUILDERS = {
         stoneMat
       );
       cap.position.y = y + 0.1;
-      cap.scale.set(1.1, 0.5, 1.1);
+      cap.scale.set(1.1 * pillarHorizontalScale, 0.5, 1.1 * pillarHorizontalScale);
       cap.rotation.y = Math.random() * Math.PI * 2;
       cap.castShadow = true;
       g.add(cap);
+      capTopY = cap.position.y + 0.22 * cap.scale.y;
     }
+    g.userData.capTopY = capTopY;
+    g.userData.nestHostRadius = capRadius;
     return g;
   },
 

@@ -100,24 +100,30 @@ assert(
 );
 
 assert(
-  worldSource.includes('const NEST_HOST_KINDS = new Set(["tree", "leafballtree", "pine", "snowpine", "balloontree", "bigmushroom"])')
+  worldSource.includes('const NEST_HOST_KINDS = new Set(["tree", "leafballtree", "pine", "snowpine", "balloontree", "bigmushroom", "pillar"])')
     && worldSource.includes('const biomeHasNestHosts = biome.flora.some((kind) => NEST_HOST_KINDS.has(kind))')
+    && worldSource.includes('const MIN_NEST_HOST_RADIUS')
     && worldSource.includes('const nestHosts = []')
     && worldSource.includes('function blocksNestPlacement')
     && worldSource.includes('if (block === allowedHostBlock) continue')
     && worldSource.includes('function nestTouchesWater(x, z, r)')
+    && worldSource.includes('function sampleTerrainFootprint(x, z, r)')
+    && worldSource.includes('function getFlyerNestGroundPose(x, z, r, scale)')
+    && worldSource.includes('Math.max(...heights) - FLYER_NEST_BASE_CLEARANCE * scale')
     && worldSource.includes('function pickNestHost')
     && worldSource.includes('if (!choices.length) return null')
     && worldSource.includes('if (nestTouchesWater(host.x, host.z, r * 1.2)) continue')
     && worldSource.includes('let nestHost = biomeHasNestHosts ? pickNestHost(fp) : null')
     && worldSource.includes('if (biomeHasNestHosts) return false')
+    && worldSource.includes('const candidatePose = getFlyerNestGroundPose(candidate.x, candidate.z, fp, s)')
+    && worldSource.includes('if (!candidatePose) continue')
     && worldSource.includes('if (nestTouchesWater(candidate.x, candidate.z, fp * 1.2)) continue')
     && worldSource.includes('kind === "flyer_nest" && nestHost')
     && worldSource.includes('perchKind: "flyer_nest"')
     && worldSource.includes('perchKind: kind')
     && worldSource.includes('nestHosts.push({')
     && worldSource.includes('hostKind: kind'),
-  'flyer_nest placement should avoid ground flora, other nests, and water overlap, using hosts only in biomes that have eligible trees or large mushrooms.'
+  'flyer_nest placement should avoid ground flora, other nests, water overlap, and terrain clipping, using eligible trees, large mushrooms, or wide pillars as hosts.'
 );
 
 assert(

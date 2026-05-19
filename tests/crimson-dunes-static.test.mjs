@@ -5,6 +5,8 @@ import { BIOMES, FLOWER_DENSITY, WILDFLOWER_PALETTES } from '../src/biomes.js';
 const desert = BIOMES.find((biome) => biome.id === 'desert');
 const ashen = BIOMES.find((biome) => biome.id === 'ashen');
 const environmentSource = readFileSync(new URL('../src/environment.js', import.meta.url), 'utf8');
+const floraSource = readFileSync(new URL('../src/flora.js', import.meta.url), 'utf8');
+const worldSource = readFileSync(new URL('../src/world.js', import.meta.url), 'utf8');
 const sizeMapStart = environmentSource.indexOf('const sizeMap = {');
 const sizeMapEnd = environmentSource.indexOf('const opacityMap = {', sizeMapStart);
 const sizeMapBlock = environmentSource.slice(sizeMapStart, sizeMapEnd);
@@ -39,6 +41,21 @@ assert.equal(
   Object.hasOwn(WILDFLOWER_PALETTES, 'desert'),
   false,
   'crimson dunes should not keep a wildflower palette when flowers are disabled.'
+);
+
+assert(
+  floraSource.includes('const pillarHorizontalScale = biome.id === "desert" ? 1 + Math.random() : 1')
+    && floraSource.includes('const capRadius = 0.22 * 1.1 * pillarHorizontalScale')
+    && floraSource.includes('g.userData.nestHostRadius = capRadius'),
+  'crimson dunes pillars should roll up to +1 horizontal radius and expose their wide cap for flyer nests.'
+);
+
+assert(
+  worldSource.includes('const NEST_HOST_KINDS = new Set(["tree", "leafballtree", "pine", "snowpine", "balloontree", "bigmushroom", "pillar"])')
+    && worldSource.includes('const MIN_NEST_HOST_RADIUS')
+    && worldSource.includes('const nestHostRadius = (f.userData.nestHostRadius ?? f.userData.perchRadius ?? 0) * s')
+    && worldSource.includes('if (kind !== "pillar" || nestHostRadius >= MIN_NEST_HOST_RADIUS)'),
+  'world generation should allow nests to use only the wider pillar instances as hosts.'
 );
 
 assert(

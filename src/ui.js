@@ -706,8 +706,12 @@ export function initUi({ camera, canvas, controls, renderer }) {
     g.mesh.count = Math.max(0, Math.min(g.maxPlaced ?? g.mesh.count, target));
     g.uniforms.uHeightMul.value = height;
   }
-  function syncGrassSliderEnabledState() {
-    const dis = state.userSettings.grassEnabled === false;
+  function syncGrassControls() {
+    const grassAvailable = !!state.grass;
+    const enabled = grassAvailable && state.userSettings.grassEnabled !== false;
+    grassEnabledEl.checked = enabled;
+    grassEnabledEl.disabled = !grassAvailable;
+    const dis = !enabled;
     grassDensityEl.disabled = dis;
     grassHeightEl.disabled = dis;
     grassDensityEl.style.opacity = dis ? "0.4" : "";
@@ -732,7 +736,7 @@ export function initUi({ camera, canvas, controls, renderer }) {
     Math.round(((state.userSettings.grassHeight ?? HEIGHT_BASE) / HEIGHT_BASE) * 100)
   );
   grassHeightValueEl.textContent = grassHeightEl.value + "%";
-  syncGrassSliderEnabledState();
+  syncGrassControls();
 
   grassDetailsEl.addEventListener("toggle", () => {
     state.userSettings.grassPanelOpen = grassDetailsEl.open;
@@ -740,7 +744,7 @@ export function initUi({ camera, canvas, controls, renderer }) {
   });
   grassEnabledEl.addEventListener("change", () => {
     state.userSettings.grassEnabled = grassEnabledEl.checked;
-    syncGrassSliderEnabledState();
+    syncGrassControls();
     applyGrassSettings();
     saveSettings();
   });
@@ -774,8 +778,12 @@ export function initUi({ camera, canvas, controls, renderer }) {
     });
   }
 
-  state._reapplyGrassSettings = applyGrassSettings;
+  state._reapplyGrassSettings = () => {
+    applyGrassSettings();
+    syncGrassControls();
+  };
   applyGrassSettings();
+  syncGrassControls();
 
   const fxDetailsEl = document.getElementById("setting-fx-details");
   const bloomEl = document.getElementById("setting-bloom");
