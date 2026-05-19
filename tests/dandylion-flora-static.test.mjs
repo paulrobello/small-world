@@ -29,34 +29,67 @@ for (const biome of BIOMES) {
 const builderStart = floraSource.indexOf('dandylion(biome)');
 const builderEnd = floraSource.indexOf('cactus()', builderStart);
 const builderBlock = floraSource.slice(builderStart, builderEnd);
+const detachedMatStart = builderBlock.indexOf('const detachedSporeMat = pooled("dandylion.detached.spore.point.mat"');
+const detachedMatEnd = builderBlock.indexOf('const fuzzLines = new THREE.LineSegments', detachedMatStart);
+const detachedMatBlock = builderBlock.slice(detachedMatStart, detachedMatEnd);
 
 assert(builderStart >= 0 && builderEnd > builderStart, 'Dandy lion builder should live before cactus flora.');
+assert(detachedMatStart >= 0 && detachedMatEnd > detachedMatStart, 'Dandy lion loose spore material should be present.');
 assert(
   builderBlock.includes('DANDYLION_STEM_H = 0.92')
     && builderBlock.includes('buildLeafGeo')
     && builderBlock.includes('baseLeafCount')
     && builderBlock.includes('applyWindSway')
     && builderBlock.includes('flowerSpotY')
-    && builderBlock.includes('sporeCount = 288'),
-  'Dandy lion should have a long wind-swaying stem, broad leaves, and a dense procedural fuzz ball.'
+    && builderBlock.includes('sporeCount = 288')
+    && builderBlock.includes('detachedSporeCount = 6'),
+  'Dandy lion should have a long wind-swaying stem, broad leaves, a dense procedural fuzz ball, and a small loose spore stream.'
 );
 
 assert(
   builderBlock.includes('dandylion.fuzz.line.mat')
     && builderBlock.includes('dandylion.spore.point.mat')
+    && builderBlock.includes('dandylion.detached.spore.point.mat')
     && builderBlock.includes('new THREE.ShaderMaterial')
     && builderBlock.includes('new THREE.LineSegments(lineGeo, lineMat)')
     && builderBlock.includes('new THREE.Points(sporeGeo, sporeMat)')
+    && builderBlock.includes('new THREE.Points(detachedSporeGeo, detachedSporeMat)')
     && builderBlock.includes('uFoliageWind: state.windUniforms.uFoliageWind')
     && builderBlock.includes('const fuzzInnerRadius = 0.050')
     && builderBlock.includes('sporeSizes[i] = 4.2 + Math.random() * 4.2')
     && builderBlock.includes('gl_PointSize = aSize;')
     && builderBlock.includes('uOpacity: { value: glow ? 0.46 : 0.34 }')
     && builderBlock.includes('uOpacity: { value: glow ? 0.58 : 0.44 }')
-    && builderBlock.match(/transparent: true/g)?.length >= 2
+    && builderBlock.includes('uOpacity: { value: glow ? 0.62 : 0.48 }')
+    && builderBlock.match(/transparent: true/g)?.length >= 3
     && !builderBlock.includes('new THREE.InstancedMesh(puffGeo, puffMat')
     && !builderBlock.includes('new THREE.IcosahedronGeometry(0.018'),
   'Dandy lion fuzz should use shader lines and point spores, not instanced mesh geometry.'
+);
+
+assert(
+  builderBlock.includes('const detachedSporeGeo = pooled("dandylion.detached.spore.point.geo"')
+    && builderBlock.includes('geo.boundingSphere = new THREE.Sphere(new THREE.Vector3(0, DANDYLION_STEM_H + 0.35, 0), 12.5)')
+    && builderBlock.includes('detachedSporeSizes[i] = 4.0 + Math.random() * 3.1')
+    && builderBlock.includes('float cycle = fract(uTime * 0.037 + aSeed)')
+    && builderBlock.includes('float fade = rise * (1.0 - smoothstep(0.62, 0.96, cycle)) * uFoliageWind')
+    && builderBlock.includes('float lift = smoothstep(0.0, 0.72, cycle)')
+    && builderBlock.includes('vec2 crossWind = vec2(-windDir.y, windDir.x)')
+    && builderBlock.includes('float lateralLane = (fract(aSeed * 17.0) - 0.5) * 0.055')
+    && builderBlock.includes('float forwardGust = 0.92 + 0.16 * sin(aSeed * 37.0)')
+    && builderBlock.includes('float modelScale = max(length(modelMatrix[0].xyz), 0.001)')
+    && builderBlock.includes('float travel = 10.0 / modelScale')
+    && builderBlock.includes('p.xz += windDir * cycle * cycle * forwardGust * uWindStrength * uFoliageWind * travel')
+    && builderBlock.includes('p.xz += crossWind * lateralLane * lift * uFoliageWind')
+    && builderBlock.includes('p.y += cycle * (0.18 + sin(aSeed * 19.0) * 0.045);')
+    && !detachedMatBlock.includes('cycle * 8.0')
+    && !detachedMatBlock.includes('cycle * 13.0')
+    && !detachedMatBlock.includes('uTime * 3.3')
+    && builderBlock.includes('vDriftAlpha = fade')
+    && builderBlock.includes('gl_FragColor = vec4(uColor * twinkle, soft * uOpacity * vDriftAlpha)')
+    && builderBlock.includes('g.add(detachedSpores)')
+    && !detachedMatBlock.includes('dandylionHeadWindOffset()'),
+  'Dandy lion loose spores should occasionally lift off independently from the head and drift only when foliage wind is active.'
 );
 
 assert(

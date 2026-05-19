@@ -1289,6 +1289,10 @@ export const FLORA_BUILDERS = {
     const sporePositions = new Float32Array(sporeCount * 3);
     const sporeSeeds = new Float32Array(sporeCount);
     const sporeSizes = new Float32Array(sporeCount);
+    const detachedSporeCount = 6;
+    const detachedSporePositions = new Float32Array(detachedSporeCount * 3);
+    const detachedSporeSeeds = new Float32Array(detachedSporeCount);
+    const detachedSporeSizes = new Float32Array(detachedSporeCount);
     const v = new THREE.Vector3();
     for (let i = 0; i < sporeCount; i++) {
       const y = 1 - (i / (sporeCount - 1)) * 2;
@@ -1308,6 +1312,17 @@ export const FLORA_BUILDERS = {
       sporeSeeds[i] = i * 0.173 + 0.71;
       sporeSizes[i] = 4.2 + Math.random() * 4.2;
     }
+    for (let i = 0; i < detachedSporeCount; i++) {
+      const y = 0.2 + Math.random() * 0.6;
+      const r = Math.sqrt(Math.max(0, 1 - y * y));
+      const a = i * goldenAngle + Math.random() * 0.28;
+      v.set(Math.cos(a) * r, y * 0.86, Math.sin(a) * r).normalize();
+      const start = v.multiplyScalar(fuzzOuterRadius * (0.72 + Math.random() * 0.20));
+      start.y += DANDYLION_STEM_H;
+      detachedSporePositions.set([start.x, start.y, start.z], i * 3);
+      detachedSporeSeeds[i] = Math.random();
+      detachedSporeSizes[i] = 4.0 + Math.random() * 3.1;
+    }
 
     const lineGeo = pooled("dandylion.fuzz.line.geo", () => {
       const geo = new THREE.BufferGeometry();
@@ -1320,6 +1335,14 @@ export const FLORA_BUILDERS = {
       geo.setAttribute("position", new THREE.Float32BufferAttribute(sporePositions, 3));
       geo.setAttribute("aSeed", new THREE.Float32BufferAttribute(sporeSeeds, 1));
       geo.setAttribute("aSize", new THREE.Float32BufferAttribute(sporeSizes, 1));
+      return geo;
+    });
+    const detachedSporeGeo = pooled("dandylion.detached.spore.point.geo", () => {
+      const geo = new THREE.BufferGeometry();
+      geo.setAttribute("position", new THREE.Float32BufferAttribute(detachedSporePositions, 3));
+      geo.setAttribute("aSeed", new THREE.Float32BufferAttribute(detachedSporeSeeds, 1));
+      geo.setAttribute("aSize", new THREE.Float32BufferAttribute(detachedSporeSizes, 1));
+      geo.boundingSphere = new THREE.Sphere(new THREE.Vector3(0, DANDYLION_STEM_H + 0.35, 0), 12.5);
       return geo;
     });
     const fuzzVertexShader = `
@@ -1403,12 +1426,78 @@ export const FLORA_BUILDERS = {
         depthWrite: false,
       })
     );
+    const detachedSporeMat = pooled("dandylion.detached.spore.point.mat", () =>
+      new THREE.ShaderMaterial({
+        uniforms: {
+          uTime: state.windUniforms.uTime,
+          uWindStrength: { value: DANDYLION_WIND },
+          uFoliageWind: state.windUniforms.uFoliageWind,
+          uDandylionHeadY: { value: DANDYLION_STEM_H },
+          uColor: { value: new THREE.Color("#fffaf0") },
+          uOpacity: { value: glow ? 0.62 : 0.48 },
+        },
+        vertexShader: `
+          attribute float aSeed;
+          attribute float aSize;
+          uniform float uTime;
+          uniform float uWindStrength;
+          uniform float uFoliageWind;
+          uniform float uDandylionHeadY;
+          varying float vSeed;
+          varying float vDriftAlpha;
+          void main() {
+            vSeed = aSeed;
+            float cycle = fract(uTime * 0.037 + aSeed);
+            float rise = smoothstep(0.03, 0.18, cycle);
+            float fade = rise * (1.0 - smoothstep(0.62, 0.96, cycle)) * uFoliageWind;
+            vec4 headWp = modelMatrix * vec4(vec3(0.0, uDandylionHeadY, 0.0), 1.0);
+            vec2 windDir = normalize(vec2(
+              0.72 + sin(headWp.z * 0.23 + aSeed * 8.0) * 0.28,
+              0.44 + cos(headWp.x * 0.19 + aSeed * 7.0) * 0.24
+            ));
+            vec3 p = position;
+            float lift = smoothstep(0.0, 0.72, cycle);
+            vec2 crossWind = vec2(-windDir.y, windDir.x);
+            float lateralLane = (fract(aSeed * 17.0) - 0.5) * 0.055;
+            float forwardGust = 0.92 + 0.16 * sin(aSeed * 37.0);
+            float modelScale = max(length(modelMatrix[0].xyz), 0.001);
+            float travel = 10.0 / modelScale;
+            p.xz += windDir * cycle * cycle * forwardGust * uWindStrength * uFoliageWind * travel;
+            p.xz += crossWind * lateralLane * lift * uFoliageWind;
+            p.y += cycle * (0.18 + sin(aSeed * 19.0) * 0.045);
+            vec4 mv = modelViewMatrix * vec4(p, 1.0);
+            gl_Position = projectionMatrix * mv;
+            gl_PointSize = aSize * (1.0 - cycle * 0.35);
+            vDriftAlpha = fade;
+          }
+        `,
+        fragmentShader: `
+          uniform vec3 uColor;
+          uniform float uOpacity;
+          varying float vSeed;
+          varying float vDriftAlpha;
+          void main() {
+            vec2 c = gl_PointCoord - 0.5;
+            float d = length(c);
+            if (d > 0.5) discard;
+            float soft = smoothstep(0.5, 0.08, d);
+            float twinkle = 0.86 + 0.14 * sin(vSeed * 41.0);
+            gl_FragColor = vec4(uColor * twinkle, soft * uOpacity * vDriftAlpha);
+          }
+        `,
+        transparent: true,
+        depthWrite: false,
+      })
+    );
     const fuzzLines = new THREE.LineSegments(lineGeo, lineMat);
     const spores = new THREE.Points(sporeGeo, sporeMat);
+    const detachedSpores = new THREE.Points(detachedSporeGeo, detachedSporeMat);
     fuzzLines.renderOrder = 1;
     spores.renderOrder = 2;
+    detachedSpores.renderOrder = 3;
     g.add(fuzzLines);
     g.add(spores);
+    g.add(detachedSpores);
 
     g.userData.flowerSpotY = DANDYLION_STEM_H;
     return g;
