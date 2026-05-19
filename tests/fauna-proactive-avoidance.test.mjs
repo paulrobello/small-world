@@ -55,3 +55,28 @@ const turnResult = avoidObstacles(
 assert.ok(turnResult, 'turn response should also steer before hard contact');
 assert.equal(turnResult.nx, step, 'proactive turn response should keep moving forward');
 assert.equal(turnResult.nz, 0, 'proactive turn response should not freeze at the current position');
+
+state.obstacles = [{ x: 0, z: 0, r: 0.5, top: 1.5 }];
+buildObstacleGrid(state.obstacles);
+
+const stuckRingStep = 0.05;
+const stuckRingResult = avoidObstacles(
+  0.6,
+  0,
+  0.6,
+  stuckRingStep,
+  Math.PI / 2,
+  stuckRingStep,
+  0.25,
+  undefined,
+  undefined,
+  undefined,
+  {},
+  { staticResponse: 'turn' }
+);
+
+assert.ok(stuckRingResult, 'crawler inside a tree clearance ring should get an escape response');
+assert.ok(
+  Math.hypot(stuckRingResult.nx, stuckRingResult.nz) > 0.6,
+  'crawler escape response should increase distance from the tree instead of orbiting in place'
+);

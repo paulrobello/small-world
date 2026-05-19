@@ -284,14 +284,16 @@ export function avoidObstacles(
           break;
         }
       }
-      // If the current position is already inside this obstacle (e.g. a
-      // crawler spawned inside a fairy ring), the normal "turn" freeze
-      // would trap it forever. Allow it to step outward instead.
-      const pxInside = rx * rx + rz * rz < o.r * o.r;
+      // If the current position is already inside this obstacle's clearance
+      // ring, the normal crawler "turn" freeze would trap it forever. Walk it
+      // outward until it reaches the ring again.
+      const pxInsideClearance = rx * rx + rz * rz < minD * minD;
       result = wedged
         ? { nx: px, nz: pz, heading: Math.atan2(nrz, nrx) + (Math.random() - 0.5) * 0.5 }
-        : staticResponse === "turn" && !pxInside
-          ? { nx: px, nz: pz, heading: tangentHeading }
+        : staticResponse === "turn"
+          ? pxInsideClearance
+            ? { nx: px + nrx * step, nz: pz + nrz * step, heading: Math.atan2(nrz, nrx) }
+            : { nx: px, nz: pz, heading: tangentHeading }
           : { nx: sx, nz: sz, heading: tangentHeading };
       break;
     }
