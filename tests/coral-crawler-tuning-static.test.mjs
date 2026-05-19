@@ -23,6 +23,8 @@ assert(coral, 'coral atoll biome should exist.');
 assert.equal(coral.noCaterpillars, true, 'coral atoll should not spawn caterpillars.');
 assert.equal(coral.snailCountMultiplier, 2, 'coral atoll should double its snail count.');
 assert.equal(coral.snailAntennaGlow, false, 'coral atoll snails should not glow at the antenna tips.');
+assert(coral.groundMarks, 'coral atoll should enable terrain-painted marks for snail trails.');
+assert.equal(coral.groundMarks.poof, 'sand', 'coral atoll snail trails should use the sand-style soft ground mark poof.');
 
 assert(
   worldSource.includes('const ncats = biome.noCaterpillars ? 0 : 1 + Math.floor(Math.random() * 3)'),

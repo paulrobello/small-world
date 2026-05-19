@@ -12,6 +12,26 @@ assert(
   coral.flora.includes('seaweed'),
   'coral atoll should include seaweed in its flora mix.'
 );
+assert.equal(
+  coral.flora.filter((kind) => kind === 'seaweed').length,
+  16,
+  'coral atoll should double seaweed weighting from 8 to 16 flora slots.'
+);
+assert.equal(
+  coral.flora.filter((kind) => kind === 'coral').length,
+  4,
+  'coral atoll should double branching coral weighting from 2 to 4 flora slots.'
+);
+assert.equal(
+  coral.flora.filter((kind) => kind === 'braincoral').length,
+  2,
+  'coral atoll should double brain coral weighting from 1 to 2 flora slots.'
+);
+assert.equal(
+  coral.flora.filter((kind) => kind === 'cupcoral').length,
+  2,
+  'coral atoll should double cup coral weighting from 1 to 2 flora slots.'
+);
 
 for (const biome of BIOMES) {
   if (biome.id === 'coral') continue;
@@ -41,7 +61,7 @@ assert(
 assert(
   worldSource.includes('const MEDIUM_DEEP_WATER_FLORA = new Set(["seaweed"])')
     && worldSource.includes('const WATER_FLORA_DEPTH_RANGE = {')
-    && worldSource.includes('seaweed: [0.85, 1.65]')
+    && worldSource.includes('seaweed: [2.1, 3.7]')
     && worldSource.includes('const surfaceReach = f.userData.surfaceReachRange')
     && worldSource.includes('const targetReach = surfaceReach[0] + Math.random() * (surfaceReach[1] - surfaceReach[0])')
     && worldSource.includes('const WATER_FLORA_SURFACE_CLEARANCE = 0.10')

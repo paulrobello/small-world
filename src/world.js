@@ -713,7 +713,7 @@ export async function generateWorld(seed) {
   const WATER_FLORA_MARGIN = 0.02;
   const WATER_FLORA_DEPTH_RANGE = {
     reed: [WATER_FLORA_MARGIN, 0.45],
-    seaweed: [0.85, 1.65],
+    seaweed: [2.1, 3.7],
   };
   const WATER_FLORA_SURFACE_CLEARANCE = 0.10;
 

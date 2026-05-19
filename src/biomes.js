@@ -335,8 +335,10 @@ export const BIOMES = [
     cloudTint: "#ffffff",
     cloudOpacity: 0.75,
     flora: [
-      "coral", "coral", "braincoral", "cupcoral",
-      "seaweed", "seaweed", "reed", "limestonerock", "beachsucculent",
+      "coral", "coral", "coral", "coral", "braincoral", "braincoral", "cupcoral", "cupcoral",
+      "seaweed", "seaweed", "seaweed", "seaweed", "seaweed", "seaweed", "seaweed", "seaweed",
+      "seaweed", "seaweed", "seaweed", "seaweed", "seaweed", "seaweed", "seaweed", "seaweed",
+      "reed", "limestonerock", "beachsucculent",
     ],
     floraCount: 78,
     particle: "bubble",
@@ -346,6 +348,7 @@ export const BIOMES = [
     noCaterpillars: true,
     snailCountMultiplier: 2,
     snailAntennaGlow: false,
+    groundMarks: { color: "#49828a", opacity: 0.24, life: 7.0, softness: 1.1, poof: "sand" },
     dusk: { sky: "#e8a8c0", fog: "#c890a0", sun: "#ff8090", ground: "#7a4a4a" },
     night: { sky: "#04102a", fog: "#021024", sun: "#a8b8d0", ground: "#102028" },
     edgeAura: {
