@@ -84,6 +84,7 @@ export function addAntennae(parent, biome, bodyColor, opts = {}) {
     tipRadius = 0.04,
     colorDarken = 0.2,
     emissiveStrength = 0.35,
+    tipGlow = true,
   } = opts;
   const antMat = new THREE.MeshStandardMaterial({
     color: bodyColor.clone().offsetHSL(0, 0, -colorDarken),
@@ -102,10 +103,12 @@ export function addAntennae(parent, biome, bodyColor, opts = {}) {
       new THREE.SphereGeometry(tipRadius, 6, 6),
       new THREE.MeshStandardMaterial({
         color: new THREE.Color(biome.accent),
-        emissive: new THREE.Color(biome.accent).multiplyScalar(emissiveStrength),
+        emissive: tipGlow
+          ? new THREE.Color(biome.accent).multiplyScalar(emissiveStrength)
+          : new THREE.Color(0x000000),
       })
     );
-    tip.layers.enable(BLOOM_LAYER);
+    if (tipGlow) tip.layers.enable(BLOOM_LAYER);
     tip.position.set(0, stalkHeight / 2, 0);
     stalk.add(tip);
     stalks.push(stalk);

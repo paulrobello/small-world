@@ -343,6 +343,9 @@ export const BIOMES = [
     creatureColors: ["#ff7a8c", "#ffb88a", "#7ad6e0", "#fff2b3"],
     creatureCount: [9, 14],
     creatureKind: "fish",
+    noCaterpillars: true,
+    snailCountMultiplier: 2,
+    snailAntennaGlow: false,
     dusk: { sky: "#e8a8c0", fog: "#c890a0", sun: "#ff8090", ground: "#7a4a4a" },
     night: { sky: "#04102a", fog: "#021024", sun: "#a8b8d0", ground: "#102028" },
     edgeAura: {

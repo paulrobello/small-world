@@ -1269,14 +1269,15 @@ export async function generateWorld(seed) {
     return false;
   }
 
-  const ncats = 1 + Math.floor(Math.random() * 3); // 1–3
+  const ncats = biome.noCaterpillars ? 0 : 1 + Math.floor(Math.random() * 3); // 1–3
   for (let i = 0; i < ncats; i++) {
     placeCrawler(() => makeCaterpillar(biome));
     await yieldIfNeeded();
   }
-  // snails — 0-2 per world (cute, slow). They live in the caterpillars array
-  // so they get stepped and ray-picked alongside their cousins.
-  const nsnails = Math.random() < 0.7 ? (Math.random() < 0.4 ? 2 : 1) : 0;
+  // snails — base 0-2 per world (cute, slow), with optional biome multiplier.
+  // They live in the caterpillars array so they get stepped and ray-picked alongside their cousins.
+  const baseSnails = Math.random() < 0.7 ? (Math.random() < 0.4 ? 2 : 1) : 0;
+  const nsnails = Math.round(baseSnails * (biome.snailCountMultiplier ?? 1));
   for (let i = 0; i < nsnails; i++) {
     placeCrawler(() => makeCaterpillar(biome, { kind: "snail" }));
     await yieldIfNeeded();

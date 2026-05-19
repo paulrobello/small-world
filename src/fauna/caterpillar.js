@@ -224,6 +224,7 @@ export function makeCaterpillar(biome, opts = {}) {
     tipRadius: 0.04,
     colorDarken: 0.25,
     emissiveStrength: 0.4,
+    tipGlow: !isSnail || biome.snailAntennaGlow !== false,
   });
 
   // ── body segments — all the same radius as the head ──────────────────
