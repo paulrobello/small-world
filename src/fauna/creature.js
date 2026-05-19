@@ -159,6 +159,7 @@ const PERSONALITIES = {
 const PERSONALITY_NAMES = Object.keys(PERSONALITIES);
 
 const FISH_MIN_GROUND_Y = -4.2;
+const FISH_SPEED_MULTIPLIER = 0.5;
 const PERCHED_WING_DOWN_Z = -0.42;
 const PERCHED_WING_BACK_Y = 0.42;
 const PERCHED_WING_RELAX_X = -0.12;
@@ -761,7 +762,7 @@ export function makeCreature(biome, opts = {}) {
     role: opts.role || null,         // "parent" | "kid" | null
     parent: opts.parent || null,     // reference to parent creature (kids only)
     heading: Math.random() * Math.PI * 2,
-    speed: baseSpeed * personality.speedMul,
+    speed: baseSpeed * personality.speedMul * (isFish ? FISH_SPEED_MULTIPLIER : 1),
     bob: Math.random() * Math.PI * 2,
     bobSpeed: baseBobSpeed * personality.bobSpeedMul,
     flapSpeed: 16 + Math.random() * 10,
