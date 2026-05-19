@@ -1258,7 +1258,7 @@ export async function generateWorld(seed) {
   }
 
   const flyerCount = state.creatures.filter((c) => c.flies && !c.isFish && !c.isBee).length;
-  const flyerNestTarget = flyerCount < 4 ? flyerCount : Math.ceil(flyerCount / 2);
+  const flyerNestTarget = biome.noFlyerNests ? 0 : flyerCount < 4 ? flyerCount : Math.ceil(flyerCount / 2);
   let flyerNestPlaced = 0;
   let flyerNestAttempts = 0;
   while (flyerNestPlaced < flyerNestTarget && flyerNestAttempts < flyerNestTarget * 80) {

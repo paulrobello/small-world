@@ -400,6 +400,17 @@ function getLeafballOutlineColor(leaves, trunk) {
     .offsetHSL(0.0, -0.05, -0.18);
 }
 
+function getFlyerNestPalette(biome) {
+  const ground0 = new THREE.Color(biome.ground[0]);
+  const ground1 = new THREE.Color(biome.ground[1] ?? biome.ground[0]);
+  const ground2 = new THREE.Color(biome.ground[2] ?? biome.ground[1] ?? biome.ground[0]);
+  const cliff = new THREE.Color(biome.cliff);
+  const accent = new THREE.Color(biome.accent ?? biome.sun ?? biome.cliff);
+  const base = cliff.clone().lerp(ground0, 0.48).lerp(ground1, biome.cloudlike ? 0.28 : 0.12);
+  const light = ground2.clone().lerp(accent, biome.cloudlike ? 0.40 : 0.20).lerp(base, 0.38);
+  return { base, light };
+}
+
 function getDandylionFloraPalette(biome) {
   const ground0 = new THREE.Color(biome.ground[0]);
   const ground1 = new THREE.Color(biome.ground[1] ?? biome.ground[0]);
@@ -1911,7 +1922,8 @@ export const FLORA_BUILDERS = {
   flyer_nest(biome) {
     const g = new THREE.Group();
     const FLYER_NEST_PERCH_RADIUS = 0.612;
-    const nestColor = new THREE.Color(TRUNK).lerp(new THREE.Color(biome.cliff), 0.28);
+    const nestPalette = getFlyerNestPalette(biome);
+    const nestColor = nestPalette.base;
     const bowlMat = makeFlyerNestPBRMaterial({
       color: nestColor,
       flatShading: true,
@@ -1923,7 +1935,7 @@ export const FLORA_BUILDERS = {
       flatShading: true,
       roughness: 0.96,
     });
-    const lightTwigColor = nestColor.clone().lerp(new THREE.Color(0xc99a63), 0.72);
+    const lightTwigColor = nestPalette.light;
     const twigLightMat = makeFlyerNestPBRMaterial({
       color: lightTwigColor,
       flatShading: true,
@@ -2969,6 +2981,8 @@ export const FLORA_BUILDERS = {
       puff.castShadow = true;
       g.add(puff);
     }
+    g.userData.capTopY = trunkH + 0.95;
+    g.userData.obstacleTopY = trunkH + (biome.cloudlike ? 1.08 : 0.95);
     return g;
   },
 

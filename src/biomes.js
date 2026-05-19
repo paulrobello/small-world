@@ -383,6 +383,7 @@ export const BIOMES = [
     creatureColors: ["#fff4b8", "#ffe08a", "#f6c36a", "#ffd0a3"],
     creatureCount: [9, 14],
     cloudlike: true,
+    noFlyerNests: true,
     bloom: false,
     cloudSwirl: false,
     furProbability: 0.50,

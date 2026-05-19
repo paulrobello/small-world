@@ -20,6 +20,13 @@ for (const biome of BIOMES) {
   );
 }
 
+const cloudBiome = BIOMES.find((biome) => biome.id === 'cloud');
+assert.equal(
+  cloudBiome?.noFlyerNests,
+  true,
+  'cloud island should keep balloon trees but opt out of flyer nest generation.'
+);
+
 const nestStart = floraSource.indexOf('flyer_nest(biome)');
 const nestEnd = floraSource.indexOf('deadtree(biome)', nestStart);
 const nestBlock = floraSource.slice(nestStart, nestEnd);
@@ -35,14 +42,30 @@ assert(
     && nestBlock.includes('side: THREE.DoubleSide')
     && nestBlock.includes('const bowl = new THREE.Mesh(innerBowlGeo, bowlMat)')
     && nestBlock.includes('new THREE.CylinderGeometry(0.0432, 0.0612, 1, 5)')
-    && nestBlock.includes('const lightTwigColor = nestColor.clone().lerp(new THREE.Color(0xc99a63), 0.72)')
+    && floraSource.includes('function getFlyerNestPalette(biome)')
+    && floraSource.includes('new THREE.Color(biome.ground[0])')
+    && floraSource.includes('new THREE.Color(biome.cliff)')
+    && floraSource.includes('new THREE.Color(biome.accent ?? biome.sun ?? biome.cliff)')
+    && nestBlock.includes('const nestPalette = getFlyerNestPalette(biome)')
+    && nestBlock.includes('const lightTwigColor = nestPalette.light')
     && nestBlock.includes('const twigLightMat = makeFlyerNestPBRMaterial')
     && nestBlock.includes('i % 4 === 1 || i % 7 === 3 ? twigLightMat : mat')
     && nestBlock.includes('flyer_nest.outerRing.geo')
     && nestBlock.includes('flyer_nest.innerBowl.geo')
     && nestBlock.includes('g.userData.capTopY')
     && nestBlock.includes('g.userData.perchRadius'),
-  'flyer_nest should build a broad twig-textured bowl with explicit perch height and radius.'
+  'flyer_nest should build a broad twig-textured bowl with biome-derived colors, explicit perch height, and radius.'
+);
+
+const balloonStart = floraSource.indexOf('balloontree(biome)');
+const balloonEnd = floraSource.indexOf('lavafissure(biome)', balloonStart);
+const balloonBlock = floraSource.slice(balloonStart, balloonEnd);
+
+assert(balloonStart >= 0 && balloonEnd > balloonStart, 'balloontree builder should live before lavafissure flora.');
+assert(
+  balloonBlock.includes('g.userData.capTopY = trunkH + 0.95')
+    && balloonBlock.includes('g.userData.obstacleTopY = trunkH + (biome.cloudlike ? 1.08 : 0.95)'),
+  'balloontree should publish a per-instance crown height so hosted flyer nests sit on the puff canopy instead of using the loose obstacle fallback.'
 );
 
 assert(
@@ -99,7 +122,7 @@ assert(
 
 assert(
   worldSource.includes('const flyerCount = state.creatures.filter((c) => c.flies && !c.isFish && !c.isBee).length')
-    && worldSource.includes('const flyerNestTarget = flyerCount < 4 ? flyerCount : Math.ceil(flyerCount / 2)')
+    && worldSource.includes('const flyerNestTarget = biome.noFlyerNests ? 0 : flyerCount < 4 ? flyerCount : Math.ceil(flyerCount / 2)')
     && worldSource.includes('while (flyerNestPlaced < flyerNestTarget')
     && worldSource.includes('if (placeFlyerNest()) flyerNestPlaced++')
     && !worldSource.includes('state.bees.filter')
