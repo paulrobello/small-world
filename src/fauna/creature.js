@@ -1563,7 +1563,7 @@ export function stepCreature(c, dt, t, heightFn) {
         nextGround > fishMaxGroundY(c.scale) ||
         nextGround < FISH_MIN_GROUND_Y;
       target = nearestCenter(pos.x, pos.z);
-    } else if (c.flies && c.landState === "flying") {
+    } else if (c.flies && c.landState !== "landed") {
       const planeBound = state.ISLAND_SIZE * 0.46;
       wouldStray = Math.sqrt(nx * nx + nz * nz) > planeBound;
       // Fliers may cruise across water. The Y-position block below raises
@@ -1582,12 +1582,23 @@ export function stepCreature(c, dt, t, heightFn) {
     }
 
     if (wouldStray) {
+      const currentDist = target ? Math.hypot(pos.x - target.cx, pos.z - target.cz) : 0;
+      const nextDist = target ? Math.hypot(nx - target.cx, nz - target.cz) : currentDist;
+      const recoveringStrayFlier =
+        c.flies &&
+        c.landState !== "landed" &&
+        !c.isFish &&
+        currentDist > nextDist;
       if (c.isFish) {
         c.heading += Math.PI + (Math.random() - 0.5) * 0.7;
       } else {
         c.heading =
           Math.atan2(target.cz - pos.z, target.cx - pos.x) +
           (Math.random() - 0.5) * 0.5;
+      }
+      if (recoveringStrayFlier) {
+        pos.x = nx;
+        pos.z = nz;
       }
     } else {
       // Obstacle slide — walkers always route around trunks; fliers route

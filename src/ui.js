@@ -362,8 +362,7 @@ export function initUi({ camera, canvas, controls, renderer }) {
   }
   function enterStroll() {
     if (_stroll) return;
-    // Release any other active camera mode so they don't fight.
-    setFollowTarget(null);
+    // Preserve any follow target: first-person + follow becomes creature POV.
     setSelectingCreature(false);
     if (_locatorOpen) setLocatorOpen(false);
     // Get the settings panel out of the way so the player can actually see.
@@ -441,7 +440,7 @@ export function initUi({ camera, canvas, controls, renderer }) {
 
     // Pointer lock so the mouse can move infinitely without leaving the
     // canvas. Browsers require this from a user gesture (button click).
-    canvas.requestPointerLock?.();
+    canvas.requestPointerLock?.().catch(() => {});
 
     const onMove = (e) => {
       if (!_stroll) return;

@@ -202,13 +202,16 @@ export function makeCaterpillar(biome, opts = {}) {
   // at the head's surface, floating out in front.
   const eyeZ = segRadius - 0.05;
   const pupilZ = segRadius + 0.04;
+  const eyeParts = [];
   for (const sign of [-1, 1]) {
     const eye = new THREE.Mesh(eyeGeo, eyeMat);
     eye.position.set(sign * 0.13, 0.12, eyeZ);
     head.add(eye);
+    eyeParts.push(eye);
     const pupil = new THREE.Mesh(pupilGeo, pupilMat);
     pupil.position.set(sign * 0.13, 0.12, pupilZ);
     head.add(pupil);
+    eyeParts.push(pupil);
   }
 
   // antennae always for caterpillars — feels right
@@ -344,6 +347,7 @@ export function makeCaterpillar(biome, opts = {}) {
     type: isSnail ? "snail" : "caterpillar",
     group,
     segments,
+    eyeParts,
     segRadius,
     trail,
     segSpacing,
@@ -477,10 +481,8 @@ export function stepCaterpillar(c, dt, t, heightFn) {
   if (slide) {
     nx = slide.nx;
     nz = slide.nz;
-    // Slide deflections are small and must match the deflected nx/nz this
-    // frame, so snap heading directly. Also retarget so the next frame's
-    // slew doesn't drag heading back to a pre-slide aim.
-    c.heading = slide.heading;
+    // Retarget only; the normal heading slew below keeps obstacle course
+    // corrections from whip-snapping the head before the body catches up.
     c.headingTarget = slide.heading;
   }
 

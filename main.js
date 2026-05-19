@@ -26,6 +26,11 @@ import { sharedFurUniforms } from "./src/fur.js";
 import { initPostFX } from "./src/postfx.js";
 import { updateWaterReflection } from "./src/reflection.js";
 import {
+  restoreCreaturePovRenderHidden,
+  setCreaturePovRenderHidden,
+  syncCreaturePovCamera,
+} from "./src/creaturePov.js";
+import {
   initUi,
   loadSettings,
   getFollowTarget,
@@ -33,6 +38,7 @@ import {
   stepStroll,
   isAnyFP,
   isPhotoFP,
+  isStrolling,
   getPhotoReviewGroup,
   isSelectingCreature,
   isManualPaused,
@@ -174,6 +180,7 @@ function animate() {
   const dt = paused ? 0 : rawDt;
   const t = paused ? (state.lastSimT ?? rawT) : rawT;
   beginPerfFrame();
+  restoreCreaturePovRenderHidden();
 
   // Fur shells read these once per frame — shared across all fur instances.
   // Done before INSPECT branch so fuzzy specimens get lit correctly.
@@ -314,7 +321,15 @@ function animate() {
 
   measurePerfPhase("cameraFollowAndWake", () => {
     if (isAnyFP()) {
-      stepStroll(isPhotoFP() ? rawDt : dt);
+      const followedCreature = isStrolling() ? getFollowTarget() : null;
+      stepStroll(followedCreature ? 0 : isPhotoFP() ? rawDt : dt);
+      if (followedCreature) {
+        if (syncCreaturePovCamera(camera, controls, followedCreature)) {
+          setCreaturePovRenderHidden(followedCreature);
+        } else {
+          setFollowTarget(null);
+        }
+      }
       if (state.currentBiome?.cloudlike && scene.fog) {
         // Cloud fog is tuned for orbit mode; from eye level it can flatten the
         // whole frame. Pull it back only while strolling so nearby puffs and
