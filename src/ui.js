@@ -37,7 +37,6 @@ const PERSISTED_KEYS = [
   "bloom",
   "bloomRadius",
   "tiltShift",
-  "softParticles",
   "outline",
   "ao",
   "depthFog",
@@ -788,7 +787,6 @@ export function initUi({ camera, canvas, controls, renderer }) {
   const fxDetailsEl = document.getElementById("setting-fx-details");
   const bloomEl = document.getElementById("setting-bloom");
   const tiltEl = document.getElementById("setting-tiltshift");
-  const softParticlesEl = document.getElementById("setting-softparticles");
   const outlineEl = document.getElementById("setting-outline");
   const aoEl = document.getElementById("setting-ao");
   const depthFogEl = document.getElementById("setting-depthfog");
@@ -807,23 +805,20 @@ export function initUi({ camera, canvas, controls, renderer }) {
   bloomRadiusEl.value = String(Math.round(bloomRadius * 100));
   bloomRadiusValueEl.textContent = bloomRadiusEl.value + "%";
   tiltEl.checked = state.userSettings.tiltShift;
-  softParticlesEl.checked = state.userSettings.softParticles;
   outlineEl.checked = state.userSettings.outline;
   aoEl.checked = state.userSettings.ao;
   depthFogEl.checked = state.userSettings.depthFog;
   function syncBiomeOverrideSettings() {
     const bloomOverridden = state.currentBiome?.bloom === false;
-    const softParticlesOverridden = state.currentBiome?.softParticles === false;
     bloomEl.parentElement.hidden = bloomOverridden;
     bloomRadiusEl.parentElement.hidden = bloomOverridden;
-    softParticlesEl.parentElement.hidden = softParticlesOverridden;
   }
   syncBiomeOverrideSettings();
 
   if (LOWFX) {
     // The depth pre-pass and composer are stubbed out under LOWFX, so every
     // FX in this section is a no-op there.
-    for (const el of [bloomEl, bloomRadiusEl, tiltEl, softParticlesEl, outlineEl, aoEl, depthFogEl]) {
+    for (const el of [bloomEl, bloomRadiusEl, tiltEl, outlineEl, aoEl, depthFogEl]) {
       el.disabled = true;
     }
     lowfxHint.hidden = false;
@@ -882,18 +877,6 @@ export function initUi({ camera, canvas, controls, renderer }) {
     () => tryResumeOnGesture(),
     { once: true },
   );
-  softParticlesEl.addEventListener("change", () => {
-    state.userSettings.softParticles = softParticlesEl.checked;
-    // Particle material's uSoftParticles is a runtime float toggle (no
-    // shader recompile). Only live particle systems need the update.
-    const p = state.particles;
-    if (p && p.material.uniforms.uSoftParticles && state.depthTexture) {
-      const biomeAllowsSoftParticles = state.currentBiome?.softParticles !== false;
-      p.material.uniforms.uSoftParticles.value =
-        softParticlesEl.checked && p.userData.softParticlesSupported && biomeAllowsSoftParticles ? 1.0 : 0.0;
-    }
-    saveSettings();
-  });
   outlineEl.addEventListener("change", () => {
     state.userSettings.outline = outlineEl.checked;
     if (state.postfx) state.postfx.setOutline(outlineEl.checked);

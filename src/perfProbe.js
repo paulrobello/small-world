@@ -179,7 +179,6 @@ function buildReport({ state, scene, renderer, timings, phaseFrames }) {
       outline: state.userSettings.outline,
       ao: state.userSettings.ao,
       depthFog: state.userSettings.depthFog,
-      softParticles: state.userSettings.softParticles,
       tiltShift: state.userSettings.tiltShift,
     },
     grass: state.grass

@@ -384,9 +384,7 @@ const _depthFXShader = {
 
 // Minimal passthrough shader for InputPass — copies an external render
 // target's color into the composer's ping-pong chain without re-rendering
-// the scene. Eliminates the second full-scene render that was the main
-// performance bottleneck when depth-dependent FX (outlines, AO, depth fog,
-// tilt-shift, soft particles) were enabled.
+// the scene.
 const _copyShader = {
   uniforms: { tDiffuse: { value: null } },
   vertexShader: `
@@ -406,10 +404,7 @@ const _copyShader = {
 };
 
 // Replacement for RenderPass in the main composer chain. It copies an
-// external color target into the EffectComposer ping-pong buffers. Most
-// frames read from the depth pre-pass color; soft-particle frames read from
-// a separate color target so particles can safely sample the completed
-// depthTexture without sampling the framebuffer currently being written.
+// external color target into the EffectComposer ping-pong buffers.
 class InputPass extends Pass {
   constructor(sourceTexture) {
     super();
@@ -446,7 +441,6 @@ export function initPostFX(renderer, scene, camera) {
       onResize: () => {},
       setBloom: () => {},
       setTiltShift: () => {},
-      setSoftParticles: () => {},
       setOutline: () => {},
       setAo: () => {},
       setDepthFog: () => {},
@@ -467,10 +461,7 @@ export function initPostFX(renderer, scene, camera) {
   // matching dimensions, so we cannot downscale the bloom RT. The cost is
   // bounded: layer-filtering means only emissive meshes get rasterized.
 
-  // Depth pre-pass RT, kept OUTSIDE the composer's ping-pong. Sampling a
-  // depth texture while writing to the FBO that owns it is a feedback loop
-  // (WebGL undefined behaviour → all-black output). The pre-pass therefore
-  // temporarily detaches particle depth sampling while depthRT is bound.
+  // Depth pre-pass RT, kept OUTSIDE the composer's ping-pong.
   const depthTexture = new THREE.DepthTexture(
     Math.max(1, Math.round(size.x * pixelRatio)),
     Math.max(1, Math.round(size.y * pixelRatio))
@@ -486,13 +477,7 @@ export function initPostFX(renderer, scene, camera) {
     // composer chain. UnsignedByte would clamp everything above 1.0 to white.
     { type: THREE.HalfFloatType, depthBuffer: true, depthTexture }
   );
-  const colorRT = new THREE.WebGLRenderTarget(
-    Math.max(1, Math.round(size.x * pixelRatio)),
-    Math.max(1, Math.round(size.y * pixelRatio)),
-    { type: THREE.HalfFloatType, depthBuffer: true }
-  );
-
-  // Expose for consumers (environment.js soft particles).
+  // Expose for depth-based post-processing passes.
   state.depthTexture = depthTexture;
 
   // Bloom-only composer. The camera is layer-filtered to BLOOM_LAYER for
@@ -663,59 +648,22 @@ export function initPostFX(renderer, scene, camera) {
       depthFXPass.uniforms.uUnderwaterStrength.value > 0.001;
   }
 
-  function particlesUseSoftDepth() {
-    return (state.particles?.material?.uniforms?.uSoftParticles?.value ?? 0) > 0.001;
-  }
-
   return {
     composer,
     tiltShiftPass,
     depthFXPass,
-    // Anything that reads depth keeps the depth pre-pass alive (and the
-    // composer chain — soft particles need a composer-rendered scene so
-    // they read fresh depth from this frame's pre-pass, not last frame's).
+    // Anything that reads depth keeps the depth pre-pass alive.
     isActive: () =>
       state.userSettings.bloom ||
       tiltShiftPass.enabled ||
-      depthFXPass.enabled ||
-      particlesUseSoftDepth(),
+      depthFXPass.enabled,
     render: (s, cam) => {
-      // Render depthRT first so bloom, depth FX, and particles have a fresh
-      // depthTexture. Particle soft-depth sampling is disabled only for this
-      // pre-pass because depthRT owns the texture as its depth attachment.
+      // Render depthRT first so bloom and depth FX have a fresh depthTexture.
       const prevTarget = renderer.getRenderTarget();
-      const particleMaterial = state.particles?.material;
-      const particleDepthUniform = particleMaterial?.uniforms?.tDepth;
-      const particleSoftUniform = particleMaterial?.uniforms?.uSoftParticles;
-      const prevParticleDepth = particleDepthUniform?.value;
-      const prevParticleSoft = particleSoftUniform?.value;
-      const hasParticleDepth = !!(particleDepthUniform && prevParticleDepth);
-      const needsSoftParticleColorPass =
-        hasParticleDepth && (prevParticleSoft ?? 0) > 0.001;
-      // The depth pre-pass owns depthTexture as its framebuffer attachment.
-      // Particle materials normally sample the same texture for soft
-      // particles, which is a WebGL feedback loop while depthRT is bound.
-      try {
-        if (particleDepthUniform) particleDepthUniform.value = null;
-        if (particleSoftUniform) particleSoftUniform.value = 0.0;
-        renderer.setRenderTarget(depthRT);
-        renderer.clear();
-        renderer.render(s, cam);
-      } finally {
-        if (particleDepthUniform) particleDepthUniform.value = prevParticleDepth;
-        if (particleSoftUniform) particleSoftUniform.value = prevParticleSoft;
-      }
-
-      if (needsSoftParticleColorPass) {
-        // ColorRT does not own depthTexture, so the restored particle shader
-        // can sample the completed pre-pass depth without a feedback loop.
-        renderer.setRenderTarget(colorRT);
-        renderer.clear();
-        renderer.render(s, cam);
-        inputPass.setSourceTexture(colorRT.texture);
-      } else {
-        inputPass.setSourceTexture(depthRT.texture);
-      }
+      renderer.setRenderTarget(depthRT);
+      renderer.clear();
+      renderer.render(s, cam);
+      inputPass.setSourceTexture(depthRT.texture);
       renderer.setRenderTarget(prevTarget);
 
       bloomRenderPass.scene = s;
@@ -752,7 +700,6 @@ export function initPostFX(renderer, scene, camera) {
       tiltShiftPass.uniforms.uResolution.value.set(w, h);
       depthFXPass.uniforms.uResolution.value.set(w, h);
       depthRT.setSize(pw, ph);
-      colorRT.setSize(pw, ph);
     },
     setBloom: (on) => {
       bloomCompositePass.uniforms.uStrength.value = on ? BLOOM_COMPOSITE_STRENGTH : 0.0;
@@ -760,7 +707,6 @@ export function initPostFX(renderer, scene, camera) {
     },
     setBloomRadius: (r) => { applyBloomRadiusSetting(r); },
     setTiltShift: (on) => { tiltShiftPass.enabled = on; },
-    setSoftParticles: () => { /* particle shader reads userSettings directly */ },
     setOutline: (on) => {
       depthFXPass.uniforms.uOutlineStrength.value = on ? 1.0 : 0.0;
       refreshDepthFXEnabled();

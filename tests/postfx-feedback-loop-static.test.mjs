@@ -5,21 +5,18 @@ const postfxSource = readFileSync(new URL('../src/postfx.js', import.meta.url), 
 
 assert(
   postfxSource.includes('setSourceTexture(sourceTexture)')
-    && postfxSource.includes('const colorRT = new THREE.WebGLRenderTarget')
-    && postfxSource.includes('particleDepthUniform.value = null')
-    && postfxSource.includes('particleSoftUniform.value = 0.0')
-    && postfxSource.includes('inputPass.setSourceTexture(colorRT.texture)')
     && postfxSource.includes('inputPass.setSourceTexture(depthRT.texture)')
-    && postfxSource.includes('colorRT.setSize(pw, ph)'),
-  'Post-FX should avoid binding particle depth sampling while rendering into the target that owns depthTexture.'
+    && !postfxSource.includes('const colorRT = new THREE.WebGLRenderTarget')
+    && !postfxSource.includes('particleDepthUniform')
+    && !postfxSource.includes('particleSoftUniform'),
+  'Post-FX should not keep the removed soft-particle feedback-loop workaround.'
 );
 
 assert(
-  postfxSource.includes('try {')
-    && postfxSource.includes('finally {')
-    && postfxSource.includes('particleDepthUniform.value = prevParticleDepth')
-    && postfxSource.includes('particleSoftUniform.value = prevParticleSoft'),
-  'Particle depth uniforms should be restored even if the depth pre-pass render exits early.'
+  postfxSource.includes('renderer.setRenderTarget(depthRT);')
+    && postfxSource.includes('renderer.render(s, cam);')
+    && postfxSource.includes('inputPass.setSourceTexture(depthRT.texture);'),
+  'The depth pre-pass render should feed the composer directly after soft-particle removal.'
 );
 
 const inputAdd = postfxSource.indexOf('composer.addPass(inputPass)');

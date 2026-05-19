@@ -113,8 +113,8 @@ if (typeof window !== "undefined") window.__sw = { state, controls, scene, camer
 startPerfProbe({ state, scene, renderer });
 
 // Persisted settings must be applied BEFORE initPostFX so the composer is
-// built with the user's saved bloom / tilt-shift / softParticles / outline /
-// ao / depthFog values rather than the defaults. initUi runs later in this
+// built with the user's saved bloom / tilt-shift / outline / ao / depthFog
+// values rather than the defaults. initUi runs later in this
 // file and re-loads settings to drive its checkboxes — harmless on the
 // second call since localStorage is the source of truth.
 loadSettings();
@@ -134,10 +134,6 @@ window.addEventListener("resize", () => {
       1 / w,
       1 / h
     );
-  }
-  // Soft-particle shader samples tDepth by gl_FragCoord/uResolution.
-  if (state.particles && state.particles.material.uniforms.uResolution) {
-    state.particles.material.uniforms.uResolution.value.set(w, h);
   }
 });
 

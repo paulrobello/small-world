@@ -75,47 +75,23 @@ assert(
 );
 assert(goldenSteppe, 'Golden steppe biome should exist.');
 assert.equal(goldenSteppe.bloom, false, 'Golden steppe should opt out of bloom post-processing.');
-assert.equal(goldenSteppe.softParticles, false, 'Golden steppe should opt out of soft particles.');
 assert(mossyRuins, 'Mossy ruins biome should exist.');
 assert.equal(mossyRuins.bloom, false, 'Mossy ruins should opt out of bloom post-processing.');
-assert.equal(mossyRuins.softParticles, false, 'Mossy ruins should opt out of soft particles.');
 assert(twilightMeadow, 'Twilight meadow biome should exist.');
 assert.notEqual(twilightMeadow.bloom, false, 'Twilight meadow should keep bloom controlled by user settings.');
-assert.equal(twilightMeadow.softParticles, false, 'Twilight meadow should opt out of soft particles.');
 assert(coralAtoll, 'Coral atoll biome should exist.');
 assert.equal(coralAtoll.bloom, false, 'Coral atoll should opt out of bloom post-processing.');
-assert.equal(coralAtoll.softParticles, false, 'Coral atoll should opt out of soft particles.');
 assert(cloudIsland, 'Cloud island biome should exist.');
 assert.equal(cloudIsland.bloom, false, 'Cloud island should opt out of bloom post-processing.');
-assert.equal(cloudIsland.softParticles, false, 'Cloud island should opt out of soft particles.');
 assert(mushroomGrove, 'Mushroom grove biome should exist.');
 assert.notEqual(mushroomGrove.bloom, false, 'Mushroom grove should keep bloom controlled by user settings.');
-assert.equal(mushroomGrove.softParticles, false, 'Mushroom grove should opt out of soft particles.');
 assert(volcanicGlass, 'Volcanic glass biome should exist.');
 assert.notEqual(volcanicGlass.bloom, false, 'Volcanic glass should keep bloom controlled by user settings.');
-assert.equal(volcanicGlass.softParticles, false, 'Volcanic glass should opt out of soft particles.');
 assert(verdantGrove, 'Verdant grove biome should exist.');
 assert.notEqual(verdantGrove.bloom, false, 'Verdant grove should keep bloom controlled by user settings.');
-assert.equal(verdantGrove.softParticles, false, 'Verdant grove should opt out of soft particles.');
 assert(crimsonDunes, 'Crimson dunes biome should exist.');
 assert.equal(crimsonDunes.bloom, false, 'Crimson dunes should opt out of bloom post-processing.');
-assert.equal(crimsonDunes.softParticles, false, 'Crimson dunes should opt out of soft particles.');
 assert(lavenderMarsh, 'Lavender marsh biome should exist.');
 assert.notEqual(lavenderMarsh.bloom, false, 'Lavender marsh should keep bloom controlled by user settings.');
-assert.equal(lavenderMarsh.softParticles, false, 'Lavender marsh should opt out of soft particles.');
-assert(
-  environmentSource.includes('biome.softParticles !== false'),
-  'Particle creation should keep soft particles disabled for biomes that opt out.'
-);
-assert(
-  uiSource.includes('const softParticlesOverridden = state.currentBiome?.softParticles === false;'),
-  'Soft particles controls should be treated as overridden when the current biome disables them.'
-);
-assert(
-  uiSource.includes('softParticlesEl.parentElement.hidden = softParticlesOverridden;'),
-  'The soft particles checkbox should be hidden while a biome disables soft particles.'
-);
-assert(
-  uiSource.includes('state.currentBiome?.softParticles !== false'),
-  'The FX toggle should not re-enable soft particles while the current biome opts out.'
-);
+assert.equal(environmentSource.includes('softParticles'), false, 'Particle creation should not retain soft-particle biome checks.');
+assert.equal(uiSource.includes('softParticles'), false, 'The settings UI should not retain soft-particle controls.');

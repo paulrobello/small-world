@@ -63,11 +63,6 @@ assert(
     && environmentSource.includes('PARTICLE_KIND == 11')
     && environmentSource.includes('windBand')
     && environmentSource.includes('groundY + 0.08')
-    && environmentSource.includes('const SOFT_PARTICLE_KINDS = new Set(')
-    && !environmentSource.slice(
-      environmentSource.indexOf('const SOFT_PARTICLE_KINDS = new Set('),
-      environmentSource.indexOf(');', environmentSource.indexOf('const SOFT_PARTICLE_KINDS = new Set('))
-    ).includes('"sand"')
     && environmentSource.includes('if (length(c) > 0.34) discard;')
     && environmentSource.includes('kind === "sand" ? _sandParticleVS : _particleVS')
     && environmentSource.includes('kind === "sand" ? _sandParticleFS : _particleFS')

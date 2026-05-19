@@ -117,7 +117,6 @@ export const state = {
     autoRegenMinutes: 2,
     bloom: true,
     tiltShift: false,
-    softParticles: true,
     outline: true,
     ao: true,
     depthFog: true,
@@ -140,8 +139,7 @@ export const state = {
   },
   // Set by world.js after makeTerrain.
   terrainMesh: null,
-  // Set by initPostFX; environment.js reads it to enable soft-particle depth
-  // testing. Null under LOWFX (no composer, no depth capture).
+  // Set by initPostFX. Null under LOWFX (no composer, no depth capture).
   depthTexture: null,
 };
 

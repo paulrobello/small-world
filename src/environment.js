@@ -28,11 +28,6 @@ const PARTICLE_KIND_ID = {
   sand: 11, cinder: 12,
 };
 
-const SOFT_PARTICLE_KINDS = new Set([
-  "pollen", "dust", "snow", "firefly", "ember",
-  "lichenmote", "feather", "bubble", "spark", "rain", "cinder",
-]);
-
 function cinderFissureLiftAt(x, z) {
   let lift = 0;
   for (const obstacle of state.obstacles) {
@@ -51,7 +46,6 @@ attribute float aSeed;
 attribute float aLife;
 varying float vLife;
 varying float vSeed;
-varying float vViewZ;
 uniform float uTime;
 uniform float uPixelRatio;
 uniform float uBaseSize;
@@ -59,7 +53,6 @@ void main() {
   vLife = aLife;
   vSeed = aSeed;
   vec4 mv = modelViewMatrix * vec4(position, 1.0);
-  vViewZ = -mv.z; // positive distance in front of camera, matches readViewDist in postfx.js
   float size = uBaseSize;
   #if PARTICLE_KIND == 11
     size *= (0.80 + 1.80 * fract(aSeed * 11.317)) * (0.82 + 0.18 * sin(aLife * 6.2831));
@@ -75,24 +68,14 @@ void main() {
 }
 `;
 
-// Soft-particles: sample the depth pre-pass texture and fade alpha when a
-// particle is within a small view-Z window of the scene surface behind it,
-// so embers/dust/rain don't slice through cliffs and creatures with a hard
-// edge. uSoftParticles is a runtime 0/1 toggle (no shader recompile).
 const _particleFS = `
 precision highp float;
 uniform vec3 uColor;
 uniform vec3 uColor2;
 uniform float uOpacity;
 uniform float uTime;
-uniform sampler2D tDepth;
-uniform vec2 uResolution;
-uniform float uCameraNear;
-uniform float uCameraFar;
-uniform float uSoftParticles;
 varying float vLife;
 varying float vSeed;
-varying float vViewZ;
 void main() {
   vec2 c = gl_PointCoord - 0.5;
   float d = length(c);
@@ -123,15 +106,6 @@ void main() {
   #elif PARTICLE_KIND == 5
     a *= 0.6 + 0.3 * sin(uTime * 1.4 + vSeed * 9.0);
   #endif
-  if (uSoftParticles > 0.5) {
-    float rawD = texture2D(tDepth, gl_FragCoord.xy / uResolution).x;
-    float viewZ = (uCameraNear * uCameraFar) / ((uCameraFar - uCameraNear) * rawD - uCameraFar);
-    float sceneDist = -viewZ;
-    // Fade over a 1.2 world-unit window — gentle on dust/embers but firm
-    // enough to hide intersections with cliffs and tree trunks.
-    float soft = clamp((sceneDist - vViewZ) / 1.2, 0.0, 1.0);
-    a *= soft;
-  }
   gl_FragColor = vec4(col, a * uOpacity);
 }
 `;
@@ -246,11 +220,6 @@ export function makeParticles(biome) {
 
   const renderer = state.renderer; // set by main.js after init
   const pixelRatio = renderer ? renderer.getPixelRatio() : 1;
-  const camera = state.camera;
-  // Soft particles require the depth pre-pass — null under LOWFX, in which
-  // case uSoftParticles stays 0 and the shader skips the depth-fade branch.
-  const softParticlesSupported = SOFT_PARTICLE_KINDS.has(kind) && biome.softParticles !== false;
-  const softOn = softParticlesSupported && !!(state.depthTexture && state.userSettings.softParticles);
   const cinderBloomBoost = kind === "cinder" ? 3.2 : 1.0;
 
   const mat = new THREE.ShaderMaterial({
@@ -261,11 +230,6 @@ export function makeParticles(biome) {
       uColor: { value: new THREE.Color(colorMap[kind]).multiplyScalar(cinderBloomBoost) },
       uColor2: { value: new THREE.Color(color2Map[kind] ?? colorMap[kind]).multiplyScalar(cinderBloomBoost) },
       uOpacity: { value: opacityMap[kind] ?? 0.85 },
-      tDepth: { value: state.depthTexture },
-      uResolution: { value: new THREE.Vector2(window.innerWidth, window.innerHeight) },
-      uCameraNear: { value: camera ? camera.near : 0.1 },
-      uCameraFar: { value: camera ? camera.far : 400.0 },
-      uSoftParticles: { value: softOn ? 1.0 : 0.0 },
     },
     defines: { PARTICLE_KIND: PARTICLE_KIND_ID[kind] ?? 0 },
     vertexShader: kind === "sand" ? _sandParticleVS : _particleVS,
@@ -283,7 +247,6 @@ export function makeParticles(biome) {
     seeds,
     lifes,
     count,
-    softParticlesSupported,
   };
   if (kind === "cinder") points.layers.enable(BLOOM_LAYER);
   return points;
