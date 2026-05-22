@@ -163,6 +163,11 @@ export function isSelectingCreature() {
 }
 
 let _manualPause = false;
+
+let tour = null;
+let _tourButton = null;
+let _tourBanner = null;
+
 export function isManualPaused() {
   return _manualPause;
 }
@@ -172,6 +177,94 @@ function setManualPaused(on) {
   if (banner) {
     banner.classList.toggle("visible", on);
     banner.setAttribute("aria-hidden", on ? "false" : "true");
+  }
+}
+
+export function isTouring() {
+  return tour !== null && tour.active;
+}
+
+export function stepTour(dt) {
+  if (!tour || !tour.active) return;
+  tour.timer -= dt;
+
+  if (tour.phase === "orbit") {
+    if (tour.timer <= 0) {
+      const candidates = [...state.creatures, ...state.caterpillars].filter(
+        (c) => (c.group && c.group.parent) || (c.segments && c.segments[0])
+      );
+      if (candidates.length > 0) {
+        const pick = candidates[Math.floor(Math.random() * candidates.length)];
+        setFollowTarget(pick);
+        tour.phase = "follow";
+        tour.timer = 4 + Math.random() * 4;
+        if (_controls) _controls.autoRotateSpeed = 0.05;
+      } else {
+        tour.timer = 8 + Math.random() * 7;
+      }
+    }
+  } else if (tour.phase === "follow") {
+    const ft = getFollowTarget();
+    if (!ft || tour.timer <= 0) {
+      setFollowTarget(null);
+      tour.phase = "orbit";
+      tour.timer = 8 + Math.random() * 7;
+      if (_controls) {
+        _controls.autoRotate = true;
+        _controls.autoRotateSpeed = 0.22;
+      }
+    }
+  }
+}
+
+function startTour() {
+  if (tour && tour.active) return;
+  tour = {
+    active: true,
+    phase: "orbit",
+    timer: 2,
+    savedAutoRotate: _controls ? _controls.autoRotate : false,
+    savedAutoRotateSpeed: _controls ? _controls.autoRotateSpeed : 0.22,
+  };
+  if (_controls) {
+    _controls.autoRotate = true;
+    _controls.autoRotateSpeed = 0.22;
+  }
+  _tourButton?.classList.add("active");
+  _updateTourButtonLabel(true);
+  _tourBanner?.classList.add("visible");
+  _tourBanner?.setAttribute("aria-hidden", "false");
+}
+
+function stopTour() {
+  if (!tour) return;
+  if (_controls) {
+    _controls.autoRotate = tour.savedAutoRotate && state.userSettings.autoRotate;
+    _controls.autoRotateSpeed = tour.savedAutoRotateSpeed;
+  }
+  if (getFollowTarget()) setFollowTarget(null);
+  tour = null;
+  _tourButton?.classList.remove("active");
+  _updateTourButtonLabel(false);
+  _tourBanner?.classList.remove("visible");
+  _tourBanner?.setAttribute("aria-hidden", "true");
+}
+
+function toggleTour() {
+  if (tour && tour.active) stopTour();
+  else startTour();
+}
+
+function _updateTourButtonLabel(active) {
+  if (!_tourButton) return;
+  const label = _tourButton.querySelector(".setting-button-label");
+  const hint = _tourButton.querySelector(".setting-button-hint");
+  if (active) {
+    label.textContent = "stop tour";
+    hint.textContent = "touring · t or esc to stop";
+  } else {
+    label.textContent = "cinematic tour";
+    hint.textContent = "t · orbits and follows creatures · esc to stop";
   }
 }
 
@@ -256,6 +349,7 @@ let _settingsPanel = null;
 let _followButton = null;
 let _followBanner = null;
 let _canvas = null;
+let _controls = null;
 let _locatorPanel = null;
 let _locatorOpen = false;
 let _locatorCycle = null; // { entities, getPos, isCreature, index }
@@ -283,6 +377,7 @@ function setSelectingCreature(on) {
 }
 
 export function initUi({ camera, canvas, controls, renderer }) {
+  _controls = controls;
   // Inject app version into header eyebrow
   const versionEl = document.getElementById("app-version");
   if (versionEl) versionEl.textContent = APP_VERSION;
@@ -296,6 +391,8 @@ export function initUi({ camera, canvas, controls, renderer }) {
   _settingsPanel = document.getElementById("settings-panel");
   _followBanner = document.getElementById("follow-banner");
   _followButton = document.getElementById("setting-follow");
+  _tourBanner = document.getElementById("tour-banner");
+  _tourButton = document.getElementById("setting-tour");
   _locatorPanel = document.getElementById("locator-panel");
   const locatorEyebrow = document.getElementById("locator-eyebrow");
   const settingsToggle = document.getElementById("settings-toggle");
@@ -338,8 +435,13 @@ export function initUi({ camera, canvas, controls, renderer }) {
       setFollowTarget(null);
       return;
     }
+    if (tour && tour.active) stopTour();
     setSelectingCreature(!selectingCreature);
   });
+
+  if (_tourButton) {
+    _tourButton.addEventListener("click", () => toggleTour());
+  }
 
   document.getElementById("setting-reset-camera").addEventListener("click", () => {
     setFollowTarget(null);
@@ -362,6 +464,7 @@ export function initUi({ camera, canvas, controls, renderer }) {
   function enterStroll() {
     if (_stroll) return;
     // Preserve any follow target: first-person + follow becomes creature POV.
+    if (tour && tour.active) stopTour();
     setSelectingCreature(false);
     if (_locatorOpen) setLocatorOpen(false);
     // Get the settings panel out of the way so the player can actually see.
@@ -1377,6 +1480,7 @@ export function initUi({ camera, canvas, controls, renderer }) {
   function setPhotoMode(on) {
     if (on) {
       if (_stroll) exitStroll();
+      if (tour && tour.active) stopTour();
       if (_locatorOpen) setLocatorOpen(false);
       setFollowTarget(null);
       setSelectingCreature(false);
@@ -1880,6 +1984,7 @@ export function initUi({ camera, canvas, controls, renderer }) {
     if (INSPECT) return;
     if (e.key === "Escape") {
       if (_photoReview) { closePhotoReview({ resumePhotoFp: false }); setPhotoMode(false); }
+      else if (tour && tour.active) stopTour();
       else if (_stroll) _exitStroll();
       else if (document.body.classList.contains("photo-mode")) setPhotoMode(false);
       else if (_locatorOpen) setLocatorOpen(false);
@@ -1897,6 +2002,9 @@ export function initUi({ camera, canvas, controls, renderer }) {
       e.preventDefault();
       if (_stroll || document.body.classList.contains("photo-mode")) return;
       setLocatorOpen(!_locatorOpen);
+    } else if (e.key === "t" || e.key === "T") {
+      e.preventDefault();
+      toggleTour();
     } else if (e.key === "Tab" && _locatorCycle) {
       e.preventDefault();
       const { isCreature } = _locatorCycle;

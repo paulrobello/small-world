@@ -36,6 +36,7 @@ import {
   getFollowTarget,
   setFollowTarget,
   stepStroll,
+  stepTour,
   isAnyFP,
   isPhotoFP,
   isStrolling,
@@ -382,6 +383,9 @@ function animate() {
       }
       controls.update();
     }
+  });
+  measurePerfPhase("tour", () => {
+    if (!paused) stepTour(dt);
   });
   // Refresh sky-only reflection RT for water biomes. One extra render pass
   // per frame at 256×256 — cheap, and shared uniforms mean day/night updates

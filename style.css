@@ -216,6 +216,15 @@ body {
   font-size: 14px;
 }
 
+.island-name {
+  font-family: "Cormorant Infant", serif;
+  font-size: 16px;
+  font-style: italic;
+  color: var(--ink);
+  letter-spacing: 0.03em;
+  line-height: 1;
+}
+
 /* ─── Stats row ─── */
 .stats {
   display: flex;
@@ -367,6 +376,7 @@ body {
   .eyebrow { font-size: 8px; letter-spacing: 0.35em; }
   .biome-card { min-width: 0; max-width: 38vw; gap: 4px; }
   .biome-name { font-size: clamp(15px, 4.2vw, 20px); }
+  .island-name { font-size: 14px; }
   .biome-sub { font-size: 12px; line-height: 1.15; }
   .stats {
     gap: 14px;
@@ -1094,6 +1104,37 @@ body.photo-mode .help-panel {
   letter-spacing: 0.1em;
 }
 
+.tour-banner {
+  position: fixed;
+  top: 16px;
+  left: 50%;
+  transform: translateX(-50%) translateY(-12px);
+  z-index: 9;
+  padding: 8px 14px;
+  background: rgba(14, 14, 18, 0.78);
+  border: 1px solid var(--ink-dim);
+  color: var(--ink);
+  font-family: "DM Mono", monospace;
+  font-size: 11px;
+  letter-spacing: 0.18em;
+  text-transform: lowercase;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.3s ease, transform 0.3s ease;
+  backdrop-filter: blur(4px);
+}
+.tour-banner.visible {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+}
+.tour-banner kbd {
+  border: 1px solid var(--ink-dim);
+  padding: 1px 5px;
+  font-family: inherit;
+  font-size: 10px;
+  letter-spacing: 0.1em;
+}
+
 /* ─── Locator panel ─────────────────────────────────────────────────── */
 .locator-panel {
   position: fixed;
@@ -1326,6 +1367,7 @@ body.photo-mode .corner,
 body.photo-mode .settings-panel,
 body.photo-mode .follow-banner,
 body.photo-mode .pause-banner,
+body.photo-mode .tour-banner,
 body.photo-mode .vignette,
 body.photo-mode .grain {
   /* !important required: the .hud rule has a `forwards` keyframe animation

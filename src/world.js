@@ -13,6 +13,7 @@ import {
 import { BIOMES, WILDFLOWER_PALETTES, FLOWER_DENSITY } from "./biomes.js";
 import { switchMusic } from "./music.js";
 import { mulberry32, formatSeed, writeSeedToUrl } from "./seed.js";
+import { generateIslandName } from "./islandname.js";
 import { randInt } from "./util.js";
 import {
   makeHeightFn,
@@ -1401,6 +1402,8 @@ export async function generateWorld(seed) {
   const flyCreatureCount = state.creatures.filter((c) => c.flies && !c.isFish).length;
   const swimCreatureCount = state.creatures.filter((c) => c.isFish).length;
   document.getElementById("biome-name").textContent = biome.name;
+  const islandNameEl = document.getElementById("island-name");
+  if (islandNameEl) islandNameEl.textContent = generateIslandName(seed);
   document.getElementById("biome-sub").textContent = biome.sub;
   document.getElementById("ground-creature-count").textContent = padStat(groundCreatureCount);
   document.getElementById("fly-creature-count").textContent = padStat(flyCreatureCount);
@@ -1412,6 +1415,8 @@ export async function generateWorld(seed) {
   // Mobile help panel — mirror the same stats
   const hBiome = document.getElementById("help-biome");
   if (hBiome) hBiome.textContent = biome.name;
+  const hIsland = document.getElementById("help-island-name");
+  if (hIsland) hIsland.textContent = generateIslandName(seed);
   const hSeed = document.getElementById("help-seed");
   if (hSeed) hSeed.textContent = formatSeed(seed);
   const hGround = document.getElementById("help-ground-creatures");

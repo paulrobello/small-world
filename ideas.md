@@ -8,10 +8,7 @@ Remove completed items from this list, commit and push so its live on github pag
 
 ## World Generation
 
-- **Caves / arches** (L) — carve negative-space holes through the island using a third noise field with a CSG-style threshold. Probably needs a marching-cubes pass instead of `PlaneGeometry` — large change, save for later.
-- **Procedural island name** (S) — generate a two-syllable name ("Mossbrim", "Velin", "Quillhollow") from the seed and show it under the biome label in the HUD. Pure flavor, deterministic. Touches `src/world.js` + `index.html`.
 - **Hidden landmarks** (M) — 1-in-N chance per world of spawning a single tiny set piece (stone arch, tilted obelisk, mushroom ring, bird's nest with eggs) at a chosen `pickGroundPoint`. Surface "found: <thing>" in the HUD. New module `src/landmarks.js`.
-- **Footpaths** (M) — when a creature is followed for a while, leave a faint worn dirt path along its trace by tinting the underlying terrain colors. Touches `src/fauna.js` + `src/terrain.js`.
 
 ## Weather & Atmosphere
 
@@ -28,12 +25,8 @@ Remove completed items from this list, commit and push so its live on github pag
 
 ## UI / HUD / Photo
 
-- **Postcard export** (S) — extend photo mode's PNG save to compose biome name + seed + date in the corner with the existing eyebrow font before download. Touches `src/ui.js`.
-- **Cinematic auto-tour** (M) — toggleable mode that slowly orbits the island, occasionally cutting to a follow on a random creature for a few seconds, then back. Reuses follow + orbit machinery. Touches `src/ui.js`.
-
 ## Stretch / Big Swings
 
-- **Seasonal overlay** (L) — each biome has a `spring/summer/autumn/winter` palette delta; URL `?season=` (or auto from real-world date) tints flora and ground.
 - **Sandbox mode** (L) — a `?sandbox=1` HUD panel that lets the user override individual biome knobs (creature count, fog, water on/off, flora kinds) on top of the chosen seed. Touches `src/ui.js` + `src/world.js`.
 - **Secret seeds** (S) — a small lookup table mapping a handful of cute seeds (e.g. `0xC0FE`, `0xBEEF`) to easter-egg combinations: tuned biome + camera + extra landmark. Touches `src/seed.js` + `src/world.js`.
 

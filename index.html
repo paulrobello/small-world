@@ -46,6 +46,7 @@
     <div class="biome-card">
       <div class="label">current biome</div>
       <div class="biome-name" id="biome-name">—</div>
+      <div class="island-name" id="island-name"></div>
       <div class="biome-sub" id="biome-sub">awaiting genesis</div>
     </div>
   </header>
@@ -136,6 +137,8 @@
         <dd><kbd>p</kbd> hides the ui and freezes animation. Click or use the save button to capture a png. <kbd>p</kbd> or <kbd>esc</kbd> exits.</dd>
         <dt>manual pause</dt>
         <dd><kbd>space</kbd> pauses or resumes the simulation outside photo/stroll/selection modes.</dd>
+        <dt>cinematic tour</dt>
+        <dd><kbd>t</kbd> slowly orbits the island, occasionally cutting to follow a random creature for a few seconds. <kbd>esc</kbd> or <kbd>t</kbd> exits.</dd>
       </dl>
     </section>
 
@@ -155,6 +158,7 @@
         <dt><kbd>shift</kbd></dt><dd>move faster in first-person stroll.</dd>
         <dt><kbd>,</kbd></dt><dd>open or close settings.</dd>
         <dt><kbd>space</kbd></dt><dd>toggle manual pause.</dd>
+        <dt><kbd>t</kbd></dt><dd>toggle cinematic auto-tour.</dd>
         <dt><kbd>esc</kbd></dt><dd>cancel focus · exit any mode · close panels.</dd>
       </dl>
     </section>
@@ -166,6 +170,7 @@
       <div class="settings-section-label">world</div>
       <dl class="help-list help-world-info">
         <dt>biome</dt><dd id="help-biome">—</dd>
+        <dt>island</dt><dd id="help-island-name">—</dd>
         <dt>seed</dt><dd id="help-seed">0x0000</dd>
         <dt>ground</dt><dd id="help-ground-creatures">00</dd>
         <dt>fly</dt><dd id="help-fly-creatures">00</dd>
@@ -258,6 +263,11 @@
       <button class="setting-button" id="setting-stroll">
         <span class="setting-button-label">first-person stroll</span>
         <span class="setting-button-hint">f · wasd · mouse-look · esc to exit</span>
+      </button>
+
+      <button class="setting-button" id="setting-tour">
+        <span class="setting-button-label">cinematic tour</span>
+        <span class="setting-button-hint">t · orbits and follows creatures · esc to stop</span>
       </button>
 
       <button class="setting-button" id="setting-reset-camera">
@@ -453,6 +463,10 @@
 
   <div class="pause-banner" id="pause-banner" aria-hidden="true">
     paused · press <kbd>space</kbd> to resume
+  </div>
+
+  <div class="tour-banner" id="tour-banner" aria-hidden="true">
+    touring · press <kbd>t</kbd> or <kbd>esc</kbd> to stop
   </div>
 
   <div class="photo-hud" id="photo-hud" aria-hidden="true">
