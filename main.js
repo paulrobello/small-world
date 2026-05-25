@@ -26,7 +26,8 @@ import { sharedFurUniforms } from "./src/fur.js";
 import { initPostFX } from "./src/postfx.js";
 import { updateWaterReflection } from "./src/reflection.js";
 import {
-  getPortalArrivalPose,
+  getPortalCameraSide,
+  getPortalSideArrivalPose,
   isCameraPassingThroughPortal,
   updatePortalPreview,
 } from "./src/portal.js";
@@ -147,30 +148,38 @@ window.addEventListener("resize", () => {
 let portalTravelInProgress = false;
 const PORTAL_ARRIVAL_RETRY_LIMIT = 45;
 
+function getActivePortals() {
+  return state.portals?.length ? state.portals : (state.portal ? [state.portal] : []);
+}
+
 function travelThroughPortalIfNeeded() {
   if (portalTravelInProgress || state.isGeneratingWorld || !isStrolling()) return;
-  const portal = state.portal;
   const sourceBiome = state.currentBiome;
+  const ws = state.userSettings.worldScale ?? 1;
+  const portal = getActivePortals().find((candidate) => isCameraPassingThroughPortal(candidate, camera, ws));
   const targetBiome = portal?.targetBiome;
   if (!portal || !sourceBiome || !targetBiome) return;
-  const ws = state.userSettings.worldScale ?? 1;
-  if (!isCameraPassingThroughPortal(portal, camera, ws)) return;
-  const targetSeed = newRandomSeed({ allowedBiomeIds: [targetBiome.id], excludeBiomeId: sourceBiome.id });
+  const targetSeed = portal.targetSeed ?? newRandomSeed({ allowedBiomeIds: [targetBiome.id], excludeBiomeId: sourceBiome.id });
+  const portalSide = getPortalCameraSide(portal, camera, ws);
   const url = new URL(window.location.href);
   url.searchParams.set("seed", formatSeed(targetSeed));
   url.searchParams.set("portal", sourceBiome.id);
+  url.searchParams.set("portalSide", String(portalSide));
   portalTravelInProgress = true;
   window.location.href = url.toString();
 }
 
 function enterPortalArrivalIfRequested(attempt = 0) {
-  const portalParam = new URLSearchParams(window.location.search).get("portal");
+  const params = new URLSearchParams(window.location.search);
+  const portalParam = params.get("portal");
   if (!portalParam) return;
-  if (!state.portal) {
+  const arrivalPortal = getActivePortals().find((candidate) => candidate.targetBiome?.id === portalParam) ?? state.portal;
+  if (!arrivalPortal) {
     if (attempt < PORTAL_ARRIVAL_RETRY_LIMIT) requestAnimationFrame(() => enterPortalArrivalIfRequested(attempt + 1));
     return;
   }
-  const arrivalPose = getPortalArrivalPose(state.portal);
+  const arrivalSide = params.get("portalSide") === "-1" ? -1 : 1;
+  const arrivalPose = getPortalSideArrivalPose(arrivalPortal, arrivalSide);
   if (!enterStrollFromPortal(arrivalPose.x, arrivalPose.z, arrivalPose.yaw)
     && attempt < PORTAL_ARRIVAL_RETRY_LIMIT) {
     requestAnimationFrame(() => enterPortalArrivalIfRequested(attempt + 1));
@@ -436,7 +445,9 @@ function animate() {
     }
   });
   measurePerfPhase("portalPreview", () => {
-    updatePortalPreview(state.portal, renderer, camera, rawT);
+    for (const portal of getActivePortals()) {
+      updatePortalPreview(portal, renderer, camera, rawT);
+    }
   });
 
   // Update tilt-shift focus: project the active camera focus point to

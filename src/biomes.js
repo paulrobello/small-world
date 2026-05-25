@@ -469,6 +469,7 @@ export const BIOMES = [
     particle: "spark",
     creatureColors: ["#1a1018", "#3a2018", "#ff7a2a", "#ffb060"],
     creatureCount: [7, 11],
+    noButterflies: true,
     glowEyes: true,
     darkBiome: true,
     sunIntensity: 8.8,

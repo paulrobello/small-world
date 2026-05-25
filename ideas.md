@@ -6,10 +6,6 @@ Remove completed items from this list, commit and push so its live on github pag
 
 ---
 
-## World Generation
-
-- **Hidden landmarks** (M) — 1-in-N chance per world of spawning a single tiny set piece (stone arch, tilted obelisk, mushroom ring, bird's nest with eggs) at a chosen `pickGroundPoint`. Surface "found: <thing>" in the HUD. New module `src/landmarks.js`.
-
 ## Weather & Atmosphere
 
 - **Passing storm** (M) — occasionally drift a darker cloud across the island that casts a soft ground shadow, briefly intensifies fog, and triggers rain particles if biome allows. Touches `src/sky.js` + `src/environment.js`.
@@ -22,8 +18,6 @@ Remove completed items from this list, commit and push so its live on github pag
 - **Ambient bed per biome** (S) — soft loop chosen by biome id (wind, rustle, drips, crackle). One `<audio>` element, crossfade on regenerate. Mute toggle in HUD.
 - **Creature chirps** (S) — occasional very-soft pitched blip when a creature transitions states. Web Audio API, tiny `OscillatorNode` envelope, no samples needed.
 - **Wind-chime ping on landmark discover** (S) — single soft chime when a hidden landmark first becomes visible after regenerate. Web Audio. Depends on **Hidden landmarks**.
-
-## UI / HUD / Photo
 
 ## Stretch / Big Swings
 

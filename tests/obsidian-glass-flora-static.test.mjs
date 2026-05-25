@@ -26,6 +26,11 @@ assert(
   'volcanic glass should include shiny obsidian glass flora.'
 );
 assert.equal(
+  obsidian.noButterflies,
+  true,
+  'volcanic glass should not spawn butterflies.'
+);
+assert.equal(
   obsidian.sunIntensity,
   8.8,
   'volcanic glass should be 10% brighter than the previous 8.0 sun intensity.'

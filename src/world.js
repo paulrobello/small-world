@@ -12,7 +12,7 @@ import {
 } from "./state.js";
 import { BIOMES, WILDFLOWER_PALETTES, FLOWER_DENSITY } from "./biomes.js";
 import { switchMusic } from "./music.js";
-import { mulberry32, formatSeed, writeSeedToUrl } from "./seed.js";
+import { mulberry32, formatSeed, writeSeedToUrl, newRandomSeed } from "./seed.js";
 import { generateIslandName } from "./islandname.js";
 import { randInt } from "./util.js";
 import {
@@ -57,7 +57,7 @@ import {
   updateSkyColors,
 } from "./sky.js";
 import { makeWaterReflection, disposeWaterReflection } from "./reflection.js";
-import { createBiomePortal, disposePortal } from "./portal.js";
+import { createBiomePortal, disposePortal, makeSeededPortalPlacement } from "./portal.js";
 import { LOWFX, LOWFX_DENSITY } from "./lowfx.js";
 import { resetPBRTextureCache } from "./pbr.js";
 
@@ -68,6 +68,7 @@ let _generationRunId = 0;
 
 const STALE_GENERATION = Symbol("stale-generation");
 const GENERATION_FRAME_BUDGET_MS = 8;
+const TERRAIN_NOISE_SEED_XOR = 0x5eed5eed;
 
 function generationNow() {
   return typeof performance !== "undefined" && performance.now
@@ -99,6 +100,51 @@ export function setFollowReleaseCallback(fn) {
 function readPortalTargetBiomeIdFromUrl() {
   if (typeof window === "undefined") return null;
   return new URLSearchParams(window.location.search).get("portal");
+}
+
+function findNextPortalBiome(sourceBiome, excludedIds) {
+  const biomeIndex = BIOMES.findIndex((b) => b.id === sourceBiome.id);
+  for (let offset = 1; offset <= BIOMES.length; offset++) {
+    const candidate = BIOMES[(biomeIndex + offset + BIOMES.length) % BIOMES.length];
+    if (!excludedIds.has(candidate.id)) return candidate;
+  }
+  return null;
+}
+
+function getPortalTargetBiomes(sourceBiome, portalTargetBiomeId, doublePlacement) {
+  const targets = [];
+  const excludedIds = new Set([sourceBiome.id]);
+  const portalTargetBiome = portalTargetBiomeId
+    ? BIOMES.find((b) => b.id === portalTargetBiomeId && b.id !== sourceBiome.id)
+    : null;
+  if (portalTargetBiome) {
+    targets.push(portalTargetBiome);
+    excludedIds.add(portalTargetBiome.id);
+  }
+  if (!targets.length) {
+    const next = findNextPortalBiome(sourceBiome, excludedIds);
+    if (next) {
+      targets.push(next);
+      excludedIds.add(next.id);
+    }
+  }
+  if (doublePlacement) {
+    const next = findNextPortalBiome(sourceBiome, excludedIds);
+    if (next) targets.push(next);
+  }
+  return targets;
+}
+
+function disposeWorldPortals(worldState) {
+  const portals = worldState.portals?.length
+    ? worldState.portals
+    : (worldState.portal ? [worldState.portal] : []);
+  for (const portal of portals) {
+    portal.group?.parent?.remove(portal.group);
+    disposePortal(portal);
+  }
+  worldState.portal = null;
+  worldState.portals = [];
 }
 
 export function createWorldBuildContext(overrides = {}) {
@@ -276,8 +322,7 @@ export async function generateWorld(seed, context = createWorldBuildContext()) {
   // makeWaterReflection below can't sample disposed materials.
   disposeWaterReflection(worldState.waterReflection);
   worldState.waterReflection = null;
-  disposePortal(worldState.portal);
-  worldState.portal = null;
+  disposeWorldPortals(worldState);
   worldScene.remove(worldState.world);
   worldState.world = new THREE.Group();
   worldState.world.scale.setScalar(worldState.userSettings.worldScale ?? 1);
@@ -420,7 +465,7 @@ export async function generateWorld(seed, context = createWorldBuildContext()) {
   await yieldIfNeeded(true);
 
   // terrain
-  const noise2D = createNoise2D();
+  const noise2D = createNoise2D(mulberry32((seed ^ TERRAIN_NOISE_SEED_XOR) >>> 0));
   // Cloud islands should read as soft puffs rather than rocky mountains.
   // Lowering the amplitude keeps the silhouette pillowy while preserving the
   // seeded terrain function for creature placement.
@@ -519,7 +564,7 @@ export async function generateWorld(seed, context = createWorldBuildContext()) {
   // Visual canopy spacing is wider than root/footprint spacing. Trees, bushes,
   // and big mushrooms can have small bases but broad crowns/caps, so they need
   // a separate placement radius to prevent silhouettes from intersecting.
-  const CANOPY_SPACING_KINDS = new Set(["tree", "leafballtree", "pine", "snowpine", "deadtree", "bigmushroom", "fairyring", "berrybush"]);
+  const CANOPY_SPACING_KINDS = new Set(["tree", "leafballtree", "pine", "snowpine", "deadtree", "bigmushroom", "fairyring", "portal", "berrybush"]);
   const NEST_HOST_KINDS = new Set(["tree", "leafballtree", "pine", "snowpine", "balloontree", "bigmushroom", "pillar"]);
   const biomeHasNestHosts = biome.flora.some((kind) => NEST_HOST_KINDS.has(kind));
   const MIN_NEST_HOST_RADIUS = 0.42;
@@ -530,37 +575,66 @@ export async function generateWorld(seed, context = createWorldBuildContext()) {
   const GRASS_SHORTEN_MIN_RADIUS = 0.42;
   const GRASS_SHORTEN_MAX_RADIUS = 1.2;
   const GRASS_SHORTEN_MIN_HEIGHT = 0.14;
-  const PLACEMENT_BLOCK_KINDS = new Set(["lavafissure"]);
-  const GROUND_CREATURE_BLOCK_KINDS = new Set(["lavafissure", "fairyring"]);
+  const PLACEMENT_BLOCK_KINDS = new Set(["lavafissure", "portal"]);
+  const GROUND_CREATURE_BLOCK_KINDS = new Set(["lavafissure", "fairyring", "portal"]);
   const floraPlacementBlocks = [];
   const nestHosts = [];
-  // Track fairy-ring flatten zones so heightFn can be patched afterward.
-  const fairyFlat = []; // { cx, cz, r, flatY }
+  // Track terrain flatten zones so heightFn can be patched afterward.
+  const terrainFlatZones = []; // { cx, cz, r, flatY }
 
-  for (let tries = 0; tries < 40 && !worldState.portal; tries++) {
-    const p = pickWorldGroundPoint(0.54);
-    const y = worldState.heightFn(p.x, p.z);
-    if (y < -0.18 || blocksFloraPlacement(p.x, p.z, 2.2)) continue;
-    const biomeIndex = BIOMES.findIndex((b) => b.id === biome.id);
-    const portalTargetBiome = context.portalTargetBiomeId
-      ? BIOMES.find((b) => b.id === context.portalTargetBiomeId)
-      : null;
-    const targetBiome = portalTargetBiome ?? BIOMES[(biomeIndex + 1 + BIOMES.length) % BIOMES.length];
-    const heading = Math.atan2(-p.x, -p.z);
-    const portal = createBiomePortal({
-      sourceBiome: biome,
-      targetBiome,
-      x: p.x,
-      y,
-      z: p.z,
-      heading,
-      seed: seed + 0x51f15e,
-      previewSettings: worldState.userSettings,
-    });
-    worldState.portal = portal;
-    worldState.world.add(portal.group);
-    floraPlacementBlocks.push(portal.blocker);
-    worldState.obstacles.push(portal.obstacle);
+  if (worldState.userSettings.portalEnabled !== false) {
+    const portalPlacementAnchors = [];
+    const portalMinDistSq = worldState.ISLAND_RADIUS * worldState.ISLAND_RADIUS;
+    const portalTargets = getPortalTargetBiomes(
+      biome,
+      context.portalTargetBiomeId,
+      worldState.userSettings.portalDoublePlacement === true
+    );
+    for (let portalIndex = 0; portalIndex < portalTargets.length; portalIndex++) {
+      const targetBiome = portalTargets[portalIndex];
+      const p = makeSeededPortalPlacement({
+        seed,
+        index: portalIndex,
+        layout: worldState.currentLayout,
+        heightFn: worldState.heightFn,
+        maxRadiusFrac: worldState.userSettings.portalDoublePlacement === true ? 0.72 : 0.54,
+        minRadiusFrac: worldState.userSettings.portalDoublePlacement === true ? 0.48 : 0,
+        preferredAngle: portalPlacementAnchors.length
+          ? Math.atan2(portalPlacementAnchors[0].z, portalPlacementAnchors[0].x) + Math.PI
+          : null,
+        isBlocked: (x, z) => blocksFloraPlacement(x, z, 2.2) ||
+          portalPlacementAnchors.some((anchor) => {
+            const dx = x - anchor.x;
+            const dz = z - anchor.z;
+            return dx * dx + dz * dz < portalMinDistSq;
+          }),
+      });
+      if (portalPlacementAnchors.some((anchor) => {
+        const dx = p.x - anchor.x;
+        const dz = p.z - anchor.z;
+        return dx * dx + dz * dz < portalMinDistSq;
+      })) continue;
+      const portalGroundY = p.y;
+      const targetSeed = newRandomSeed({ allowedBiomeIds: [targetBiome.id], excludeBiomeId: biome.id });
+      for (const zone of p.flatZones) flattenTerrainCircle(zone.cx, zone.cz, zone.r, zone.flatY);
+      const portal = createBiomePortal({
+        sourceBiome: biome,
+        targetBiome,
+        x: p.x,
+        y: portalGroundY,
+        z: p.z,
+        heading: p.heading,
+        seed: targetSeed,
+        targetSeed,
+        previewSettings: worldState.userSettings,
+      });
+      if (!worldState.portal) worldState.portal = portal;
+      worldState.portals.push(portal);
+      worldState.world.add(portal.group);
+      floraPlacementBlocks.push(portal.blocker);
+      worldState.obstacles.push(portal.obstacle);
+      portalPlacementAnchors.push({ x: p.x, z: p.z });
+    }
   }
 
   function flattenTerrainCircle(cx, cz, r, flatY) {
@@ -580,7 +654,7 @@ export async function generateWorld(seed, context = createWorldBuildContext()) {
     }
     pos.needsUpdate = true;
     mesh.geometry.computeVertexNormals();
-    fairyFlat.push({ cx, cz, r, flatY });
+    terrainFlatZones.push({ cx, cz, r, flatY });
   }
   function blocksPlacement(x, z, r, kinds = PLACEMENT_BLOCK_KINDS) {
     const kindSet = kinds instanceof Set ? kinds : new Set(kinds);
@@ -833,22 +907,23 @@ export async function generateWorld(seed, context = createWorldBuildContext()) {
 
   await yieldIfNeeded();
 
-  // Patch heightFn to reflect fairy-ring flattening so all subsequent
+  // Patch heightFn to reflect flattened terrain pads so all subsequent
   // flora placement and conformSurfaceChildren see the real mesh heights.
-  if (fairyFlat.length) {
+  if (terrainFlatZones.length) {
     const rawHeightFn = worldState.heightFn;
     worldState.heightFn = (x, z) => {
       const h = rawHeightFn(x, z);
-      for (const { cx, cz, r, flatY } of fairyFlat) {
+      let out = h;
+      for (const { cx, cz, r, flatY } of terrainFlatZones) {
         const dx = x - cx, dz = z - cz;
         const d2 = dx * dx + dz * dz;
         const r2 = r * r;
         if (d2 >= r2) continue;
         const t = 1 - d2 / r2;
         const blend = t * t * (3 - 2 * t);
-        return h + (flatY - h) * blend;
+        out += (flatY - out) * blend;
       }
-      return h;
+      return out;
     };
   }
 
@@ -895,7 +970,8 @@ export async function generateWorld(seed, context = createWorldBuildContext()) {
     if (kind === "tree" || kind === "leafballtree" || kind === "pine" || kind === "snowpine" || kind === "deadtree" || kind === "balloontree") s *= 2;
     if (kind === "berrybush") s *= 1 + Math.random() * 0.25;
     if (kind === "flyer_nest") s = Math.max(s, 1.05);
-    const fp = (FLORA_FOOTPRINT[kind] ?? FLORA_FOOTPRINT_DEFAULT) * s;
+    const footprintBase = FLORA_FOOTPRINT[kind] ?? FLORA_FOOTPRINT_DEFAULT;
+    let fp = footprintBase * s;
     let nestHost = null;
     let nestGroundPose = null;
     if (kind === "flyer_nest") {
@@ -909,7 +985,7 @@ export async function generateWorld(seed, context = createWorldBuildContext()) {
         y0 = nestGroundPose.groundY;
       }
     }
-    const grassShortenRadius = Math.min(
+    let grassShortenRadius = Math.min(
       GRASS_SHORTEN_MAX_RADIUS,
       Math.max(GRASS_SHORTEN_MIN_RADIUS, fp * GRASS_SHORTEN_PAD)
     );
@@ -960,7 +1036,16 @@ export async function generateWorld(seed, context = createWorldBuildContext()) {
         if (ddx * ddx + ddz * ddz < bDx * bDx + bDz * bDz) { bDx = ddx; bDz = ddz; }
       }
       if (Math.sqrt(bDx * bDx + bDz * bDz) > worldState.ISLAND_RADIUS / 3) continue;
-      s *= 4;
+      const giantS = s * 4;
+      const giantFp = footprintBase * giantS;
+      if (blocksFloraPlacement(p.x, p.z, giantFp * 1.2, placementBlockKinds)) continue;
+      if (CANOPY_SPACING_KINDS.has(kind) && blocksFloraPlacement(p.x, p.z, giantFp * CANOPY_SPACING_PAD, CANOPY_SPACING_KINDS)) continue;
+      s = giantS;
+      fp = giantFp;
+      grassShortenRadius = Math.min(
+        GRASS_SHORTEN_MAX_RADIUS,
+        Math.max(GRASS_SHORTEN_MIN_RADIUS, fp * GRASS_SHORTEN_PAD)
+      );
       f.scale.setScalar(s);
       // Disable wind on the giant mushroom — at 4× scale the sway
       // amplitude looks exaggerated and comical. Clone materials first
@@ -998,7 +1083,16 @@ export async function generateWorld(seed, context = createWorldBuildContext()) {
         // Skip this placement — keep verdantGiantPlaced false so we retry
         continue;
       }
-      s *= 3;
+      const giantS = s * 3;
+      const giantFp = footprintBase * giantS;
+      if (blocksFloraPlacement(p.x, p.z, giantFp * 1.2, placementBlockKinds)) continue;
+      if (CANOPY_SPACING_KINDS.has(kind) && blocksFloraPlacement(p.x, p.z, giantFp * CANOPY_SPACING_PAD, CANOPY_SPACING_KINDS)) continue;
+      s = giantS;
+      fp = giantFp;
+      grassShortenRadius = Math.min(
+        GRASS_SHORTEN_MAX_RADIUS,
+        Math.max(GRASS_SHORTEN_MIN_RADIUS, fp * GRASS_SHORTEN_PAD)
+      );
       f.scale.setScalar(s);
       verdantGiantPlaced = true;
       // Will-o-wisp that orbits and flies above the giant tree
@@ -1171,32 +1265,38 @@ export async function generateWorld(seed, context = createWorldBuildContext()) {
   await yieldIfNeeded(true);
 
   // ground cover — instanced grass / wildflowers / pebbles
-  // Exclude fairy-ring circles from all ground cover placement.
+  // Keep flower/pebble/detail fields out of landmark clearings and portal pads.
   const coverExclusions = floraPlacementBlocks
     .filter(b => b.kind === "fairyring")
+    .map(b => ({ x: b.x, z: b.z, r: b.r }));
+  const groundCoverExclusions = floraPlacementBlocks
+    .filter(b => b.kind === "fairyring" || b.kind === "portal")
     .map(b => ({ x: b.x, z: b.z, r: b.r }));
   const grassShorteners = floraPlacementBlocks
     .filter(b => b.kind !== "fairyring" && b.grassRadius > 0)
     .map(b => ({ x: b.x, z: b.z, r: b.grassRadius, shortenTo: GRASS_SHORTEN_MIN_HEIGHT }));
-  const grass = makeGrassField(biome, worldState.heightFn, coverExclusions, grassShorteners);
+  const portalGrassClearances = floraPlacementBlocks
+    .filter(b => b.kind === "portal" && b.grassClearance)
+    .map(b => b.grassClearance);
+  const grass = makeGrassField(biome, worldState.heightFn, coverExclusions, grassShorteners, portalGrassClearances);
   if (grass) worldState.world.add(grass);
   if (worldState._reapplyGrassSettings) worldState._reapplyGrassSettings();
   await yieldIfNeeded(true);
-  for (const m of makeWildflowerField(biome, worldState.heightFn, coverExclusions)) {
+  for (const m of makeWildflowerField(biome, worldState.heightFn, groundCoverExclusions)) {
     worldState.world.add(m);
     if (m.userData.positions) worldState.flowerSpots.push(...m.userData.positions);
   }
   await yieldIfNeeded(true);
-  const groveDetails = makeVerdantGroveDetails(biome, worldState.heightFn, coverExclusions);
+  const groveDetails = makeVerdantGroveDetails(biome, worldState.heightFn, groundCoverExclusions);
   if (groveDetails) worldState.world.add(groveDetails);
   await yieldIfNeeded();
-  const cloudPuffs = makeCloudPuffField(biome, worldState.heightFn, coverExclusions);
+  const cloudPuffs = makeCloudPuffField(biome, worldState.heightFn, groundCoverExclusions);
   if (cloudPuffs) worldState.world.add(cloudPuffs);
   await yieldIfNeeded();
-  const beachcomb = makeBeachcombField(biome, worldState.heightFn, coverExclusions);
+  const beachcomb = makeBeachcombField(biome, worldState.heightFn, groundCoverExclusions);
   if (beachcomb) worldState.world.add(beachcomb);
   await yieldIfNeeded();
-  const pebbles = makePebbleField(biome, worldState.heightFn, coverExclusions);
+  const pebbles = makePebbleField(biome, worldState.heightFn, groundCoverExclusions);
   if (pebbles) worldState.world.add(pebbles);
   worldState.groundMarks = makeGroundMarks(biome);
   if (worldState.groundMarks) worldState.world.add(worldState.groundMarks);
@@ -1346,7 +1446,7 @@ export async function generateWorld(seed, context = createWorldBuildContext()) {
   // caterpillars — multi-segment crawlers, occasionally swapped for snails
   // Crawlers also avoid spawning inside fairy rings (large obstacle discs
   // that the "turn" avoidance response can't escape from).
-  const CRAWLER_BLOCK_KINDS = new Set(["lavafissure", "fairyring"]);
+  const CRAWLER_BLOCK_KINDS = new Set(["lavafissure", "fairyring", "portal"]);
   function placeCrawler(make) {
     for (let tries = 0; tries < 12; tries++) {
       const crawler = make();

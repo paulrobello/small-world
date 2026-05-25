@@ -3,13 +3,13 @@ import { state } from "./state.js";
 import { readSeedFromUrl, newRandomSeed, formatSeed } from "./seed.js";
 import { generateWorld, setFollowReleaseCallback } from "./world.js";
 import { islandFalloff, nearestCenter } from "./terrain.js";
-import { wakeCreature, lookAtCreature } from "./fauna.js";
+import { buildObstacleGrid, wakeCreature, lookAtCreature } from "./fauna.js";
 import { BIOMES } from "./biomes.js";
 import { LOWFX } from "./lowfx.js";
 import { INSPECT } from "./inspect.js";
 import { APP_VERSION } from "./state.js";
 import { setMusicEnabled, setMusicVolume, tryResumeOnGesture } from "./music.js";
-import { updatePortalPreviewSettings } from "./portal.js";
+import { disposePortal, getPortalSideEntryPose, updatePortalPreviewSettings } from "./portal.js";
 
 let followTarget = null;
 let selectingCreature = false;
@@ -44,6 +44,8 @@ const PERSISTED_KEYS = [
   "ao",
   "depthFog",
   "fxPanelOpen",
+  "portalEnabled",
+  "portalDoublePlacement",
   "portalPreviewGrass",
   "portalPreviewFlora",
   "portalPreviewCreatures",
@@ -87,6 +89,32 @@ function saveSettings() {
   } catch {
     // localStorage may throw in private mode / quota — non-fatal
   }
+}
+
+function eachPortal(fn) {
+  const portals = state.portals?.length ? state.portals : (state.portal ? [state.portal] : []);
+  for (const portal of portals) fn(portal);
+}
+
+function disposeStatePortals() {
+  eachPortal((portal) => {
+    portal.group?.parent?.remove(portal.group);
+    disposePortal(portal);
+  });
+  state.portal = null;
+  state.portals = [];
+  state.obstacles = state.obstacles.filter((o) => o.kind !== "portal");
+  buildObstacleGrid(state.obstacles);
+}
+
+function getPortalClickSide(portal, camera) {
+  const center = portal.group.position;
+  const cameraLocal = state.world.worldToLocal(camera.position.clone());
+  const yaw = portal.group.rotation.y;
+  const nx = Math.sin(yaw);
+  const nz = Math.cos(yaw);
+  const side = (cameraLocal.x - center.x) * nx + (cameraLocal.z - center.z) * nz;
+  return side >= 0 ? 1 : -1;
 }
 
 function loadBookmarks() {
@@ -945,6 +973,16 @@ export function initUi({ camera, canvas, controls, renderer }) {
         <summary class="settings-section-label fx-summary">portal preview</summary>
 
         <label class="setting setting-checkbox">
+          <input type="checkbox" id="setting-portal-enabled" checked />
+          <span class="setting-label">portals enabled</span>
+        </label>
+
+        <label class="setting setting-checkbox">
+          <input type="checkbox" id="setting-portal-double" />
+          <span class="setting-label">two portals</span>
+        </label>
+
+        <label class="setting setting-checkbox">
           <input type="checkbox" id="setting-portal-grass" />
           <span class="setting-label">target grass</span>
         </label>
@@ -966,17 +1004,37 @@ export function initUi({ camera, canvas, controls, renderer }) {
       </details>
     `);
   const portalDetailsEl = document.getElementById("setting-portal-details");
+  const portalEnabledEl = document.getElementById("setting-portal-enabled");
+  const portalDoubleEl = document.getElementById("setting-portal-double");
   const portalGrassEl = document.getElementById("setting-portal-grass");
   const portalFloraEl = document.getElementById("setting-portal-flora");
   const portalCreaturesEl = document.getElementById("setting-portal-creatures");
   const portalFxEl = document.getElementById("setting-portal-fx");
   portalDetailsEl.open = !!state.userSettings.portalPanelOpen;
+  portalEnabledEl.checked = state.userSettings.portalEnabled !== false;
+  portalDoubleEl.checked = state.userSettings.portalDoublePlacement === true;
   portalGrassEl.checked = !!state.userSettings.portalPreviewGrass;
   portalFloraEl.checked = state.userSettings.portalPreviewFlora !== false;
   portalCreaturesEl.checked = !!state.userSettings.portalPreviewCreatures;
   portalFxEl.checked = state.userSettings.portalPreviewFx !== false;
   portalDetailsEl.addEventListener("toggle", () => {
     state.userSettings.portalPanelOpen = portalDetailsEl.open;
+    saveSettings();
+  });
+  portalEnabledEl.addEventListener("change", () => {
+    state.userSettings.portalEnabled = portalEnabledEl.checked;
+    if (!portalEnabledEl.checked) {
+      disposeStatePortals();
+    } else if (!state.portal && !state.portals?.length && !state.isGeneratingWorld) {
+      void generateWorld(state.currentSeed);
+    }
+    saveSettings();
+  });
+  portalDoubleEl.addEventListener("change", () => {
+    state.userSettings.portalDoublePlacement = portalDoubleEl.checked;
+    if (state.userSettings.portalEnabled !== false && !state.isGeneratingWorld) {
+      void generateWorld(state.currentSeed);
+    }
     saveSettings();
   });
   for (const [el, key] of [
@@ -987,7 +1045,7 @@ export function initUi({ camera, canvas, controls, renderer }) {
   ]) {
     el.addEventListener("change", () => {
       state.userSettings[key] = el.checked;
-      updatePortalPreviewSettings(state.portal, state.userSettings);
+      eachPortal((portal) => updatePortalPreviewSettings(portal, state.userSettings));
       saveSettings();
     });
   }
@@ -2011,6 +2069,21 @@ export function initUi({ camera, canvas, controls, renderer }) {
         return;
       }
       return;
+    }
+    if (!_photoFP) {
+      const portals = state.portals?.length ? state.portals : (state.portal ? [state.portal] : []);
+      const portalHits = _raycaster.intersectObjects(portals.map((portal) => portal.group), true);
+      if (portalHits.length) {
+        let portalRoot = portalHits[0].object;
+        while (portalRoot && !portals.some((portal) => portal.group === portalRoot)) portalRoot = portalRoot.parent;
+        const portal = portals.find((candidate) => candidate.group === portalRoot);
+        if (portal) {
+          const side = getPortalClickSide(portal, camera);
+          const pose = getPortalSideEntryPose(portal, side);
+          enterStrollFromPortal(pose.x, pose.z, pose.yaw);
+          return;
+        }
+      }
     }
     const birds = [];
     for (const f of state.flocks) for (const b of f.birds) birds.push(b);

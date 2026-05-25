@@ -288,7 +288,23 @@ export function makeGrassMaterial(biome, opts = {}) {
   return { blade, material: mat, uniforms, baseCol };
 }
 
-export function makeGrassField(biome, heightFn, excludedCircles = [], shortGrassCircles = []) {
+function pointInExcludedCapsule(x, z, c) {
+  const dx = x - c.x, dz = z - c.z;
+  const along = Math.max(-c.halfLength, Math.min(c.halfLength, dx * c.nx + dz * c.nz));
+  const px = c.x + c.nx * along;
+  const pz = c.z + c.nz * along;
+  const sx = x - px, sz = z - pz;
+  return sx * sx + sz * sz < c.r * c.r;
+}
+
+export function makeGrassField(
+  biome,
+  heightFn,
+  excludedCircles = [],
+  shortGrassCircles = [],
+  excludedCapsules = [],
+  opts = {}
+) {
   // Per-biome 0 = no grass field at all (burnt/volcanic biomes). Caller
   // handles the null and skips the .add() rather than allocating an empty
   // InstancedMesh.
@@ -298,13 +314,13 @@ export function makeGrassField(biome, heightFn, excludedCircles = [], shortGrass
   // Combined with the crossed-plane blade geometry, each instance now
   // contributes meaningful screen area regardless of viewing angle.
   // LOWFX trims the count to stay inside a smaller GPU budget.
-  const overshoot = LOWFX ? 22.0 : 55.0;
+  const overshoot = opts.overshoot ?? (LOWFX ? 22.0 : 55.0);
   const nominalCount = _coverScale(density, overshoot);
   // Allocate headroom so the user's density slider can push above the
   // biome's stock count without needing a regen. The slider's visible
   // range is [0, MAX_DENSITY_MULTIPLIER]; live changes just shift
   // mesh.count between 0 and the allocated maximum.
-  const maxCount = Math.ceil(nominalCount * MAX_DENSITY_MULTIPLIER);
+  const maxCount = Math.ceil(nominalCount * (opts.maxDensityMultiplier ?? MAX_DENSITY_MULTIPLIER));
   const count = maxCount;
 
   const { blade, material: mat, uniforms, baseCol } = makeGrassMaterial(biome);
@@ -345,11 +361,16 @@ export function makeGrassField(biome, heightFn, excludedCircles = [], shortGrass
     // edge plunge. Don't reject mid-island dips.
     if (y < -4.0) continue;
 
-    // Exclude fairy-ring circles — mushrooms should sit on bare earth.
+    // Exclude bare-earth zones such as fairy rings and portal sightlines.
     let excluded = false;
     for (const c of excludedCircles) {
       const dx = x - c.x, dz = z - c.z;
       if (dx * dx + dz * dz < c.r * c.r) { excluded = true; break; }
+    }
+    if (!excluded) {
+      for (const c of excludedCapsules) {
+        if (pointInExcludedCapsule(x, z, c)) { excluded = true; break; }
+      }
     }
     if (excluded) continue;
 
@@ -385,7 +406,7 @@ export function makeGrassField(biome, heightFn, excludedCircles = [], shortGrass
   // the placed blades are drawn each frame without rebuilding the mesh.
   const maxPlaced = placed;
   const stockCount = Math.min(nominalCount, maxPlaced);
-  const initialDensity = state.userSettings.grassDensity ?? 1.0;
+  const initialDensity = opts.initialDensity ?? state.userSettings.grassDensity ?? 1.0;
   mesh.count = Math.min(maxPlaced, Math.max(0, Math.round(stockCount * initialDensity)));
   mesh.instanceMatrix.needsUpdate = true;
 
