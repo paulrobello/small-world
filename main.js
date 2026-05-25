@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { state } from "./src/state.js";
-import { readSeedFromUrl, newRandomSeed } from "./src/seed.js";
+import { readSeedFromUrl, newRandomSeed, formatSeed } from "./src/seed.js";
 import {
   generateWorld,
   updateDayNight,
@@ -26,6 +26,11 @@ import { sharedFurUniforms } from "./src/fur.js";
 import { initPostFX } from "./src/postfx.js";
 import { updateWaterReflection } from "./src/reflection.js";
 import {
+  getPortalArrivalPose,
+  isCameraPassingThroughPortal,
+  updatePortalPreview,
+} from "./src/portal.js";
+import {
   restoreCreaturePovRenderHidden,
   setCreaturePovRenderHidden,
   syncCreaturePovCamera,
@@ -40,6 +45,7 @@ import {
   isAnyFP,
   isPhotoFP,
   isStrolling,
+  enterStrollFromPortal,
   getPhotoReviewGroup,
   isSelectingCreature,
   isManualPaused,
@@ -137,6 +143,39 @@ window.addEventListener("resize", () => {
     );
   }
 });
+
+let portalTravelInProgress = false;
+const PORTAL_ARRIVAL_RETRY_LIMIT = 45;
+
+function travelThroughPortalIfNeeded() {
+  if (portalTravelInProgress || state.isGeneratingWorld || !isStrolling()) return;
+  const portal = state.portal;
+  const sourceBiome = state.currentBiome;
+  const targetBiome = portal?.targetBiome;
+  if (!portal || !sourceBiome || !targetBiome) return;
+  const ws = state.userSettings.worldScale ?? 1;
+  if (!isCameraPassingThroughPortal(portal, camera, ws)) return;
+  const targetSeed = newRandomSeed({ allowedBiomeIds: [targetBiome.id], excludeBiomeId: sourceBiome.id });
+  const url = new URL(window.location.href);
+  url.searchParams.set("seed", formatSeed(targetSeed));
+  url.searchParams.set("portal", sourceBiome.id);
+  portalTravelInProgress = true;
+  window.location.href = url.toString();
+}
+
+function enterPortalArrivalIfRequested(attempt = 0) {
+  const portalParam = new URLSearchParams(window.location.search).get("portal");
+  if (!portalParam) return;
+  if (!state.portal) {
+    if (attempt < PORTAL_ARRIVAL_RETRY_LIMIT) requestAnimationFrame(() => enterPortalArrivalIfRequested(attempt + 1));
+    return;
+  }
+  const arrivalPose = getPortalArrivalPose(state.portal);
+  if (!enterStrollFromPortal(arrivalPose.x, arrivalPose.z, arrivalPose.yaw)
+    && attempt < PORTAL_ARRIVAL_RETRY_LIMIT) {
+    requestAnimationFrame(() => enterPortalArrivalIfRequested(attempt + 1));
+  }
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Animation loop
@@ -353,6 +392,7 @@ function animate() {
       // mesh-local before comparing. Wakes both spawned sleepers and any
       // walker that has curled up from the night sleepiness cycle.
       const ws = state.userSettings.worldScale ?? 1;
+      if (!followedCreature) travelThroughPortalIfNeeded();
       const wsi = 1 / ws;
       const camLx = camera.position.x * wsi;
       const camLz = camera.position.z * wsi;
@@ -394,6 +434,9 @@ function animate() {
     if (state.waterReflection) {
       updateWaterReflection(state.waterReflection, renderer, camera, controls);
     }
+  });
+  measurePerfPhase("portalPreview", () => {
+    updatePortalPreview(state.portal, renderer, camera, rawT);
   });
 
   // Update tilt-shift focus: project the active camera focus point to
@@ -444,7 +487,9 @@ if (INSPECT) {
   setupInspect(scene, renderer, camera, controls);
 } else {
   const initialSeed = readSeedFromUrl() ?? newRandomSeed();
-  void generateWorld(initialSeed).catch((error) => {
+  void generateWorld(initialSeed).then(() => {
+    enterPortalArrivalIfRequested();
+  }).catch((error) => {
     console.error("World generation failed", error);
   });
 }

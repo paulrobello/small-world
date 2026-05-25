@@ -18,6 +18,6 @@ assert.match(
 
 assert.match(
   world,
-  /const grass = makeGrassField\(biome, state\.heightFn, coverExclusions, grassShorteners\);\s+if \(grass\) state\.world\.add\(grass\);\s+if \(state\._reapplyGrassSettings\) state\._reapplyGrassSettings\(\);/,
+  /const grass = makeGrassField\(biome, worldState\.heightFn, coverExclusions, grassShorteners\);\s+if \(grass\) worldState\.world\.add\(grass\);\s+if \(worldState\._reapplyGrassSettings\) worldState\._reapplyGrassSettings\(\);/,
   "World generation should resync grass controls only after makeGrassField has established whether grass exists."
 );

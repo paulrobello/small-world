@@ -48,6 +48,6 @@ assert.match(
 
 assert.match(
   worldSource,
-  /makeGrassField\(biome,\s*state\.heightFn,\s*coverExclusions,\s*grassShorteners\)/,
+  /makeGrassField\(biome,\s*worldState\.heightFn,\s*coverExclusions,\s*grassShorteners\)/,
   'World generation should pass flora shortening circles into instanced grass placement.'
 );

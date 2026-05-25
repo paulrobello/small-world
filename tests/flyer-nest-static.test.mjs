@@ -127,12 +127,12 @@ assert(
 );
 
 assert(
-  worldSource.includes('const flyerCount = state.creatures.filter((c) => c.flies && !c.isFish && !c.isBee).length')
+  worldSource.includes('const flyerCount = worldState.creatures.filter((c) => c.flies && !c.isFish && !c.isBee).length')
     && worldSource.includes('const flyerNestTarget = biome.noFlyerNests ? 0 : flyerCount < 4 ? flyerCount : Math.ceil(flyerCount / 2)')
     && worldSource.includes('while (flyerNestPlaced < flyerNestTarget')
     && worldSource.includes('if (placeFlyerNest()) flyerNestPlaced++')
-    && !worldSource.includes('state.bees.filter')
-    && !worldSource.includes('state.flocks.filter'),
+    && !worldSource.includes('worldState.bees.filter')
+    && !worldSource.includes('worldState.flocks.filter'),
   'world generation should match nest count to perch-using flyers below four, then round up half for larger counts, without counting bees or flocks.'
 );
 

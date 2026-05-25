@@ -68,8 +68,8 @@ class GroundMarksStaticTest(unittest.TestCase):
 
         self.assertIn("groundMarks: null", state_source)
         self.assertIn("makeGroundMarks", world_source)
-        self.assertIn("state.groundMarks = null", world_source)
-        self.assertIn("state.groundMarks = makeGroundMarks(biome)", world_source)
+        self.assertIn("worldState.groundMarks = null", world_source)
+        self.assertIn("worldState.groundMarks = makeGroundMarks(biome)", world_source)
         self.assertIn("stepGroundMarks", main_source)
         self.assertIn("stepGroundMarks(state.groundMarks, dt)", main_source)
 

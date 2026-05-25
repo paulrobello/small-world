@@ -76,7 +76,7 @@ export function makeHeightFn(noise2D, layout, amp = 3.0) {
 // flora/creature/instance placement so multi-island worlds get coverage of
 // every island and the void in between is skipped automatically.
 export function pickGroundPoint(maxRadiusFrac = 0.88, opts = {}) {
-  const centers = state.currentLayout.centers;
+  const centers = (opts.layout ?? state.currentLayout).centers;
   const radiusFor = (c) => opts.visualRadius ? (c.visualRadius ?? c.radius) : c.radius;
   const areaWeight = (c) => {
     const shape = c.shape ?? { kind: "round" };
@@ -155,8 +155,8 @@ export function pickLayout() {
 // ─────────────────────────────────────────────────────────────────────────────
 // Terrain mesh
 // ─────────────────────────────────────────────────────────────────────────────
-export function clipCenter() {
-  const centers = state.currentLayout?.centers ?? [];
+export function clipCenter(worldState = state) {
+  const centers = worldState.currentLayout?.centers ?? [];
   return centers.find((c) => (c.shape?.kind ?? "round") === "round") ?? centers[0] ?? null;
 }
 
@@ -221,12 +221,12 @@ function makeTerrainDepthMaterial(center) {
   return mat;
 }
 
-export function makeTerrain(biome, heightFn) {
+export function makeTerrain(biome, heightFn, worldState = state) {
   // segment density scales with size so larger worlds keep similar fidelity
-  const segs = Math.round(140 * (state.ISLAND_SIZE / ISLAND_SIZE_BASE));
+  const segs = Math.round(140 * (worldState.ISLAND_SIZE / ISLAND_SIZE_BASE));
   const geo = new THREE.PlaneGeometry(
-    state.ISLAND_SIZE,
-    state.ISLAND_SIZE,
+    worldState.ISLAND_SIZE,
+    worldState.ISLAND_SIZE,
     segs,
     segs
   );
@@ -292,7 +292,7 @@ export function makeTerrain(biome, heightFn) {
 
   const mat = makeTerrainPBRMaterial(biome, heightFn);
 
-  const terrainClipCenter = clipCenter();
+  const terrainClipCenter = clipCenter(worldState);
   applyTerrainClip(mat, terrainClipCenter);
 
   const mesh = new THREE.Mesh(geo, mat);

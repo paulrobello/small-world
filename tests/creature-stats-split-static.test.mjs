@@ -28,9 +28,9 @@ assert(
 );
 
 assert(
-  worldSource.includes('const groundCreatureCount = state.creatures.filter((c) => !c.flies && !c.isFish).length + state.caterpillars.length')
-    && worldSource.includes('const flyCreatureCount = state.creatures.filter((c) => c.flies && !c.isFish).length')
-    && worldSource.includes('const swimCreatureCount = state.creatures.filter((c) => c.isFish).length')
+  worldSource.includes('const groundCreatureCount = worldState.creatures.filter((c) => !c.flies && !c.isFish).length + worldState.caterpillars.length')
+    && worldSource.includes('const flyCreatureCount = worldState.creatures.filter((c) => c.flies && !c.isFish).length')
+    && worldSource.includes('const swimCreatureCount = worldState.creatures.filter((c) => c.isFish).length')
     && worldSource.includes('document.getElementById("ground-creature-count").textContent = padStat(groundCreatureCount)')
     && worldSource.includes('document.getElementById("fly-creature-count").textContent = padStat(flyCreatureCount)')
     && worldSource.includes('document.getElementById("swim-creature-count").textContent = padStat(swimCreatureCount)')

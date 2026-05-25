@@ -9,6 +9,7 @@ import { LOWFX } from "./lowfx.js";
 import { INSPECT } from "./inspect.js";
 import { APP_VERSION } from "./state.js";
 import { setMusicEnabled, setMusicVolume, tryResumeOnGesture } from "./music.js";
+import { updatePortalPreviewSettings } from "./portal.js";
 
 let followTarget = null;
 let selectingCreature = false;
@@ -20,6 +21,8 @@ let _photoFP = null;
 let _photoReview = null;
 // Bound exit function for the Escape handler; set inside initUi().
 let _exitStroll = () => {};
+let _enterStroll = () => {};
+let _requestStrollPointerLock = () => {};
 
 // Persisted settings ----------------------------------------------------------
 // Only fields explicitly listed here are read/written; unknown keys in
@@ -41,6 +44,11 @@ const PERSISTED_KEYS = [
   "ao",
   "depthFog",
   "fxPanelOpen",
+  "portalPreviewGrass",
+  "portalPreviewFlora",
+  "portalPreviewCreatures",
+  "portalPreviewFx",
+  "portalPanelOpen",
   "showFps",
   "windEnabled",
   "windStrength",
@@ -152,6 +160,32 @@ function applyStrollVisualComfort(on) {
   if (state.currentBiome?.cloudlike && state.mountains) {
     state.mountains.visible = !on;
   }
+}
+
+export function setStrollLocalPose(localX, localZ, yaw) {
+  if (!_stroll) return false;
+  const ws = state.userSettings.worldScale ?? 1;
+  const groundY = state.heightFn(localX, localZ) * ws;
+  _stroll.camera.position.set(localX * ws, groundY + 1.9 * ws, localZ * ws);
+  _stroll.yaw = yaw;
+  _stroll.pitch = 0;
+  _stroll.keys = { w: false, a: false, s: false, d: false, shift: false };
+  const target = _stroll.savedTarget || _controls?.target;
+  if (target) {
+    target.set(
+      _stroll.camera.position.x - Math.sin(yaw) * 8,
+      _stroll.camera.position.y,
+      _stroll.camera.position.z - Math.cos(yaw) * 8
+    );
+  }
+  return true;
+}
+
+export function enterStrollFromPortal(localX, localZ, yaw) {
+  if (!_stroll) _enterStroll();
+  const positioned = setStrollLocalPose(localX, localZ, yaw);
+  if (positioned) _requestStrollPointerLock(true);
+  return positioned;
 }
 
 export function isPhotoMode() {
@@ -461,6 +495,16 @@ export function initUi({ camera, canvas, controls, renderer }) {
       ? "wasd · mouse-look · esc to exit"
       : "wasd · mouse-look · esc to exit";
   }
+  function requestStrollPointerLock(armRetry = false) {
+    canvas.requestPointerLock?.().catch(() => {});
+    if (!armRetry) return;
+    const retryPointerLock = () => {
+      if (_stroll && document.pointerLockElement !== canvas) {
+        canvas.requestPointerLock?.().catch(() => {});
+      }
+    };
+    canvas.addEventListener("pointerdown", retryPointerLock, { once: true });
+  }
   function enterStroll() {
     if (_stroll) return;
     // Preserve any follow target: first-person + follow becomes creature POV.
@@ -537,6 +581,7 @@ export function initUi({ camera, canvas, controls, renderer }) {
       },
       savedTarget: controls.target,
       handlers: {},
+      hasPointerLock: false,
     };
     camera.position.y = groundY + 1.9 * ws0;
 
@@ -546,6 +591,7 @@ export function initUi({ camera, canvas, controls, renderer }) {
 
     const onMove = (e) => {
       if (!_stroll) return;
+      if (document.pointerLockElement !== canvas) return;
       const sens = 0.0022;
       _stroll.yaw -= e.movementX * sens;
       _stroll.pitch -= e.movementY * sens;
@@ -567,7 +613,12 @@ export function initUi({ camera, canvas, controls, renderer }) {
     const onKeyDown = onKey(true);
     const onKeyUp = onKey(false);
     const onLockChange = () => {
-      if (document.pointerLockElement !== canvas) exitStroll();
+      if (!_stroll) return;
+      if (document.pointerLockElement === canvas) {
+        _stroll.hasPointerLock = true;
+        return;
+      }
+      if (_stroll.hasPointerLock) exitStroll();
     };
     document.addEventListener("mousemove", onMove);
     window.addEventListener("keydown", onKeyDown);
@@ -601,7 +652,9 @@ export function initUi({ camera, canvas, controls, renderer }) {
   });
   syncStrollButton();
   // Expose for the Escape handler below
+  _enterStroll = enterStroll;
   _exitStroll = exitStroll;
+  _requestStrollPointerLock = requestStrollPointerLock;
 
   const scaleSlider = document.getElementById("setting-scale");
   const scaleValue = document.getElementById("setting-scale-value");
@@ -886,6 +939,58 @@ export function initUi({ camera, canvas, controls, renderer }) {
   };
   applyGrassSettings();
   syncGrassControls();
+
+  grassDetailsEl.insertAdjacentHTML("afterend", `
+      <details class="fx-details" id="setting-portal-details">
+        <summary class="settings-section-label fx-summary">portal preview</summary>
+
+        <label class="setting setting-checkbox">
+          <input type="checkbox" id="setting-portal-grass" />
+          <span class="setting-label">target grass</span>
+        </label>
+
+        <label class="setting setting-checkbox">
+          <input type="checkbox" id="setting-portal-flora" />
+          <span class="setting-label">target flora</span>
+        </label>
+
+        <label class="setting setting-checkbox">
+          <input type="checkbox" id="setting-portal-creatures" />
+          <span class="setting-label">preview creatures</span>
+        </label>
+
+        <label class="setting setting-checkbox">
+          <input type="checkbox" id="setting-portal-fx" />
+          <span class="setting-label">local portal FX</span>
+        </label>
+      </details>
+    `);
+  const portalDetailsEl = document.getElementById("setting-portal-details");
+  const portalGrassEl = document.getElementById("setting-portal-grass");
+  const portalFloraEl = document.getElementById("setting-portal-flora");
+  const portalCreaturesEl = document.getElementById("setting-portal-creatures");
+  const portalFxEl = document.getElementById("setting-portal-fx");
+  portalDetailsEl.open = !!state.userSettings.portalPanelOpen;
+  portalGrassEl.checked = !!state.userSettings.portalPreviewGrass;
+  portalFloraEl.checked = state.userSettings.portalPreviewFlora !== false;
+  portalCreaturesEl.checked = !!state.userSettings.portalPreviewCreatures;
+  portalFxEl.checked = state.userSettings.portalPreviewFx !== false;
+  portalDetailsEl.addEventListener("toggle", () => {
+    state.userSettings.portalPanelOpen = portalDetailsEl.open;
+    saveSettings();
+  });
+  for (const [el, key] of [
+    [portalGrassEl, "portalPreviewGrass"],
+    [portalFloraEl, "portalPreviewFlora"],
+    [portalCreaturesEl, "portalPreviewCreatures"],
+    [portalFxEl, "portalPreviewFx"],
+  ]) {
+    el.addEventListener("change", () => {
+      state.userSettings[key] = el.checked;
+      updatePortalPreviewSettings(state.portal, state.userSettings);
+      saveSettings();
+    });
+  }
 
   const fxDetailsEl = document.getElementById("setting-fx-details");
   const bloomEl = document.getElementById("setting-bloom");

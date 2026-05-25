@@ -93,7 +93,7 @@ assert(
   'cloud puff ambiance should sit partially sunk into the cloud terrain.'
 );
 assert(
-  worldSource.includes('state.userSettings.bloom && biome.bloom !== false'),
+  worldSource.includes('worldState.userSettings.bloom && biome.bloom !== false'),
   'world generation should keep bloom disabled for biomes that opt out.'
 );
 assert(

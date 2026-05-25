@@ -57,6 +57,7 @@ import {
   updateSkyColors,
 } from "./sky.js";
 import { makeWaterReflection, disposeWaterReflection } from "./reflection.js";
+import { createBiomePortal, disposePortal } from "./portal.js";
 import { LOWFX, LOWFX_DENSITY } from "./lowfx.js";
 import { resetPBRTextureCache } from "./pbr.js";
 
@@ -93,6 +94,26 @@ export function setControlsRef(controls) {
 }
 export function setFollowReleaseCallback(fn) {
   _releaseFollow = fn;
+}
+
+function readPortalTargetBiomeIdFromUrl() {
+  if (typeof window === "undefined") return null;
+  return new URLSearchParams(window.location.search).get("portal");
+}
+
+export function createWorldBuildContext(overrides = {}) {
+  return {
+    state: overrides.state ?? state,
+    scene: overrides.scene ?? _scene,
+    controls: overrides.controls ?? _controls,
+    releaseFollow: overrides.releaseFollow ?? _releaseFollow,
+    setLoading: overrides.setLoading ?? setWorldLoading,
+    dispatchWorldReady:
+      overrides.dispatchWorldReady ??
+      (() => window.dispatchEvent(new CustomEvent("world-ready"))),
+    writeSeed: overrides.writeSeed ?? writeSeedToUrl,
+    portalTargetBiomeId: overrides.portalTargetBiomeId ?? readPortalTargetBiomeIdFromUrl(),
+  };
 }
 
 // Slow day/night cycle. Lerps a handful of scene values between the biome's
@@ -194,10 +215,14 @@ export function updateDayNight(t) {
   }
 }
 
-export async function generateWorld(seed) {
+export async function generateWorld(seed, context = createWorldBuildContext()) {
+  const worldState = context.state;
+  const worldScene = context.scene;
+  const worldControls = context.controls;
+  const releaseFollow = context.releaseFollow;
   const runId = ++_generationRunId;
-  state.isGeneratingWorld = true;
-  setWorldLoading(true);
+  worldState.isGeneratingWorld = true;
+  context.setLoading(true);
   await nextGenerationFrame();
   if (runId !== _generationRunId) return;
 
@@ -236,43 +261,47 @@ export async function generateWorld(seed) {
   // Layout (size + shape + island count) — must be picked right after the
   // biome so it stays inside the deterministic Math.random window.
   const layout = pickLayout();
-  state.currentLayout = layout;
-  state.ISLAND_SIZE = layout.planeSize;
-  state.ISLAND_RADIUS = layout.boundRadius;
+  worldState.currentLayout = layout;
+  worldState.ISLAND_SIZE = layout.planeSize;
+  worldState.ISLAND_RADIUS = layout.boundRadius;
+  const pickWorldGroundPoint = (maxRadiusFrac = 0.88, opts = {}) =>
+    pickGroundPoint(maxRadiusFrac, { ...opts, layout: worldState.currentLayout });
 
   // clear
-  disposeGroup(state.world);
+  disposeGroup(worldState.world);
   // Dispose previous reflection's WebGL render target + clear its cloned
-  // scene — disposeGroup only walks state.world, and the reflection lives on
-  // state.waterReflection. Clearing the scene before nulling the ref ensures
+  // scene — disposeGroup only walks worldState.world, and the reflection lives on
+  // worldState.waterReflection. Clearing the scene before nulling the ref ensures
   // a stray updateWaterReflection call between here and the new
   // makeWaterReflection below can't sample disposed materials.
-  disposeWaterReflection(state.waterReflection);
-  state.waterReflection = null;
-  _scene.remove(state.world);
-  state.world = new THREE.Group();
-  state.world.scale.setScalar(state.userSettings.worldScale ?? 1);
-  _scene.add(state.world);
-  state.creatures = [];
-  state.flocks = [];
-  state.caterpillars = [];
-  state.butterflies = [];
-  state.bees = [];
-  state.flySwarms = [];
-  state.willowisps = [];
-  state.dirtPuffs = [];
-  state.dustKicks = [];
-  state.groundMarks = null;
-  state.flowerSpots = [];
-  state.obstacles = [];
-  state._dynPool = null;
-  state.perchSpots = [];
-  state.creatureColorBuckets = null;
-  state.particles = null;
-  state.waterMesh = null;
-  state.grass = null;
+  disposeWaterReflection(worldState.waterReflection);
+  worldState.waterReflection = null;
+  disposePortal(worldState.portal);
+  worldState.portal = null;
+  worldScene.remove(worldState.world);
+  worldState.world = new THREE.Group();
+  worldState.world.scale.setScalar(worldState.userSettings.worldScale ?? 1);
+  worldScene.add(worldState.world);
+  worldState.creatures = [];
+  worldState.flocks = [];
+  worldState.caterpillars = [];
+  worldState.butterflies = [];
+  worldState.bees = [];
+  worldState.flySwarms = [];
+  worldState.willowisps = [];
+  worldState.dirtPuffs = [];
+  worldState.dustKicks = [];
+  worldState.groundMarks = null;
+  worldState.flowerSpots = [];
+  worldState.obstacles = [];
+  worldState._dynPool = null;
+  worldState.perchSpots = [];
+  worldState.creatureColorBuckets = null;
+  worldState.particles = null;
+  worldState.waterMesh = null;
+  worldState.grass = null;
   // release any followed creature — the entity it pointed to no longer exists
-  _releaseFollow();
+  releaseFollow();
 
   // reset the flora + creature resource pools — previous-world
   // materials/geometries were just disposed via disposeGroup, so we can't
@@ -281,8 +310,8 @@ export async function generateWorld(seed) {
   resetCreaturePool();
   resetPBRTextureCache();
 
-  state.currentBiome = biome;
-  state.currentSeed = seed;
+  worldState.currentBiome = biome;
+  worldState.currentSeed = seed;
 
   // Switch background music to match the biome (streams on demand).
   switchMusic(biome);
@@ -291,47 +320,47 @@ export async function generateWorld(seed) {
   // see _bloomCompositeShader). It can only brighten the frame, so darkBiomes
   // can keep bloom on — and the obsidian shard / glow eye / ember halos are
   // exactly the visual feature those moody biomes benefit from.
-  if (state.postfx) state.postfx.setBloom(state.userSettings.bloom && biome.bloom !== false);
+  if (worldState.postfx) worldState.postfx.setBloom(worldState.userSettings.bloom && biome.bloom !== false);
   // depth-fog post pass tints distant pixels toward the same atmosphere color
   // as the in-scene FogExp2, just with a more painterly far-field falloff.
-  if (state.postfx && state.postfx.setDepthFogColor) {
-    state.postfx.setDepthFogColor(new THREE.Color(biome.fog));
+  if (worldState.postfx && worldState.postfx.setDepthFogColor) {
+    worldState.postfx.setDepthFogColor(new THREE.Color(biome.fog));
   }
 
   // atmosphere — Color/Fog instances are mutated by updateDayNight()
-  _scene.background = new THREE.Color(biome.sky);
-  _scene.fog = new THREE.FogExp2(new THREE.Color(biome.fog), biome.fogDensity);
+  worldScene.background = new THREE.Color(biome.sky);
+  worldScene.fog = new THREE.FogExp2(new THREE.Color(biome.fog), biome.fogDensity);
 
   // darkBiome biomes need extra lift: their sky/ground/cliff hexes are
   // near-black, so even strong lights still multiply against tiny material
   // colours. Boost hemi/sun/accent + nudge tone-mapping exposure to lift
   // the whole frame without changing the moody palette.
   const dark = !!biome.darkBiome;
-  if (state.renderer) state.renderer.toneMappingExposure = dark ? 2.6 : 1.05;
+  if (worldState.renderer) worldState.renderer.toneMappingExposure = dark ? 2.6 : 1.05;
 
   const hemi = new THREE.HemisphereLight(
     new THREE.Color(biome.sky),
     new THREE.Color(biome.ground[0]),
     dark ? 2.2 : 0.65
   );
-  state.world.add(hemi);
-  state.hemiLight = hemi;
+  worldState.world.add(hemi);
+  worldState.hemiLight = hemi;
 
   const sun = new THREE.DirectionalLight(new THREE.Color(biome.sun), (dark ? 2.0 : 1.25) * (biome.sunIntensity ?? 1));
   sun.position.set(18, 28, 12);
   sun.castShadow = true;
   sun.shadow.mapSize.set(2048, 2048);
-  sun.shadow.camera.left = -state.ISLAND_SIZE / 2;
-  sun.shadow.camera.right = state.ISLAND_SIZE / 2;
-  sun.shadow.camera.top = state.ISLAND_SIZE / 2;
-  sun.shadow.camera.bottom = -state.ISLAND_SIZE / 2;
+  sun.shadow.camera.left = -worldState.ISLAND_SIZE / 2;
+  sun.shadow.camera.right = worldState.ISLAND_SIZE / 2;
+  sun.shadow.camera.top = worldState.ISLAND_SIZE / 2;
+  sun.shadow.camera.bottom = -worldState.ISLAND_SIZE / 2;
   sun.shadow.camera.near = 0.5;
   sun.shadow.camera.far = 80;
   sun.shadow.bias = -0.0006;
   sun.shadow.normalBias = 0.04;
   sun.shadow.radius = 3.5;
-  state.world.add(sun);
-  state.sunLight = sun;
+  worldState.world.add(sun);
+  worldState.sunLight = sun;
 
   const accent = new THREE.PointLight(
     new THREE.Color(biome.accent),
@@ -340,38 +369,38 @@ export async function generateWorld(seed) {
     1.6
   );
   accent.position.set(0, 8, 0);
-  state.world.add(accent);
+  worldState.world.add(accent);
 
   // Sky backdrop — dome (gradient) + two-layer mountain silhouette + drifting
   // cloud sprites. Day/night re-tints them via updateSkyColors each frame.
   const skyDome = makeSkyDome(biome);
-  state.world.add(skyDome);
-  state.skyDome = skyDome;
+  worldState.world.add(skyDome);
+  worldState.skyDome = skyDome;
 
   const mountains = makeMountainBackdrop(biome);
-  state.world.add(mountains);
-  state.mountains = mountains;
-  state.mountainBasePos = mountains.position.clone();
+  worldState.world.add(mountains);
+  worldState.mountains = mountains;
+  worldState.mountainBasePos = mountains.position.clone();
 
-  state.clouds = makeCloudLayer(biome);
-  if (state.clouds) state.world.add(state.clouds);
+  worldState.clouds = makeCloudLayer(biome);
+  if (worldState.clouds) worldState.world.add(worldState.clouds);
 
   // Starfield + aurora — drawn always, faded by night-amount in updateDayNight.
-  state.starfield = makeStarfield();
-  state.world.add(state.starfield);
+  worldState.starfield = makeStarfield();
+  worldState.world.add(worldState.starfield);
 
-  state.aurora = makeAurora(biome);
-  if (state.aurora) state.world.add(state.aurora);
+  worldState.aurora = makeAurora(biome);
+  if (worldState.aurora) worldState.world.add(worldState.aurora);
 
-  state.cloudSwirl = makeCloudSwirl(biome);
-  if (state.cloudSwirl) state.world.add(state.cloudSwirl);
+  worldState.cloudSwirl = makeCloudSwirl(biome);
+  if (worldState.cloudSwirl) worldState.world.add(worldState.cloudSwirl);
 
   const edgeMist = makeIslandEdgeMist(biome);
-  if (edgeMist) state.world.add(edgeMist);
+  if (edgeMist) worldState.world.add(edgeMist);
 
   const nightP = biome.night ?? {};
   const duskP = biome.dusk ?? null;
-  state.dayNight = {
+  worldState.dayNight = {
     sky: new THREE.Color(biome.sky),
     skyForHemi: new THREE.Color(biome.sky),
     fog: new THREE.Color(biome.fog),
@@ -397,7 +426,7 @@ export async function generateWorld(seed) {
   // seeded terrain function for creature placement.
   const terrainAmp = biome.cloudlike ? 2.15 : 3.2;
   const baseHeightFn = makeHeightFn(noise2D, layout, terrainAmp);
-  state.heightFn = biome.water
+  worldState.heightFn = biome.water
     ? (x, z) => {
       const h = baseHeightFn(x, z);
       const waterY = -0.12;
@@ -408,24 +437,24 @@ export async function generateWorld(seed) {
       return h - smoothWet * (0.45 + depth * 0.28);
     }
     : baseHeightFn;
-  const terrain = makeTerrain(biome, state.heightFn);
-  state.world.add(terrain);
-  state.terrainMesh = terrain;
+  const terrain = makeTerrain(biome, worldState.heightFn, worldState);
+  worldState.world.add(terrain);
+  worldState.terrainMesh = terrain;
   terrain.material.flatShading = false;
   terrain.material.needsUpdate = true;
 
   // water plane (biomes that opt in)
   if (biome.water) {
-    state.waterMesh = makeWaterPlane(biome);
-    state.world.add(state.waterMesh);
+    worldState.waterMesh = makeWaterPlane(biome);
+    worldState.world.add(worldState.waterMesh);
     // Build the reflection only after the sky dome / starfield / aurora are
     // in place. Sky elements were added a few lines above this block, so they
     // exist already.
-    state.waterReflection = makeWaterReflection(biome);
+    worldState.waterReflection = makeWaterReflection(biome);
     // Hand the RT to the water material.
-    const u = state.waterMesh.material.userData.reflectionUniforms;
+    const u = worldState.waterMesh.material.userData.reflectionUniforms;
     if (u) {
-      u.uReflTex.value = state.waterReflection.rt.texture;
+      u.uReflTex.value = worldState.waterReflection.rt.texture;
       u.uReflMix.value = 0.3; // 30% blend
     }
   }
@@ -443,7 +472,7 @@ export async function generateWorld(seed) {
   // Density compensation: biome counts were tuned against a 38-unit base; the
   // current ISLAND_SIZE may be larger. Scale linearly with width so a bigger
   // world still feels populated rather than empty.
-  const densityScale = state.ISLAND_SIZE / DENSITY_BASE;
+  const densityScale = worldState.ISLAND_SIZE / DENSITY_BASE;
   const floraTarget = LOWFX
     ? Math.max(8, Math.round(biome.floraCount * densityScale * LOWFX_DENSITY))
     : Math.round(biome.floraCount * densityScale);
@@ -507,8 +536,35 @@ export async function generateWorld(seed) {
   const nestHosts = [];
   // Track fairy-ring flatten zones so heightFn can be patched afterward.
   const fairyFlat = []; // { cx, cz, r, flatY }
+
+  for (let tries = 0; tries < 40 && !worldState.portal; tries++) {
+    const p = pickWorldGroundPoint(0.54);
+    const y = worldState.heightFn(p.x, p.z);
+    if (y < -0.18 || blocksFloraPlacement(p.x, p.z, 2.2)) continue;
+    const biomeIndex = BIOMES.findIndex((b) => b.id === biome.id);
+    const portalTargetBiome = context.portalTargetBiomeId
+      ? BIOMES.find((b) => b.id === context.portalTargetBiomeId)
+      : null;
+    const targetBiome = portalTargetBiome ?? BIOMES[(biomeIndex + 1 + BIOMES.length) % BIOMES.length];
+    const heading = Math.atan2(-p.x, -p.z);
+    const portal = createBiomePortal({
+      sourceBiome: biome,
+      targetBiome,
+      x: p.x,
+      y,
+      z: p.z,
+      heading,
+      seed: seed + 0x51f15e,
+      previewSettings: worldState.userSettings,
+    });
+    worldState.portal = portal;
+    worldState.world.add(portal.group);
+    floraPlacementBlocks.push(portal.blocker);
+    worldState.obstacles.push(portal.obstacle);
+  }
+
   function flattenTerrainCircle(cx, cz, r, flatY) {
-    const mesh = state.terrainMesh;
+    const mesh = worldState.terrainMesh;
     if (!mesh) return;
     const pos = mesh.geometry.attributes.position;
     const r2 = r * r;
@@ -528,7 +584,7 @@ export async function generateWorld(seed) {
   }
   function blocksPlacement(x, z, r, kinds = PLACEMENT_BLOCK_KINDS) {
     const kindSet = kinds instanceof Set ? kinds : new Set(kinds);
-    for (const obstacle of state.obstacles) {
+    for (const obstacle of worldState.obstacles) {
       if (!kindSet.has(obstacle.kind)) continue;
       const minD = obstacle.r + r;
       const dx = x - obstacle.x;
@@ -566,7 +622,7 @@ export async function generateWorld(seed) {
       [diagonal, diagonal], [-diagonal, diagonal],
       [diagonal, -diagonal], [-diagonal, -diagonal],
     ];
-    return samples.map(([dx, dz]) => state.heightFn(x + dx, z + dz));
+    return samples.map(([dx, dz]) => worldState.heightFn(x + dx, z + dz));
   }
   function getFlyerNestGroundPose(x, z, r, scale) {
     const heights = sampleTerrainFootprint(x, z, r);
@@ -609,7 +665,7 @@ export async function generateWorld(seed) {
     } else {
       if (biomeHasNestHosts) return false;
       for (let tries = 0; tries < 80; tries++) {
-        const candidate = pickGroundPoint(0.88);
+        const candidate = pickWorldGroundPoint(0.88);
         const candidatePose = getFlyerNestGroundPose(candidate.x, candidate.z, fp, s);
         if (!candidatePose) continue;
         if (biome.water && candidatePose.groundY < WATER_SURFACE_Y + 0.04) continue;
@@ -630,7 +686,7 @@ export async function generateWorld(seed) {
     f.position.set(p.x, y, p.z);
     f.rotation.y = Math.random() * Math.PI * 2;
     f.scale.setScalar(s);
-    state.world.add(f);
+    worldState.world.add(f);
 
     const grassShortenRadius = Math.min(
       GRASS_SHORTEN_MAX_RADIUS,
@@ -646,7 +702,7 @@ export async function generateWorld(seed) {
     floraPlacementBlocks.push(floraBlock);
     const topLocal = f.userData.obstacleTopY ?? OBSTACLE_TOP.flyer_nest;
     const topY = y + topLocal * s;
-    state.obstacles.push({
+    worldState.obstacles.push({
       kind,
       x: p.x,
       z: p.z,
@@ -654,7 +710,7 @@ export async function generateWorld(seed) {
       top: topY,
     });
     const capLocal = f.userData.capTopY ?? f.userData.obstacleTopY ?? OBSTACLE_TOP.flyer_nest;
-    state.perchSpots.push({
+    worldState.perchSpots.push({
       x: p.x,
       z: p.z,
       y: y + capLocal * s,
@@ -679,7 +735,7 @@ export async function generateWorld(seed) {
           const lz = (child.position.z + pos.getZ(i)) * scale;
           const wx = group.position.x + c * lx + s * lz;
           const wz = group.position.z - s * lx + c * lz;
-          pos.setY(i, (state.heightFn(wx, wz) - group.position.y) / scale + lift - child.position.y);
+          pos.setY(i, (worldState.heightFn(wx, wz) - group.position.y) / scale + lift - child.position.y);
         }
         pos.needsUpdate = true;
         child.geometry.computeVertexNormals();
@@ -689,7 +745,7 @@ export async function generateWorld(seed) {
       const lz = child.position.z * scale;
       const wx = group.position.x + c * lx + s * lz;
       const wz = group.position.z - s * lx + c * lz;
-      child.position.y = (state.heightFn(wx, wz) - group.position.y) / scale + lift;
+      child.position.y = (worldState.heightFn(wx, wz) - group.position.y) / scale + lift;
     }
   }
   function alignGroupUpToTerrainNormal(group, normal, yaw) {
@@ -730,8 +786,8 @@ export async function generateWorld(seed) {
   if (biome.groveDetails?.fairyRing) {
     let choice = null;
     for (let tries = 0; tries < 36; tries++) {
-      const p = pickGroundPoint(0.42);
-      const y0 = state.heightFn(p.x, p.z);
+      const p = pickWorldGroundPoint(0.42);
+      const y0 = worldState.heightFn(p.x, p.z);
       const s = 1.05 + Math.random() * 0.22;
       const fp = FLORA_FOOTPRINT.fairyring * s;
       if (blocksFloraPlacement(p.x, p.z, fp * 1.1)) continue;
@@ -744,10 +800,10 @@ export async function generateWorld(seed) {
       landmark.userData.inspect = { category: "flora", variant: "fairyring" };
       const y = Math.min(
         y0,
-        state.heightFn(p.x + fp, p.z),
-        state.heightFn(p.x - fp, p.z),
-        state.heightFn(p.x, p.z + fp),
-        state.heightFn(p.x, p.z - fp)
+        worldState.heightFn(p.x + fp, p.z),
+        worldState.heightFn(p.x - fp, p.z),
+        worldState.heightFn(p.x, p.z + fp),
+        worldState.heightFn(p.x, p.z - fp)
       ) - FLORA_BURY;
       landmark.position.set(p.x, y, p.z);
       landmark.rotation.y = Math.random() * Math.PI * 2;
@@ -755,9 +811,9 @@ export async function generateWorld(seed) {
       // Flatten terrain vertices inside the ring so mushrooms sit level.
       flattenTerrainCircle(p.x, p.z, fp * 1.66, y);
       conformSurfaceChildrenToTerrain(landmark);
-      state.world.add(landmark);
+      worldState.world.add(landmark);
       floraPlacementBlocks.push({ kind: "fairyring", x: p.x, z: p.z, r: fp * 1.1 });
-      state.obstacles.push({
+      worldState.obstacles.push({
         kind: "fairyring",
         x: p.x,
         z: p.z,
@@ -768,8 +824,8 @@ export async function generateWorld(seed) {
       const wispCount = landmark.userData.willowispCount ?? 0;
       for (let wi = 0; wi < wispCount; wi++) {
         const wisp = makeWillOWisp(p.x, y, p.z, fp * 2);
-        state.world.add(wisp.group);
-        state.willowisps.push(wisp);
+        worldState.world.add(wisp.group);
+        worldState.willowisps.push(wisp);
       }
       placed++;
     }
@@ -780,8 +836,8 @@ export async function generateWorld(seed) {
   // Patch heightFn to reflect fairy-ring flattening so all subsequent
   // flora placement and conformSurfaceChildren see the real mesh heights.
   if (fairyFlat.length) {
-    const rawHeightFn = state.heightFn;
-    state.heightFn = (x, z) => {
+    const rawHeightFn = worldState.heightFn;
+    worldState.heightFn = (x, z) => {
       const h = rawHeightFn(x, z);
       for (const { cx, cz, r, flatY } of fairyFlat) {
         const dx = x - cx, dz = z - cz;
@@ -812,8 +868,8 @@ export async function generateWorld(seed) {
       ? WATER_FLORA_DEPTH_RANGE[kind]
       : null;
     const normalFloraRadius = biome.id === "golden" && (kind === "tree" || kind === "leafballtree") ? 0.98 : 0.88;
-    let p = pickGroundPoint(isReefCoral || waterFloraDepthRange ? 1.0 : normalFloraRadius);
-    let y0 = state.heightFn(p.x, p.z);
+    let p = pickWorldGroundPoint(isReefCoral || waterFloraDepthRange ? 1.0 : normalFloraRadius);
+    let y0 = worldState.heightFn(p.x, p.z);
     if (isReefCoral) {
       if (y0 > WATER_SURFACE_Y - 0.05) continue; // not submerged enough
       if (y0 < -1.8) continue; // void / extreme depth
@@ -863,10 +919,10 @@ export async function generateWorld(seed) {
     if (CANOPY_SPACING_KINDS.has(kind) && blocksFloraPlacement(p.x, p.z, fp * CANOPY_SPACING_PAD, CANOPY_SPACING_KINDS)) continue;
     const f = FLORA_BUILDERS[kind](biome);
     f.userData.inspect = { category: "flora", variant: kind };
-    const hXp = state.heightFn(p.x + fp, p.z);
-    const hXm = state.heightFn(p.x - fp, p.z);
-    const hZp = state.heightFn(p.x, p.z + fp);
-    const hZm = state.heightFn(p.x, p.z - fp);
+    const hXp = worldState.heightFn(p.x + fp, p.z);
+    const hXm = worldState.heightFn(p.x - fp, p.z);
+    const hZp = worldState.heightFn(p.x, p.z + fp);
+    const hZm = worldState.heightFn(p.x, p.z - fp);
     let y = nestGroundPose ? nestGroundPose.y : Math.min(y0, hXp, hXm, hZp, hZm) - FLORA_BURY;
     if (kind === "flyer_nest" && nestHost) y = nestHost.y - 0.08 * s;
     if (isReefCoral) {
@@ -897,13 +953,13 @@ export async function generateWorld(seed) {
     if (kind === "bigmushroom" && biome.id === "grove" && !groveGiantPlaced) {
       // Only place in the inner 1/3 of the island so the giant cap
       // doesn't overhang the edge.
-      const centers = state.currentLayout.centers;
+      const centers = worldState.currentLayout.centers;
       let bDx = p.x - centers[0].cx, bDz = p.z - centers[0].cz;
       for (let ci = 1; ci < centers.length; ci++) {
         const ddx = p.x - centers[ci].cx, ddz = p.z - centers[ci].cz;
         if (ddx * ddx + ddz * ddz < bDx * bDx + bDz * bDz) { bDx = ddx; bDz = ddz; }
       }
-      if (Math.sqrt(bDx * bDx + bDz * bDz) > state.ISLAND_RADIUS / 3) continue;
+      if (Math.sqrt(bDx * bDx + bDz * bDz) > worldState.ISLAND_RADIUS / 3) continue;
       s *= 4;
       f.scale.setScalar(s);
       // Disable wind on the giant mushroom — at 4× scale the sway
@@ -928,7 +984,7 @@ export async function generateWorld(seed) {
     if (kind === "leafballtree" && biome.id === "verdant" && !verdantGiantPlaced) {
       // Only place in the inner 2/3 of the island so the giant canopy doesn't
       // overhang the edge.
-      const centers = state.currentLayout.centers;
+      const centers = worldState.currentLayout.centers;
       let bestDx = p.x - centers[0].cx, bestDz = p.z - centers[0].cz;
       for (let ci = 1; ci < centers.length; ci++) {
         const ddx = p.x - centers[ci].cx, ddz = p.z - centers[ci].cz;
@@ -937,7 +993,7 @@ export async function generateWorld(seed) {
         }
       }
       const distFromCenter = Math.sqrt(bestDx * bestDx + bestDz * bestDz);
-      const maxR = state.ISLAND_RADIUS * (2 / 3);
+      const maxR = worldState.ISLAND_RADIUS * (2 / 3);
       if (distFromCenter > maxR) {
         // Skip this placement — keep verdantGiantPlaced false so we retry
         continue;
@@ -963,8 +1019,8 @@ export async function generateWorld(seed) {
         canopyCenterY + canopyR,
         p.z + Math.sin(startAngle) * (canopyR + 0.5)
       );
-      state.world.add(wisp.group);
-      state.willowisps.push(wisp);
+      worldState.world.add(wisp.group);
+      worldState.willowisps.push(wisp);
     }
     if (kind === "lavafissure" || kind === "mushroom" || kind === "bigmushroom") conformSurfaceChildrenToTerrain(f);
     if (kind === "crystal") {
@@ -979,10 +1035,10 @@ export async function generateWorld(seed) {
       f.add(glow);
       fissureLightCount++;
     }
-    state.world.add(f);
+    worldState.world.add(f);
     // Berry bushes and dandy lions are nectar targets for bees alongside flowers.
     if (kind === "berrybush" || kind === "dandylion") {
-      state.flowerSpots.push({ x: p.x, y: y + (f.userData.flowerSpotY ?? 0.3) * s, z: p.z });
+      worldState.flowerSpots.push({ x: p.x, y: y + (f.userData.flowerSpotY ?? 0.3) * s, z: p.z });
     }
     const floraBlock = {
       kind,
@@ -1019,17 +1075,17 @@ export async function generateWorld(seed) {
           const lz = pt.z * s;
           const wx = p.x + c * lx + sy * lz;
           const wz = p.z - sy * lx + c * lz;
-          state.obstacles.push({
+          worldState.obstacles.push({
             kind,
             x: wx,
             z: wz,
             r: (pt.r ?? 0.24) * s * OBSTACLE_PAD,
-            top: state.heightFn(wx, wz) + topLocal,
+            top: worldState.heightFn(wx, wz) + topLocal,
           });
         }
       } else {
         const topY = kind === "flyer_nest" && nestHost ? y + topLocal : y0 + topLocal;
-        state.obstacles.push({
+        worldState.obstacles.push({
           kind,
           x: p.x,
           z: p.z,
@@ -1044,7 +1100,7 @@ export async function generateWorld(seed) {
       // OBSTACLE_TOP estimate, so fliers actually touch the cap.
       if (kind === "mushroom" || kind === "bigmushroom" || kind === "leafballtree" || kind === "flyer_nest") {
         const capLocal = f.userData.capTopY ?? f.userData.obstacleTopY ?? OBSTACLE_TOP[kind] ?? OBSTACLE_TOP_DEFAULT;
-        state.perchSpots.push({
+        worldState.perchSpots.push({
           x: p.x,
           z: p.z,
           y: y + capLocal * s,
@@ -1064,8 +1120,8 @@ export async function generateWorld(seed) {
     // skull rather than hovering somewhere above it.
     if (kind === "skull" && Math.random() < 0.55) {
       const swarm = makeFlySwarm(p.x, y + 0.5 * s, p.z);
-      state.world.add(swarm);
-      state.flySwarms.push(swarm);
+      worldState.world.add(swarm);
+      worldState.flySwarms.push(swarm);
     }
     if (isReefCoral) coralPlaced++;
     placed++;
@@ -1085,18 +1141,18 @@ export async function generateWorld(seed) {
       coralAttempts++;
       if ((coralAttempts & 7) === 0) await yieldIfNeeded();
       const kind = reefKinds[Math.floor(Math.random() * reefKinds.length)];
-      const p = pickGroundPoint(1.0);
-      const y0 = state.heightFn(p.x, p.z);
+      const p = pickWorldGroundPoint(1.0);
+      const y0 = worldState.heightFn(p.x, p.z);
       if (y0 > WATER_SURFACE_Y - 0.05) continue;
       if (y0 < -3.0) continue; // void / past the underwater shelf
       let s = 0.7 + Math.random() * 0.7;
       const fp = (FLORA_FOOTPRINT[kind] ?? FLORA_FOOTPRINT_DEFAULT) * s;
       const y = Math.min(
         y0,
-        state.heightFn(p.x + fp, p.z),
-        state.heightFn(p.x - fp, p.z),
-        state.heightFn(p.x, p.z + fp),
-        state.heightFn(p.x, p.z - fp)
+        worldState.heightFn(p.x + fp, p.z),
+        worldState.heightFn(p.x - fp, p.z),
+        worldState.heightFn(p.x, p.z + fp),
+        worldState.heightFn(p.x, p.z - fp)
       ) - FLORA_BURY;
       const maxScale = (WATER_SURFACE_Y - CORAL_SUBMERGE_MARGIN - y) / REEF_CORAL_TOP_LOCAL[kind];
       if (maxScale < CORAL_MIN_SCALE) continue;
@@ -1106,7 +1162,7 @@ export async function generateWorld(seed) {
       f.position.set(p.x, y, p.z);
       f.rotation.y = Math.random() * Math.PI * 2;
       f.scale.setScalar(s);
-      state.world.add(f);
+      worldState.world.add(f);
       coralPlaced++;
       await yieldIfNeeded();
     }
@@ -1122,28 +1178,28 @@ export async function generateWorld(seed) {
   const grassShorteners = floraPlacementBlocks
     .filter(b => b.kind !== "fairyring" && b.grassRadius > 0)
     .map(b => ({ x: b.x, z: b.z, r: b.grassRadius, shortenTo: GRASS_SHORTEN_MIN_HEIGHT }));
-  const grass = makeGrassField(biome, state.heightFn, coverExclusions, grassShorteners);
-  if (grass) state.world.add(grass);
-  if (state._reapplyGrassSettings) state._reapplyGrassSettings();
+  const grass = makeGrassField(biome, worldState.heightFn, coverExclusions, grassShorteners);
+  if (grass) worldState.world.add(grass);
+  if (worldState._reapplyGrassSettings) worldState._reapplyGrassSettings();
   await yieldIfNeeded(true);
-  for (const m of makeWildflowerField(biome, state.heightFn, coverExclusions)) {
-    state.world.add(m);
-    if (m.userData.positions) state.flowerSpots.push(...m.userData.positions);
+  for (const m of makeWildflowerField(biome, worldState.heightFn, coverExclusions)) {
+    worldState.world.add(m);
+    if (m.userData.positions) worldState.flowerSpots.push(...m.userData.positions);
   }
   await yieldIfNeeded(true);
-  const groveDetails = makeVerdantGroveDetails(biome, state.heightFn, coverExclusions);
-  if (groveDetails) state.world.add(groveDetails);
+  const groveDetails = makeVerdantGroveDetails(biome, worldState.heightFn, coverExclusions);
+  if (groveDetails) worldState.world.add(groveDetails);
   await yieldIfNeeded();
-  const cloudPuffs = makeCloudPuffField(biome, state.heightFn, coverExclusions);
-  if (cloudPuffs) state.world.add(cloudPuffs);
+  const cloudPuffs = makeCloudPuffField(biome, worldState.heightFn, coverExclusions);
+  if (cloudPuffs) worldState.world.add(cloudPuffs);
   await yieldIfNeeded();
-  const beachcomb = makeBeachcombField(biome, state.heightFn, coverExclusions);
-  if (beachcomb) state.world.add(beachcomb);
+  const beachcomb = makeBeachcombField(biome, worldState.heightFn, coverExclusions);
+  if (beachcomb) worldState.world.add(beachcomb);
   await yieldIfNeeded();
-  const pebbles = makePebbleField(biome, state.heightFn, coverExclusions);
-  if (pebbles) state.world.add(pebbles);
-  state.groundMarks = makeGroundMarks(biome);
-  if (state.groundMarks) state.world.add(state.groundMarks);
+  const pebbles = makePebbleField(biome, worldState.heightFn, coverExclusions);
+  if (pebbles) worldState.world.add(pebbles);
+  worldState.groundMarks = makeGroundMarks(biome);
+  if (worldState.groundMarks) worldState.world.add(worldState.groundMarks);
 
   // creatures — fish biomes don't get sleepers/burrowers (they float).
   // We treat ncreatures as a budget; family parents consume +1 per kid,
@@ -1165,8 +1221,8 @@ export async function generateWorld(seed) {
     let y = 0;
     let found = false;
     for (let tries = 0; tries < 120; tries++) {
-      p = pickGroundPoint(1.0);
-      y = state.heightFn(p.x, p.z);
+      p = pickWorldGroundPoint(1.0);
+      y = worldState.heightFn(p.x, p.z);
       if (y <= fishMaxGroundY(c.scale) && y > fishMinGroundY) {
         found = true;
         break;
@@ -1178,8 +1234,8 @@ export async function generateWorld(seed) {
     const bottomY = y + halfBodyY + 0.04;
     const swimY = bottomY + (topY - bottomY) * (0.4 + Math.random() * 0.25);
     c.group.position.set(p.x, swimY, p.z);
-    state.world.add(c.group);
-    state.creatures.push(c);
+    worldState.world.add(c.group);
+    worldState.creatures.push(c);
     return true;
   }
   function placeOnGround(c) {
@@ -1192,8 +1248,8 @@ export async function generateWorld(seed) {
     let y = -10;
     let found = false;
     for (let tries = 0; tries < 40; tries++) {
-      p = pickGroundPoint(0.65);
-      y = state.heightFn(p.x, p.z);
+      p = pickWorldGroundPoint(0.65);
+      y = worldState.heightFn(p.x, p.z);
       if (y >= groundMinY && !blocksPlacement(p.x, p.z, 0.35, GROUND_CREATURE_BLOCK_KINDS)) {
         found = true;
         break;
@@ -1204,8 +1260,8 @@ export async function generateWorld(seed) {
       return false;
     }
     c.group.position.set(p.x, y + 0.4, p.z);
-    state.world.add(c.group);
-    state.creatures.push(c);
+    worldState.world.add(c.group);
+    worldState.creatures.push(c);
     return true;
   }
   let creatureAttempts = 0;
@@ -1235,9 +1291,9 @@ export async function generateWorld(seed) {
           const nx = pp.x + Math.cos(ang) * off;
           const nz = pp.z + Math.sin(ang) * off;
           if (blocksPlacement(nx, nz, 0.3, GROUND_CREATURE_BLOCK_KINDS)) continue;
-          kid.group.position.set(nx, state.heightFn(nx, nz) + 0.4, nz);
-          state.world.add(kid.group);
-          state.creatures.push(kid);
+          kid.group.position.set(nx, worldState.heightFn(nx, nz) + 0.4, nz);
+          worldState.world.add(kid.group);
+          worldState.creatures.push(kid);
           budget--;
           kidPlaced = true;
           break;
@@ -1277,7 +1333,7 @@ export async function generateWorld(seed) {
     }
   }
 
-  const flyerCount = state.creatures.filter((c) => c.flies && !c.isFish && !c.isBee).length;
+  const flyerCount = worldState.creatures.filter((c) => c.flies && !c.isFish && !c.isBee).length;
   const flyerNestTarget = biome.noFlyerNests ? 0 : flyerCount < 4 ? flyerCount : Math.ceil(flyerCount / 2);
   let flyerNestPlaced = 0;
   let flyerNestAttempts = 0;
@@ -1296,8 +1352,8 @@ export async function generateWorld(seed) {
       const crawler = make();
       const head = crawler.segments?.[0];
       if (head && !blocksPlacement(head.position.x, head.position.z, 0.28 * crawler.scale, CRAWLER_BLOCK_KINDS)) {
-        state.world.add(crawler.group);
-        state.caterpillars.push(crawler);
+        worldState.world.add(crawler.group);
+        worldState.caterpillars.push(crawler);
         return true;
       }
       disposeGroup(crawler.group);
@@ -1331,32 +1387,32 @@ export async function generateWorld(seed) {
   const palette = WILDFLOWER_PALETTES[biome.id] ?? ["#ffffff"];
   for (let i = 0; i < nbutterflies; i++) {
     const bf = makeButterfly(palette, biome);
-    if (state.flowerSpots.length) {
-      const f = state.flowerSpots[Math.floor(Math.random() * state.flowerSpots.length)];
+    if (worldState.flowerSpots.length) {
+      const f = worldState.flowerSpots[Math.floor(Math.random() * worldState.flowerSpots.length)];
       bf.group.position.set(
         f.x + (Math.random() - 0.5) * 1.5,
         f.y + 0.6 + Math.random() * 0.8,
         f.z + (Math.random() - 0.5) * 1.5
       );
     } else {
-      const p = pickGroundPoint(0.6);
+      const p = pickWorldGroundPoint(0.6);
       bf.group.position.set(p.x, 2, p.z);
     }
-    state.world.add(bf.group);
-    state.butterflies.push(bf);
+    worldState.world.add(bf.group);
+    worldState.butterflies.push(bf);
     if ((i & 3) === 3) await yieldIfNeeded();
   }
 
   // bee swarms — 1-2 swarms of 4-8 bees, only if there are flowers to dance
   // around. Each swarm shares a target flower; bees flock to it together.
-  if (state.flowerSpots.length > 0) {
+  if (worldState.flowerSpots.length > 0) {
     const swarmCount = 1 + (Math.random() < 0.55 ? 1 : 0);
     for (let s = 0; s < swarmCount; s++) {
       const swarm = makeSwarm();
       const beesInSwarm = 4 + Math.floor(Math.random() * 5);
       // seed the first target so all bees converge from frame 1
-      const seed = state.flowerSpots[
-        Math.floor(Math.random() * state.flowerSpots.length)
+      const seed = worldState.flowerSpots[
+        Math.floor(Math.random() * worldState.flowerSpots.length)
       ];
       swarm.target.set(seed.x, seed.y + 0.35, seed.z);
       swarm.hasTarget = true;
@@ -1369,8 +1425,8 @@ export async function generateWorld(seed) {
           seed.y + 0.4 + Math.random() * 0.6,
           seed.z + (Math.random() - 0.5) * 1.0
         );
-        state.world.add(bee.group);
-        state.bees.push(bee);
+        worldState.world.add(bee.group);
+        worldState.bees.push(bee);
       }
       await yieldIfNeeded();
     }
@@ -1383,24 +1439,24 @@ export async function generateWorld(seed) {
   let totalBirds = 0;
   for (let f = 0; f < numFlocks; f++) {
     const flock = makeFlock(biome);
-    for (const bird of flock.birds) state.world.add(bird.group);
+    for (const bird of flock.birds) worldState.world.add(bird.group);
     totalBirds += flock.birds.length;
-    state.flocks.push(flock);
+    worldState.flocks.push(flock);
   }
 
   // particles
-  state.particles = makeParticles(biome);
-  state.world.add(state.particles);
+  worldState.particles = makeParticles(biome);
+  worldState.world.add(worldState.particles);
 
   // Soft circular ground shadows under creatures + caterpillars.
-  state.shadowDisks = makeShadowDisks(biome);
-  state.world.add(state.shadowDisks);
+  worldState.shadowDisks = makeShadowDisks(biome);
+  worldState.world.add(worldState.shadowDisks);
 
   // HUD
   const padStat = (n) => String(n).padStart(2, "0");
-  const groundCreatureCount = state.creatures.filter((c) => !c.flies && !c.isFish).length + state.caterpillars.length;
-  const flyCreatureCount = state.creatures.filter((c) => c.flies && !c.isFish).length;
-  const swimCreatureCount = state.creatures.filter((c) => c.isFish).length;
+  const groundCreatureCount = worldState.creatures.filter((c) => !c.flies && !c.isFish).length + worldState.caterpillars.length;
+  const flyCreatureCount = worldState.creatures.filter((c) => c.flies && !c.isFish).length;
+  const swimCreatureCount = worldState.creatures.filter((c) => c.isFish).length;
   document.getElementById("biome-name").textContent = biome.name;
   const islandNameEl = document.getElementById("island-name");
   if (islandNameEl) islandNameEl.textContent = generateIslandName(seed);
@@ -1431,36 +1487,36 @@ export async function generateWorld(seed) {
   if (hBi) hBi.textContent = padStat(totalBirds);
 
   // Notify mobile UI that world is ready (triggers header auto-hide)
-  window.dispatchEvent(new CustomEvent("world-ready"));
+  context.dispatchWorldReady();
 
   // restore the user's auto-rotate preference (regen shouldn't override it)
-  if (_controls) _controls.autoRotate = state.userSettings.autoRotate;
-  writeSeedToUrl(seed);
+  if (worldControls) worldControls.autoRotate = worldState.userSettings.autoRotate;
+  context.writeSeed(seed);
 
   // Build the spatial grid for static obstacle queries so avoidObstacles()
   // can use O(nearby) lookups instead of scanning the full list.
-  buildObstacleGrid(state.obstacles);
+  buildObstacleGrid(worldState.obstacles);
 
   // Build color buckets for O(1) herding lookups — group creatures by
   // their bodyColor hex string so herdInfluence only scans same-colored
   // peers instead of the full creature list.
   const buckets = {};
-  for (const c of state.creatures) {
+  for (const c of worldState.creatures) {
     const key = c.colorBucket;
     if (!buckets[key]) buckets[key] = [];
     buckets[key].push(c);
   }
-  state.creatureColorBuckets = buckets;
+  worldState.creatureColorBuckets = buckets;
 
   // kick off the reveal animation — updateDayNight reads this timestamp
-  state.revealStart = performance.now();
+  worldState.revealStart = performance.now();
   } catch (error) {
     if (error !== STALE_GENERATION) throw error;
   } finally {
     restoreRandom();
     if (runId === _generationRunId) {
-      state.isGeneratingWorld = false;
-      setWorldLoading(false);
+      worldState.isGeneratingWorld = false;
+      context.setLoading(false);
     }
   }
 }

@@ -28,9 +28,9 @@ assert(
 );
 
 assert(
-  worldSource.includes('export async function generateWorld(seed)')
-    && worldSource.includes('setWorldLoading(true)')
-    && worldSource.includes('setWorldLoading(false)')
+  worldSource.includes('export async function generateWorld(seed, context = createWorldBuildContext())')
+    && worldSource.includes('context.setLoading(true)')
+    && worldSource.includes('context.setLoading(false)')
     && worldSource.includes('await nextGenerationFrame()')
     && worldSource.includes('async function yieldIfNeeded')
     && worldSource.includes('restoreRandom();\n    await nextGenerationFrame();')
@@ -41,7 +41,7 @@ assert(
 
 assert(
   mainSource.includes('state.isGeneratingWorld || isSelectingCreature() || isManualPaused()')
-    && mainSource.includes('void generateWorld(initialSeed).catch'),
+    && mainSource.includes('void generateWorld(initialSeed).then'),
   'The animation loop should pause simulation during generation and boot should not block on generation.'
 );
 
