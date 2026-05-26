@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 1.3.3 - 2026-05-26
 
 ### Added
 - Added first-visit help that opens the full help modal once per browser.
@@ -24,6 +24,7 @@
 ### Verified
 - UI/music changes were committed in `959e521` after `make checkall`, focused UI/music regression tests, rendered browser checks for the help modal, music toggle, and title fade, `git diff --check`, and `graphify update .`.
 - Fly camera changes were verified with focused fly-mode and tilt-shift static tests, `make checkall`, `graphify update .`, and a Playwright smoke test for `V`, `W`, and `Esc`.
+- Release version bump and documentation updates were verified with `make checkall`.
 
 ## 1.3.2 - 2026-05-25
 

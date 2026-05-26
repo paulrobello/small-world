@@ -29,9 +29,9 @@ A fairy ring in the verdant grove:
 - **Procedural fauna** — big-eyed creatures that wander, sleep, burrow, and travel in families; caterpillars, butterflies, bees, will-o'-wisps, and flocks of birds. Fuzzy biomes (mossy ruins, cloud island, frozen vale, mushroom grove) give walkers and caterpillars a shell-fur shader for a soft hairy silhouette.
 - **Day/night cycle** — 120-second cycle with per-biome dusk and night palettes. Creatures respond to darkness: walkers curl up and sleep, fliers descend and grow drowsy, each personality (shy, bold, sleepy, bouncy) has a different sleep threshold.
 - **Visual polish** — selective bloom on emissive elements (glow flowers, lanterns, sun), optional tilt-shift miniature blur, soft circular shadows under every creature, sky reflections on water biomes, parallax mountain backdrop, GPU-particle shader with per-particle life/size, dust kicks under footsteps.
-- **Photo mode** — freeze the sim and save a PNG; first-person stroll mode lets you walk among the creatures.
+- **Camera modes** — orbit the island, switch to fly camera with `V` for free movement, stroll in first person among the creatures, or freeze the sim in photo mode and save a PNG.
 - **Inspect mode** (`?inspect=1`) — a neutral studio backdrop for examining a single creature or flora variant. Cycle biome/variant with keyboard, pause and frame-step animation, copy the URL to share an exact recreation.
-- **Interactive UI** — follow-a-creature camera, bookmarks, biome filter, shareable seed links, wind and grass density controls, FX toggles, auto-regenerate timer, and per-biome music track selection.
+- **Interactive UI** — follow-a-creature camera, bookmarks, biome filter, shareable seed links, fly camera controls, wind and grass density controls, FX toggles, auto-regenerate timer, and per-biome music track selection.
 - **Mobile-friendly** — touch gestures, low-FX mode (`?lowfx=1`) on lower-end devices that drops fur, post-FX, and particle counts.
 
 ## Running it locally
