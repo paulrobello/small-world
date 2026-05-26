@@ -2,8 +2,8 @@
  * Ambient background music system.
  *
  * Streams one MP3 at a time via a single <audio> element.
- * Biome name → filename mapping: PascalCase the biome's `name`, look for
- *   `/music/<Name>.mp3`.  Falls back to `Default.mp3`.
+ * Biome name → filename mapping: PascalCase the biome's `name`, backed by the
+ * static track registry below. Falls back to `Default.mp3`.
  * Volume is capped low (15 %) and scaled by the persisted musicVolume setting.
  */
 
@@ -11,11 +11,38 @@ import { state } from "./state.js";
 
 const MAX_VOLUME = 0.15;
 const FADE_MS = 800;
+const MUSIC_BASE_URL = "https://static.pardev.net/small-world/music";
 
-// Static map: PascalCase name → filename.  Add entries as new tracks land.
-const TRACKS = {
+export const AVAILABLE_MUSIC_TRACKS = [
+  "AshenWastes.mp3",
+  "CloudIsland.mp3",
+  "CoralAtoll.mp3",
+  "CrimsonDunes.mp3",
+  "Default.mp3",
+  "FrozenVale.mp3",
+  "GoldenSteppe.mp3",
+  "LavenderMarsh.mp3",
+  "MossyRuins.mp3",
+  "MushroomGrove.mp3",
+  "TwilightMeadow.mp3",
+  "VerdantGrove.mp3",
+  "VolcanicGlass.mp3",
+];
+
+// Static map: PascalCase biome name → filename.
+export const BIOME_TRACKS = {
   AshenWastes: "AshenWastes.mp3",
+  CloudIsland: "CloudIsland.mp3",
+  CoralAtoll: "CoralAtoll.mp3",
   CrimsonDunes: "CrimsonDunes.mp3",
+  FrozenVale: "FrozenVale.mp3",
+  GoldenSteppe: "GoldenSteppe.mp3",
+  LavenderMarsh: "LavenderMarsh.mp3",
+  MossyRuins: "MossyRuins.mp3",
+  MushroomGrove: "MushroomGrove.mp3",
+  TwilightMeadow: "TwilightMeadow.mp3",
+  VerdantGrove: "VerdantGrove.mp3",
+  VolcanicGlass: "VolcanicGlass.mp3",
 };
 
 const DEFAULT_TRACK = "Default.mp3";
@@ -36,9 +63,25 @@ function nameToKey(name) {
     .join("");
 }
 
-function trackForBiome(biome) {
+export function defaultTrackForBiome(biome) {
   const key = nameToKey(biome.name);
-  return TRACKS[key] ?? DEFAULT_TRACK;
+  return BIOME_TRACKS[key] ?? DEFAULT_TRACK;
+}
+
+export function selectedTrackForBiome(biome) {
+  const override = state.userSettings.musicTrackOverrides?.[biome.id];
+  return AVAILABLE_MUSIC_TRACKS.includes(override) ? override : defaultTrackForBiome(biome);
+}
+
+export function setMusicTrackOverride(biomeId, track) {
+  if (!biomeId) return;
+  const overrides = { ...(state.userSettings.musicTrackOverrides || {}) };
+  if (AVAILABLE_MUSIC_TRACKS.includes(track)) {
+    overrides[biomeId] = track;
+  } else {
+    delete overrides[biomeId];
+  }
+  state.userSettings.musicTrackOverrides = overrides;
 }
 
 function ensureAudio() {
@@ -91,8 +134,8 @@ function playIfEnabled() {
  * Streams the matching track (or Default.mp3) and crossfades.
  */
 export function switchMusic(biome) {
-  const track = trackForBiome(biome);
-  const src = `/music/${track}`;
+  const track = selectedTrackForBiome(biome);
+  const src = `${MUSIC_BASE_URL}/${track}`;
 
   // Same track already playing — just ensure volume if enabled.
   if (_currentSrc === src && _audio && !_audio.paused) {

@@ -57,6 +57,8 @@ CI reads `package.json` and passes the version to the build, so the deployed sit
 
 Pushing to `main` triggers the GitHub Actions workflow (`.github/workflows/deploy.yml`) which runs `npm ci && npm run build` and deploys the `dist/` output to GitHub Pages. The `CNAME` file (`small-world.pardev.net`) is copied into the build output for the custom domain. `dist/` is gitignored — only source files are tracked; the bundle is built fresh by CI on every push.
 
+Biome music is not shipped through GitHub Pages. `src/music.js` streams tracks from `https://static.pardev.net/small-world/music/`, backed by `/docker/static/data/small-world/music/` on `lenny1`. Keep `public/music/` gitignored; it is only a local staging/convenience folder for MP3s before copying them to the static host.
+
 Before pushing, always:
 1. Bump `version` in `package.json`
 2. Commit the version bump alongside (or just before) the changes

@@ -145,6 +145,7 @@ export const state = {
     pbrDetails: true,
     musicEnabled: false,
     musicVolume: 0.5,
+    musicTrackOverrides: {},
   },
   // Set by world.js after makeTerrain.
   terrainMesh: null,

@@ -8,7 +8,16 @@ import { BIOMES } from "./biomes.js";
 import { LOWFX } from "./lowfx.js";
 import { INSPECT } from "./inspect.js";
 import { APP_VERSION } from "./state.js";
-import { setMusicEnabled, setMusicVolume, tryResumeOnGesture } from "./music.js";
+import {
+  AVAILABLE_MUSIC_TRACKS,
+  defaultTrackForBiome,
+  selectedTrackForBiome,
+  setMusicEnabled,
+  setMusicTrackOverride,
+  setMusicVolume,
+  switchMusic,
+  tryResumeOnGesture,
+} from "./music.js";
 import { disposePortal, getPortalSideEntryPose, updatePortalPreviewSettings } from "./portal.js";
 
 let followTarget = null;
@@ -64,6 +73,7 @@ const PERSISTED_KEYS = [
   "grassPanelOpen",
   "musicEnabled",
   "musicVolume",
+  "musicTrackOverrides",
 ];
 const BOOKMARKS_KEY = "smallworld:bookmarks:v1";
 const BIOME_FILTER_KEY = "smallworld:biomefilter:v1";
@@ -1117,12 +1127,34 @@ export function initUi({ camera, canvas, controls, renderer }) {
 
   // ── Music controls ------------------------------------------------------
   const musicBtn = document.getElementById("music-toggle");
+  const musicTrackEl = document.getElementById("setting-music-track");
   const musicVolumeEl = document.getElementById("setting-music-volume");
   const musicVolumeValueEl = document.getElementById("setting-music-volume-value");
+  function formatTrackLabel(track) {
+    return track.replace(/\.mp3$/i, "").replace(/([a-z])([A-Z])/g, "$1 $2");
+  }
+  function refreshMusicTrackSelect() {
+    if (!state.currentBiome) return;
+    const defaultTrack = defaultTrackForBiome(state.currentBiome);
+    musicTrackEl.innerHTML = "";
+    const defaultOption = document.createElement("option");
+    defaultOption.value = "";
+    defaultOption.textContent = `biome default (${formatTrackLabel(defaultTrack)})`;
+    musicTrackEl.appendChild(defaultOption);
+    for (const track of AVAILABLE_MUSIC_TRACKS) {
+      const option = document.createElement("option");
+      option.value = track;
+      option.textContent = formatTrackLabel(track);
+      musicTrackEl.appendChild(option);
+    }
+    const override = state.userSettings.musicTrackOverrides?.[state.currentBiome.id];
+    musicTrackEl.value = AVAILABLE_MUSIC_TRACKS.includes(override) ? selectedTrackForBiome(state.currentBiome) : "";
+  }
   function updateMusicButton() {
     musicBtn.classList.toggle("active", !!state.userSettings.musicEnabled);
   }
   updateMusicButton();
+  refreshMusicTrackSelect();
   musicVolumeEl.value = String(Math.round((state.userSettings.musicVolume ?? 0.5) * 100));
   musicVolumeValueEl.textContent = musicVolumeEl.value + "%";
   musicBtn.addEventListener("click", () => {
@@ -1131,6 +1163,14 @@ export function initUi({ camera, canvas, controls, renderer }) {
     updateMusicButton();
     saveSettings();
   });
+  function applyMusicTrackSelection() {
+    setMusicTrackOverride(state.currentBiome?.id, musicTrackEl.value);
+    if (state.currentBiome) switchMusic(state.currentBiome);
+    refreshMusicTrackSelect();
+    saveSettings();
+  }
+  musicTrackEl.addEventListener("input", applyMusicTrackSelection);
+  musicTrackEl.addEventListener("change", applyMusicTrackSelection);
   musicVolumeEl.addEventListener("input", () => {
     const v = Number(musicVolumeEl.value);
     setMusicVolume(v / 100);
@@ -1440,6 +1480,7 @@ export function initUi({ camera, canvas, controls, renderer }) {
       if (state._reapplyWindSettings) state._reapplyWindSettings();
       if (state._reapplyGrassSettings) state._reapplyGrassSettings();
       syncBiomeOverrideSettings();
+      refreshMusicTrackSelect();
       // Close the locator on regen — entity references are stale.
       if (_locatorOpen) setLocatorOpen(false);
       _locatorCycle = null;

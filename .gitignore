@@ -86,3 +86,6 @@ docs/superpowers
 dist/
 .vite/
 graphify-out/
+
+# large static media served from static.pardev.net
+public/music/

@@ -767,6 +767,19 @@ body.photo-mode .help-panel {
   border: 1px solid var(--ink);
 }
 .setting input[type="range"]:hover::-webkit-slider-thumb { transform: scale(1.2); }
+.setting select {
+  grid-column: 1 / span 2;
+  width: 100%;
+  min-width: 0;
+  border: 1px solid color-mix(in srgb, var(--ink), transparent 62%);
+  border-radius: 4px;
+  padding: 7px 8px;
+  color: var(--ink);
+  background: color-mix(in srgb, var(--paper), transparent 12%);
+  font: inherit;
+  letter-spacing: 0.08em;
+  text-transform: lowercase;
+}
 .setting-value {
   grid-column: 2;
   font-size: 10px;

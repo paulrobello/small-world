@@ -59,7 +59,7 @@ Edits to `main.js`, `src/*.js`, `style.css`, and `index.html` are reflected by V
 
 - Runtime dependencies are installed via npm and bundled by Vite.
 - `make lint` runs ESLint over `main.js` and `src/`; `make checkall` runs all JS/Python tests, lint, and the production build.
-- Deployment is via GitHub Pages at the live demo URL above; completed enhancements are typically committed and pushed to publish.
+- Deployment is via GitHub Pages at the live demo URL above; completed enhancements are typically committed and pushed to publish. Biome music is served separately from `https://static.pardev.net/small-world/music/` so large MP3 files stay out of git.
 - AI coding agents should start with [`CLAUDE.md`](CLAUDE.md), which is also referenced by `AGENTS.md` and `GEMINI.md` compatibility stubs.
 
 ## Stack
