@@ -44,6 +44,7 @@ import {
   stepStroll,
   stepTour,
   isAnyFP,
+  isFlyMode,
   isPhotoFP,
   isStrolling,
   enterStrollFromPortal,
@@ -204,7 +205,7 @@ const _focusDir = new THREE.Vector3();
 const _underwaterColor = new THREE.Color();
 function shouldApplyTiltShift() {
   if (isPhotoFP()) return state.userSettings.tiltShift;
-  return state.userSettings.tiltShift && !isStrolling() && !getFollowTarget();
+  return state.userSettings.tiltShift && !isStrolling() && !isFlyMode() && !getFollowTarget();
 }
 function updateUnderwaterTint() {
   if (!postfx.setUnderwaterTint) return;

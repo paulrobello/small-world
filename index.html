@@ -138,6 +138,8 @@
         <dd><kbd>shift</kbd> + click any creature or flora to open its inspect view in a new tab.</dd>
         <dt>first-person stroll</dt>
         <dd><kbd>f</kbd> enters/exits. <kbd>w</kbd><kbd>a</kbd><kbd>s</kbd><kbd>d</kbd> walks · <kbd>shift</kbd> moves faster · mouse looks · <kbd>esc</kbd> exits.</dd>
+        <dt>fly camera</dt>
+        <dd><kbd>v</kbd> toggles fly camera. <kbd>w</kbd><kbd>a</kbd><kbd>s</kbd><kbd>d</kbd> moves · <kbd>e</kbd>/<kbd>q</kbd> rise or descend · mouse looks · <kbd>esc</kbd> exits.</dd>
         <dt>photo mode</dt>
         <dd><kbd>p</kbd> hides the ui and freezes animation. Click or use the save button to capture a png. <kbd>p</kbd> or <kbd>esc</kbd> exits.</dd>
         <dt>manual pause</dt>
@@ -156,8 +158,9 @@
         <dt><kbd>tab</kbd></dt><dd>cycle instances of last located type.</dd>
         <dt><kbd>r</kbd></dt><dd>regenerate with the next-biome button behavior.</dd>
         <dt><kbd>p</kbd></dt><dd>toggle photo mode.</dd>
-        <dt><kbd>w</kbd><kbd>a</kbd><kbd>s</kbd><kbd>d</kbd></dt><dd>move in first-person photo mode or stroll.</dd>
+        <dt><kbd>w</kbd><kbd>a</kbd><kbd>s</kbd><kbd>d</kbd></dt><dd>move in first-person camera modes.</dd>
         <dt><kbd>f</kbd></dt><dd>enter or exit first-person stroll.</dd>
+        <dt><kbd>v</kbd></dt><dd>toggle fly camera.</dd>
         <dt><kbd>shift</kbd> + click</dt><dd>open the clicked creature/flora in inspect view.</dd>
         <dt><kbd>shift</kbd></dt><dd>move faster in first-person stroll.</dd>
         <dt><kbd>,</kbd></dt><dd>open or close settings.</dd>
@@ -268,6 +271,11 @@
       <button class="setting-button" id="setting-stroll">
         <span class="setting-button-label">first-person stroll</span>
         <span class="setting-button-hint">f · wasd · mouse-look · esc to exit</span>
+      </button>
+
+      <button class="setting-button" id="setting-fly-mode">
+        <span class="setting-button-label">fly camera</span>
+        <span class="setting-button-hint">v · wasd · e/q · mouse-look</span>
       </button>
 
       <button class="setting-button" id="setting-tour">

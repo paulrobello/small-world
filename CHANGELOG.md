@@ -1,5 +1,30 @@
 # Changelog
 
+## Unreleased
+
+### Added
+- Added first-visit help that opens the full help modal once per browser.
+- Added a main-view fly camera mode, available from settings or the `V` key, with WASD movement, mouse look, and `E`/`Q` vertical movement.
+- Added regression coverage for HUD readability, help modal layout, music toggle state, and immediate music shutdown.
+- Added static regression coverage for the fly camera mode UI wiring and tilt-shift gating.
+
+### Changed
+- Improved HUD readability with stronger mono text, translucent backdrops, higher contrast secondary labels, and title-cased biome names.
+- Changed the help panel into a centered modal with fixed `Help & Controls`, `Modes`, and `Controls` header content while only the body rows scroll.
+- Changed help and camera settings copy to document fly camera controls.
+- Removed the persistent `drag · zoom · observe` hint above the lower controls.
+- Made the top-left title block fade out after five seconds.
+- Updated the music toggle icon and accessible labels to distinguish music-on from muted state.
+
+### Fixed
+- Fixed music toggle-off behavior so the shared background audio element is silenced and paused immediately.
+- Fixed same-origin tab behavior so music-off settings propagate to other open Small World tabs.
+- Fixed tilt-shift gating so it also stays disabled while the main-view fly camera is active.
+
+### Verified
+- UI/music changes were committed in `959e521` after `make checkall`, focused UI/music regression tests, rendered browser checks for the help modal, music toggle, and title fade, `git diff --check`, and `graphify update .`.
+- Fly camera changes were verified with focused fly-mode and tilt-shift static tests, `make checkall`, `graphify update .`, and a Playwright smoke test for `V`, `W`, and `Esc`.
+
 ## 1.3.2 - 2026-05-25
 
 ### Added

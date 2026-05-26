@@ -25,8 +25,8 @@ assert(
   'Photo mode should keep tilt-shift available.'
 );
 assert(
-  mainSource.includes('return state.userSettings.tiltShift && !isStrolling() && !getFollowTarget();'),
-  'Tilt-shift should be disabled in first-person stroll and creature-follow views.'
+  mainSource.includes('return state.userSettings.tiltShift && !isStrolling() && !isFlyMode() && !getFollowTarget();'),
+  'Tilt-shift should be disabled in first-person stroll, fly camera, and creature-follow views.'
 );
 assert(
   mainSource.includes('postfx.setTiltShift(shouldApplyTiltShift());\n    if (postfx.isActive && postfx.isActive())'),

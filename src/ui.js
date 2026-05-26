@@ -25,6 +25,8 @@ let selectingCreature = false;
 
 // First-person stroll state — populated when enabled, null otherwise.
 let _stroll = null;
+// Main-view fly camera state — populated when enabled, null otherwise.
+let _flyFP = null;
 // Photo mode first-person state — populated when photo mode is active.
 let _photoFP = null;
 let _photoReview = null;
@@ -191,8 +193,12 @@ export function isPhotoFP() {
   return _photoFP !== null;
 }
 
+export function isFlyMode() {
+  return _flyFP !== null;
+}
+
 export function isAnyFP() {
-  return _stroll !== null || _photoFP !== null;
+  return _stroll !== null || _flyFP !== null || _photoFP !== null;
 }
 
 export function getPhotoReviewGroup() {
@@ -355,8 +361,8 @@ function _updateTourButtonLabel(active) {
 // yaw/pitch. Caller (main.js) calls this in lieu of controls.update() each
 // frame while stroll mode is active.
 export function stepStroll(dt) {
-  if (!_stroll && !_photoFP) return;
-  const fp = _stroll || _photoFP;
+  if (!_stroll && !_flyFP && !_photoFP) return;
+  const fp = _stroll || _flyFP || _photoFP;
   applyStrollVisualComfort(true);
   if (fp.reviewOpen) return;
   const { camera: cam, keys } = fp;
@@ -539,6 +545,7 @@ export function initUi({ camera, canvas, controls, renderer }) {
 
   // First-person stroll ----------------------------------------------------
   const strollBtn = document.getElementById("setting-stroll");
+  const flyModeBtn = document.getElementById("setting-fly-mode");
   function syncStrollButton() {
     const on = isStrolling();
     strollBtn.classList.toggle("active", on);
@@ -548,6 +555,16 @@ export function initUi({ camera, canvas, controls, renderer }) {
     strollBtn.querySelector(".setting-button-hint").textContent = on
       ? "wasd · mouse-look · esc to exit"
       : "wasd · mouse-look · esc to exit";
+  }
+  function syncFlyModeButton() {
+    const on = isFlyMode();
+    flyModeBtn.classList.toggle("active", on);
+    flyModeBtn.querySelector(".setting-button-label").textContent = on
+      ? "exit fly camera"
+      : "fly camera";
+    flyModeBtn.querySelector(".setting-button-hint").textContent = on
+      ? "wasd · e/q · mouse-look · esc to exit"
+      : "v · wasd · e/q · mouse-look";
   }
   function requestStrollPointerLock(armRetry = false) {
     canvas.requestPointerLock?.().catch(() => {});
@@ -561,6 +578,7 @@ export function initUi({ camera, canvas, controls, renderer }) {
   }
   function enterStroll() {
     if (_stroll) return;
+    if (_flyFP) exitFlyMode();
     // Preserve any follow target: first-person + follow becomes creature POV.
     if (tour && tour.active) stopTour();
     setSelectingCreature(false);
@@ -705,6 +723,102 @@ export function initUi({ camera, canvas, controls, renderer }) {
     else enterStroll();
   });
   syncStrollButton();
+
+  function enterFlyMode() {
+    if (_flyFP) return;
+    if (_stroll) exitStroll();
+    if (tour && tour.active) stopTour();
+    if (_locatorOpen) setLocatorOpen(false);
+    setFollowTarget(null);
+    setSelectingCreature(false);
+    setSettingsOpen(false);
+
+    const savedAutoRotate = controls.autoRotate;
+    controls.autoRotate = false;
+    controls.enabled = false;
+
+    camera.updateMatrixWorld();
+    const lookDir = new THREE.Vector3();
+    camera.getWorldDirection(lookDir);
+    const yaw = Math.atan2(-lookDir.x, -lookDir.z);
+    const pitch = Math.asin(Math.max(-1, Math.min(1, lookDir.y)));
+
+    _flyFP = {
+      camera,
+      controls,
+      keys: { w: false, a: false, s: false, d: false, shift: false, e: false, q: false },
+      yaw,
+      pitch,
+      fly: true,
+      savedCam: { autoRotate: savedAutoRotate },
+      savedTarget: controls.target,
+      handlers: {},
+      hasPointerLock: false,
+    };
+
+    canvas.requestPointerLock?.().catch(() => {});
+
+    const onMove = (e) => {
+      if (!_flyFP) return;
+      if (document.pointerLockElement !== canvas) return;
+      const sens = 0.0022;
+      _flyFP.yaw -= e.movementX * sens;
+      _flyFP.pitch -= e.movementY * sens;
+      const lim = Math.PI / 2 - 0.05;
+      if (_flyFP.pitch > lim) _flyFP.pitch = lim;
+      if (_flyFP.pitch < -lim) _flyFP.pitch = -lim;
+    };
+    const onKey = (down) => (e) => {
+      if (!_flyFP) return;
+      const k = e.key.toLowerCase();
+      if (k === "w") _flyFP.keys.w = down;
+      else if (k === "a") _flyFP.keys.a = down;
+      else if (k === "s") _flyFP.keys.s = down;
+      else if (k === "d") _flyFP.keys.d = down;
+      else if (k === "shift") _flyFP.keys.shift = down;
+      else if (k === "e") _flyFP.keys.e = down;
+      else if (k === "q") _flyFP.keys.q = down;
+      else return;
+      e.preventDefault();
+    };
+    const onKeyDown = onKey(true);
+    const onKeyUp = onKey(false);
+    const onLockChange = () => {
+      if (!_flyFP) return;
+      if (document.pointerLockElement === canvas) {
+        _flyFP.hasPointerLock = true;
+        return;
+      }
+      if (_flyFP.hasPointerLock) exitFlyMode();
+    };
+    document.addEventListener("mousemove", onMove);
+    window.addEventListener("keydown", onKeyDown);
+    window.addEventListener("keyup", onKeyUp);
+    document.addEventListener("pointerlockchange", onLockChange);
+    _flyFP.handlers = { onMove, onKeyDown, onKeyUp, onLockChange };
+    applyStrollVisualComfort(true);
+    syncFlyModeButton();
+  }
+  function exitFlyMode() {
+    if (!_flyFP) return;
+    const { handlers, savedCam } = _flyFP;
+    document.removeEventListener("mousemove", handlers.onMove);
+    window.removeEventListener("keydown", handlers.onKeyDown);
+    window.removeEventListener("keyup", handlers.onKeyUp);
+    document.removeEventListener("pointerlockchange", handlers.onLockChange);
+    if (document.pointerLockElement === canvas) document.exitPointerLock?.();
+    controls.autoRotate = savedCam.autoRotate && state.userSettings.autoRotate;
+    controls.enabled = true;
+    _flyFP = null;
+    applyStrollVisualComfort(false);
+    syncFlyModeButton();
+  }
+  flyModeBtn.addEventListener("click", () => {
+    if (_flyFP) exitFlyMode();
+    else enterFlyMode();
+  });
+  syncFlyModeButton();
+
   // Expose for the Escape handler below
   _enterStroll = enterStroll;
   _exitStroll = exitStroll;
@@ -1723,6 +1837,7 @@ export function initUi({ camera, canvas, controls, renderer }) {
   function setPhotoMode(on) {
     if (on) {
       if (_stroll) exitStroll();
+      if (_flyFP) exitFlyMode();
       if (tour && tour.active) stopTour();
       if (_locatorOpen) setLocatorOpen(false);
       setFollowTarget(null);
@@ -2150,7 +2265,7 @@ export function initUi({ camera, canvas, controls, renderer }) {
       }
       return;
     }
-    if (!_photoFP) {
+    if (!_photoFP && !_flyFP) {
       const portals = state.portals?.length ? state.portals : (state.portal ? [state.portal] : []);
       const portalHits = _raycaster.intersectObjects(portals.map((portal) => portal.group), true);
       if (portalHits.length) {
@@ -2244,6 +2359,7 @@ export function initUi({ camera, canvas, controls, renderer }) {
       if (_photoReview) { closePhotoReview({ resumePhotoFp: false }); setPhotoMode(false); }
       else if (tour && tour.active) stopTour();
       else if (_stroll) _exitStroll();
+      else if (_flyFP) exitFlyMode();
       else if (document.body.classList.contains("photo-mode")) setPhotoMode(false);
       else if (_locatorOpen) setLocatorOpen(false);
       else if (selectingCreature) setSelectingCreature(false);
@@ -2256,9 +2372,14 @@ export function initUi({ camera, canvas, controls, renderer }) {
       e.preventDefault();
       if (_stroll) exitStroll();
       else enterStroll();
+    } else if (e.key === "v" || e.key === "V") {
+      e.preventDefault();
+      if (document.body.classList.contains("photo-mode")) return;
+      if (_flyFP) exitFlyMode();
+      else enterFlyMode();
     } else if (e.key === "l" || e.key === "L") {
       e.preventDefault();
-      if (_stroll || document.body.classList.contains("photo-mode")) return;
+      if (_stroll || _flyFP || document.body.classList.contains("photo-mode")) return;
       setLocatorOpen(!_locatorOpen);
     } else if (e.key === "t" || e.key === "T") {
       e.preventDefault();
@@ -2291,7 +2412,7 @@ export function initUi({ camera, canvas, controls, renderer }) {
       // Spacebar toggles a manual sim pause. Stroll / selection freeze
       // the sim on their own so skip in those modes. In photo mode the sim
       // is frozen by default; Space unfreezes it for action shots.
-      if (_stroll || selectingCreature) return;
+      if (_stroll || _flyFP || selectingCreature) return;
       e.preventDefault();
       setManualPaused(!_manualPause);
     }
