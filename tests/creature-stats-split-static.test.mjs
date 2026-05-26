@@ -48,8 +48,8 @@ assert(
     && cssSource.includes('.stats .value {')
     && cssSource.includes('color: var(--ink);')
     && cssSource.includes('opacity: 1;')
-    && cssSource.includes('text-shadow: 0 1px 2px rgba(0, 0, 0, 0.9);'),
-  'bottom HUD stats text should be fully opaque with a small black readability shadow.'
+    && cssSource.includes('text-shadow: var(--hud-text-shadow);'),
+  'bottom HUD stats text should be fully opaque with the shared readability shadow.'
 );
 
 assert(

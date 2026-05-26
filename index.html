@@ -80,7 +80,6 @@
     </div>
 
     <div class="controls">
-      <div class="hint">drag · zoom · observe</div>
       <div class="controls-row">
         <button class="help-toggle" id="help-toggle" aria-label="help" title="help">
           <span class="help-glyph">?</span>
@@ -112,14 +111,20 @@
 
   <aside class="help-panel" id="help-panel" aria-hidden="true">
     <div class="settings-head">
-      <span class="settings-title">help &amp; controls</span>
-      <button class="settings-close" id="help-close" aria-label="close">×</button>
+      <div class="help-titlebar">
+        <span class="settings-title">help &amp; controls</span>
+        <button class="settings-close" id="help-close" aria-label="close">×</button>
+      </div>
+      <div class="help-desktop-labels" aria-hidden="true">
+        <div class="settings-section-label">modes</div>
+        <div class="settings-section-label">controls</div>
+      </div>
     </div>
 
+    <div class="help-scroll">
     <!-- Desktop help (hidden on touch-first devices) -->
     <div class="help-desktop">
     <section class="settings-section">
-      <div class="settings-section-label">modes</div>
       <dl class="help-list">
         <dt>same biome</dt>
         <dd><span aria-hidden="true">↻</span> rolls a fresh seed that stays in the current biome, ignoring biome-filter chips.</dd>
@@ -143,7 +148,6 @@
     </section>
 
     <section class="settings-section">
-      <div class="settings-section-label">controls</div>
       <dl class="help-list">
         <dt>drag</dt><dd>rotate the camera.</dd>
         <dt>scroll · pinch</dt><dd>zoom in / out.</dd>
@@ -199,6 +203,7 @@
         <dt>⚙ settings</dt><dd>open settings — follow mode, photo mode, biome filters, and more.</dd>
       </dl>
     </section>
+    </div>
     </div>
   </aside>
 

@@ -172,10 +172,9 @@ export function setMusicEnabled(enabled) {
     el.play().catch(() => {});
     fadeTo(targetVolume(), FADE_MS);
   } else {
-    fadeTo(0, FADE_MS);
-    setTimeout(() => {
-      if (el && !state.userSettings.musicEnabled) el.pause();
-    }, FADE_MS + 50);
+    _fadeId++;
+    el.volume = 0;
+    el.pause();
   }
 }
 

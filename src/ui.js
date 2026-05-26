@@ -77,6 +77,7 @@ const PERSISTED_KEYS = [
 ];
 const BOOKMARKS_KEY = "smallworld:bookmarks:v1";
 const BIOME_FILTER_KEY = "smallworld:biomefilter:v1";
+const HELP_SEEN_KEY = "smallworld:help-seen:v1";
 
 export function loadSettings() {
   try {
@@ -98,6 +99,16 @@ function saveSettings() {
     localStorage.setItem(SETTINGS_KEY, JSON.stringify(out));
   } catch {
     // localStorage may throw in private mode / quota — non-fatal
+  }
+}
+
+function shouldShowFirstVisitHelp() {
+  try {
+    if (localStorage.getItem(HELP_SEEN_KEY)) return false;
+    localStorage.setItem(HELP_SEEN_KEY, "1");
+    return true;
+  } catch {
+    return false;
   }
 }
 
@@ -501,6 +512,11 @@ export function initUi({ camera, canvas, controls, renderer }) {
     setHelpOpen(opening);
   });
   helpClose.addEventListener("click", () => setHelpOpen(false));
+  if (!INSPECT && shouldShowFirstVisitHelp()) {
+    setSettingsOpen(false);
+    setLocatorOpen(false);
+    setHelpOpen(true);
+  }
 
   _followButton.addEventListener("click", () => {
     if (followTarget) {
@@ -1127,6 +1143,7 @@ export function initUi({ camera, canvas, controls, renderer }) {
 
   // ── Music controls ------------------------------------------------------
   const musicBtn = document.getElementById("music-toggle");
+  const musicGlyph = musicBtn.querySelector(".music-glyph");
   const musicTrackEl = document.getElementById("setting-music-track");
   const musicVolumeEl = document.getElementById("setting-music-volume");
   const musicVolumeValueEl = document.getElementById("setting-music-volume-value");
@@ -1152,6 +1169,9 @@ export function initUi({ camera, canvas, controls, renderer }) {
   }
   function updateMusicButton() {
     musicBtn.classList.toggle("active", !!state.userSettings.musicEnabled);
+    musicGlyph.textContent = state.userSettings.musicEnabled ? "♫" : "🔇";
+    musicBtn.setAttribute("aria-label", state.userSettings.musicEnabled ? "music on" : "music off");
+    musicBtn.title = state.userSettings.musicEnabled ? "music on" : "music off";
   }
   updateMusicButton();
   refreshMusicTrackSelect();
@@ -1176,6 +1196,25 @@ export function initUi({ camera, canvas, controls, renderer }) {
     setMusicVolume(v / 100);
     musicVolumeValueEl.textContent = v + "%";
     saveSettings();
+  });
+  window.addEventListener("storage", (event) => {
+    if (event.key !== SETTINGS_KEY || !event.newValue) return;
+    try {
+      const saved = JSON.parse(event.newValue);
+      if ("musicEnabled" in saved && saved.musicEnabled !== state.userSettings.musicEnabled) {
+        state.userSettings.musicEnabled = !!saved.musicEnabled;
+        setMusicEnabled(state.userSettings.musicEnabled);
+        updateMusicButton();
+      }
+      if ("musicVolume" in saved && saved.musicVolume !== state.userSettings.musicVolume) {
+        state.userSettings.musicVolume = saved.musicVolume;
+        setMusicVolume(saved.musicVolume);
+        musicVolumeEl.value = String(Math.round((state.userSettings.musicVolume ?? 0.5) * 100));
+        musicVolumeValueEl.textContent = musicVolumeEl.value + "%";
+      }
+    } catch {
+      // Ignore malformed settings written by older tabs or manual edits.
+    }
   });
   // Resume audio on first user gesture (autoplay policy).
   document.addEventListener(
