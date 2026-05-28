@@ -111,13 +111,23 @@ assert(
 );
 
 assert(
+  indexSource.includes('<button class="help-mobile-close" id="help-mobile-close" aria-label="close">×</button>')
+    && ruleFor('.help-mobile-close').includes('position: sticky;')
+    && ruleFor('.help-mobile-close').includes('min-height: 44px;')
+    && uiSource.includes('const mobileHelpClose = document.getElementById("help-mobile-close");')
+    && uiSource.includes('mobileHelpClose.addEventListener("click", () => setHelpOpen(false));'),
+  'Mobile help should include an in-content close control that remains reachable if browser chrome clips the modal header.'
+);
+
+assert(
   uiSource.includes('const HELP_SEEN_KEY = "smallworld:help-seen:v1";')
     && uiSource.includes('function shouldShowFirstVisitHelp()')
+    && uiSource.includes('function shouldUseMobileHud()')
     && uiSource.includes('localStorage.getItem(HELP_SEEN_KEY)')
     && uiSource.includes('localStorage.setItem(HELP_SEEN_KEY, "1")')
-    && uiSource.includes('if (!INSPECT && shouldShowFirstVisitHelp()) {')
+    && uiSource.includes('if (!INSPECT && !shouldUseMobileHud() && shouldShowFirstVisitHelp()) {')
     && uiSource.includes('setHelpOpen(true);'),
-  'Help should automatically open once on a user’s first visit and persist that it was seen.'
+  'Help should automatically open once on desktop and persist that it was seen without trapping first-time mobile visitors.'
 );
 
 assert(

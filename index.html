@@ -90,6 +90,10 @@
         <button class="music-toggle" id="music-toggle" aria-label="music" title="music">
           <span class="music-glyph">♫</span>
         </button>
+        <button class="pov-toggle" id="stroll-toggle" aria-label="enter first-person stroll" aria-pressed="false" title="first-person POV">
+          <span class="pov-glyph">POV</span>
+          <span class="pov-label">stroll</span>
+        </button>
         <button class="regen" id="regen-same-biome" title="regenerate current biome">
           <span class="regen-glyph">↻</span>
           <span class="regen-label">same biome</span>
@@ -173,6 +177,8 @@
 
     <!-- Mobile help (hidden on pointer devices) -->
     <div class="help-mobile">
+    <button class="help-mobile-close" id="help-mobile-close" aria-label="close">×</button>
+
     <section class="settings-section">
       <div class="settings-section-label">world</div>
       <dl class="help-list help-world-info">

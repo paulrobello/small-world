@@ -81,6 +81,17 @@ const BOOKMARKS_KEY = "smallworld:bookmarks:v1";
 const BIOME_FILTER_KEY = "smallworld:biomefilter:v1";
 const HELP_SEEN_KEY = "smallworld:help-seen:v1";
 
+function shouldUseMobileHud() {
+  const mobileParam = new URLSearchParams(window.location.search).get("mobile");
+  if (mobileParam === "1") return true;
+  if (mobileParam === "0") return false;
+
+  const hasTouch = "ontouchstart" in window || navigator.maxTouchPoints > 0;
+  const shortViewport = Math.min(window.innerWidth, window.innerHeight);
+  const shortScreen = Math.min(screen.width || 9999, screen.height || 9999);
+  return hasTouch && (shortViewport < 768 || shortScreen < 768);
+}
+
 export function loadSettings() {
   try {
     const raw = localStorage.getItem(SETTINGS_KEY);
@@ -494,6 +505,7 @@ export function initUi({ camera, canvas, controls, renderer }) {
   const helpPanel = document.getElementById("help-panel");
   const helpToggle = document.getElementById("help-toggle");
   const helpClose = document.getElementById("help-close");
+  const mobileHelpClose = document.getElementById("help-mobile-close");
   function setHelpOpen(open) {
     helpPanel.classList.toggle("open", open);
     helpPanel.setAttribute("aria-hidden", open ? "false" : "true");
@@ -518,7 +530,8 @@ export function initUi({ camera, canvas, controls, renderer }) {
     setHelpOpen(opening);
   });
   helpClose.addEventListener("click", () => setHelpOpen(false));
-  if (!INSPECT && shouldShowFirstVisitHelp()) {
+  mobileHelpClose.addEventListener("click", () => setHelpOpen(false));
+  if (!INSPECT && !shouldUseMobileHud() && shouldShowFirstVisitHelp()) {
     setSettingsOpen(false);
     setLocatorOpen(false);
     setHelpOpen(true);
@@ -545,6 +558,7 @@ export function initUi({ camera, canvas, controls, renderer }) {
 
   // First-person stroll ----------------------------------------------------
   const strollBtn = document.getElementById("setting-stroll");
+  const strollToggle = document.getElementById("stroll-toggle");
   const flyModeBtn = document.getElementById("setting-fly-mode");
   function syncStrollButton() {
     const on = isStrolling();
@@ -555,6 +569,10 @@ export function initUi({ camera, canvas, controls, renderer }) {
     strollBtn.querySelector(".setting-button-hint").textContent = on
       ? "wasd · mouse-look · esc to exit"
       : "wasd · mouse-look · esc to exit";
+    strollToggle.classList.toggle("active", on);
+    strollToggle.setAttribute("aria-pressed", on ? "true" : "false");
+    strollToggle.setAttribute("aria-label", on ? "exit first-person stroll" : "enter first-person stroll");
+    strollToggle.title = on ? "return to global POV" : "first-person POV";
   }
   function syncFlyModeButton() {
     const on = isFlyMode();
@@ -719,6 +737,10 @@ export function initUi({ camera, canvas, controls, renderer }) {
     syncStrollButton();
   }
   strollBtn.addEventListener("click", () => {
+    if (_stroll) exitStroll();
+    else enterStroll();
+  });
+  strollToggle.addEventListener("click", () => {
     if (_stroll) exitStroll();
     else enterStroll();
   });
@@ -2174,14 +2196,7 @@ export function initUi({ camera, canvas, controls, renderer }) {
   // Touching the header area brings it back temporarily.
   // Override: ?mobile=1 forces mobile, ?mobile=0 forces desktop.
   // Auto-detect: touch input + small viewport or physical screen.
-  const _mobileParam = new URLSearchParams(window.location.search).get("mobile");
-  let _isMobile = _mobileParam === "1";
-  if (!_isMobile && _mobileParam !== "0") {
-    const _hasTouch = "ontouchstart" in window || navigator.maxTouchPoints > 0;
-    const _shortViewport = Math.min(window.innerWidth, window.innerHeight);
-    const _shortScreen = Math.min(screen.width || 9999, screen.height || 9999);
-    _isMobile = _hasTouch && (_shortViewport < 768 || _shortScreen < 768);
-  }
+  const _isMobile = shouldUseMobileHud();
   if (_isMobile) {
     document.body.classList.add("mobile");
     const header = document.querySelector(".hud-top");
