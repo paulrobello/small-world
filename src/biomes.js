@@ -29,7 +29,7 @@ export const BIOMES = [
       },
     ],
     groundMarks: { color: "#20341f", opacity: 0.16, life: 5.5, softness: 1.15 },
-    shadowLod: { microFloraShadows: false, leafballCanopyProxy: true },
+    shadowLod: { microFloraShadows: false, leafballCanopyProxy: true, staticCasterRadiusFrac: 0.55 },
     groveDetails: {
       mushroomFamilies: true,
       fairyRing: true,
@@ -268,9 +268,9 @@ export const BIOMES = [
     furProbability: 0.70,
     groundMarks: { color: "#1f2d16", opacity: 0.18, life: 5.8, softness: 1.2 },
     edgeAura: {
-      pattern: "grass",
-      colors: ["#263216", "#263216", "#263216"],
-      alpha: 1.0,
+      pattern: "mist",
+      colors: ["#2a3624", "#3b5a3a", "#9bb091"],
+      alpha: 0.82,
       innerSoft: 0.24,
       outerSoft: 10.5,
       inwardOverlap: 0.23,

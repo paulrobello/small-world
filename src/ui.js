@@ -5,7 +5,7 @@ import { generateWorld, setFollowReleaseCallback } from "./world.js";
 import { islandFalloff, nearestCenter } from "./terrain.js";
 import { buildObstacleGrid, wakeCreature, lookAtCreature } from "./fauna.js";
 import { BIOMES } from "./biomes.js";
-import { LOWFX } from "./lowfx.js";
+import { LOWFX, rendererPixelRatioCap } from "./lowfx.js";
 import { INSPECT } from "./inspect.js";
 import { APP_VERSION } from "./state.js";
 import {
@@ -39,6 +39,7 @@ let _requestStrollPointerLock = () => {};
 // Only fields explicitly listed here are read/written; unknown keys in
 // localStorage are ignored so we can change the schema later without breaking.
 const SETTINGS_KEY = "smallworld:settings:v1";
+const GRASS_DENSITY_BASE = 25;
 const PERSISTED_KEYS = [
   "fogMultiplier",
   "autoCycle",
@@ -70,6 +71,7 @@ const PERSISTED_KEYS = [
   "foliageWindEnabled",
   "grassEnabled",
   "grassDensity",
+  "grassDensityBase",
   "grassHeight",
   "groundMarkLifeScale",
   "grassPanelOpen",
@@ -100,6 +102,11 @@ export function loadSettings() {
     for (const k of PERSISTED_KEYS) {
       if (k in saved) state.userSettings[k] = saved[k];
     }
+    const savedGrassDensityBase = Number(saved.grassDensityBase ?? 12.5);
+    if ("grassDensity" in saved && savedGrassDensityBase > 0 && savedGrassDensityBase !== GRASS_DENSITY_BASE) {
+      state.userSettings.grassDensity = saved.grassDensity * (GRASS_DENSITY_BASE / savedGrassDensityBase);
+    }
+    state.userSettings.grassDensityBase = GRASS_DENSITY_BASE;
   } catch {
     // corrupted or unavailable — fall back to defaults
   }
@@ -390,7 +397,7 @@ export function stepStroll(dt) {
   const wsMove = state.userSettings.worldScale ?? 1;
   const speed = (keys.shift ? 12 : 6) * wsMove * dt;
   if (fly && (fp.lookX || fp.lookY)) {
-    const lookSpeed = 1.9;
+    const lookSpeed = 0.95;
     fp.yaw -= fp.lookX * lookSpeed * dt;
     fp.pitch -= fp.lookY * lookSpeed * dt;
     clampFirstPersonPitch(fp);
@@ -1208,12 +1215,11 @@ export function initUi({ camera, canvas, controls, renderer }) {
   // — only the slider display is rescaled. Conversion:
   //   sliderValue = internalValue / BASE * 100
   //   internalValue = sliderValue / 100 * BASE
-  const DENSITY_BASE = 12.5;
   const HEIGHT_BASE = 0.96;
   grassDetailsEl.open = !!state.userSettings.grassPanelOpen;
   grassEnabledEl.checked = state.userSettings.grassEnabled !== false;
   grassDensityEl.value = String(
-    Math.round(((state.userSettings.grassDensity ?? DENSITY_BASE) / DENSITY_BASE) * 100)
+    Math.round(((state.userSettings.grassDensity ?? GRASS_DENSITY_BASE) / GRASS_DENSITY_BASE) * 100)
   );
   grassDensityValueEl.textContent = grassDensityEl.value + "%";
   grassHeightEl.value = String(
@@ -1234,7 +1240,8 @@ export function initUi({ camera, canvas, controls, renderer }) {
   });
   grassDensityEl.addEventListener("input", () => {
     const v = Number(grassDensityEl.value);
-    state.userSettings.grassDensity = (v / 100) * DENSITY_BASE;
+    state.userSettings.grassDensity = (v / 100) * GRASS_DENSITY_BASE;
+    state.userSettings.grassDensityBase = GRASS_DENSITY_BASE;
     grassDensityValueEl.textContent = v + "%";
     applyGrassSettings();
     saveSettings();
@@ -2325,7 +2332,7 @@ export function initUi({ camera, canvas, controls, renderer }) {
   function handleResize() {
     camera.aspect = window.innerWidth / window.innerHeight;
     camera.updateProjectionMatrix();
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio, LOWFX ? 1 : 2));
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, rendererPixelRatioCap()));
     renderer.setSize(window.innerWidth, window.innerHeight);
   }
   window.addEventListener("resize", handleResize);

@@ -21,7 +21,7 @@ import {
 import { stepGrass } from "./src/grass.js";
 import { stepShadowDisks } from "./src/shadows.js";
 import { stepClouds } from "./src/sky.js";
-import { LOWFX } from "./src/lowfx.js";
+import { rendererPixelRatioCap } from "./src/lowfx.js";
 import { sharedFurUniforms } from "./src/fur.js";
 import { initPostFX } from "./src/postfx.js";
 import { updateWaterReflection } from "./src/reflection.js";
@@ -72,7 +72,7 @@ const renderer = new THREE.WebGLRenderer({
   // for photo-mode capture. Negligible perf cost for this scene.
   preserveDrawingBuffer: true,
 });
-renderer.setPixelRatio(Math.min(window.devicePixelRatio, LOWFX ? 1 : 2));
+renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, rendererPixelRatioCap()));
 renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.shadowMap.enabled = true;
 // PCFSoftShadowMap was deprecated in r180; PCFShadowMap is the supported
@@ -93,7 +93,10 @@ const camera = new THREE.PerspectiveCamera(
           // doesn't slice the terrain into the view frustum.
   400
 );
-camera.position.set(20, 14, 20);
+const DEFAULT_ORBIT_POSITION = new THREE.Vector3(20, 14, 20);
+const DEFAULT_ORBIT_RADIUS_ANCHOR = 18;
+const DEFAULT_ORBIT_MAX_DISTANCE = 72;
+camera.position.copy(DEFAULT_ORBIT_POSITION);
 
 const controls = new OrbitControls(camera, canvas);
 controls.enableDamping = true;
@@ -101,7 +104,7 @@ controls.dampingFactor = 0.06;
 controls.autoRotate = false;
 controls.autoRotateSpeed = 0.22;
 controls.minDistance = 14;
-controls.maxDistance = 72;
+controls.maxDistance = DEFAULT_ORBIT_MAX_DISTANCE;
 controls.maxPolarAngle = Math.PI / 2.15;
 controls.minPolarAngle = Math.PI / 6;
 controls.target.set(0, 1.5, 0);
@@ -110,6 +113,15 @@ controls.touches = {
   ONE: THREE.TOUCH.ROTATE,
   TWO: THREE.TOUCH.DOLLY_ROTATE,
 };
+
+function frameDefaultOrbitToIsland() {
+  const radius = state.currentLayout?.boundRadius ?? state.ISLAND_RADIUS;
+  const scale = Math.max(1, radius / DEFAULT_ORBIT_RADIUS_ANCHOR);
+  camera.position.copy(DEFAULT_ORBIT_POSITION).multiplyScalar(scale);
+  controls.target.set(0, 1.5, 0);
+  controls.maxDistance = Math.max(DEFAULT_ORBIT_MAX_DISTANCE, radius * 2.4);
+  controls.update();
+}
 
 setSceneRef(scene);
 setControlsRef(controls);
@@ -348,7 +360,8 @@ function animate() {
     stepDustKicks(state.dustKicks, dt);
     stepGroundMarks(state.groundMarks, dt);
     stepFlySwarms(state.flySwarms, t);
-    stepShadowDisks(state.shadowDisks, state.heightFn);
+    const contactShadowFocus = isAnyFP() ? camera.position : controls.target;
+    stepShadowDisks(state.shadowDisks, state.heightFn, contactShadowFocus);
     stepClouds(state.clouds, dt);
   });
   measurePerfPhase("airborneMovement", () => {
@@ -500,6 +513,7 @@ if (INSPECT) {
 } else {
   const initialSeed = readSeedFromUrl() ?? newRandomSeed();
   void generateWorld(initialSeed).then(() => {
+    frameDefaultOrbitToIsland();
     enterPortalArrivalIfRequested();
   }).catch((error) => {
     console.error("World generation failed", error);

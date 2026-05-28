@@ -80,3 +80,15 @@ assert.ok(
   Math.hypot(stuckRingResult.nx, stuckRingResult.nz) > 0.6,
   'crawler escape response should increase distance from the tree instead of orbiting in place'
 );
+
+state.obstacles = [
+  { x: -20, z: 0, r: 0.5, top: 1.5 },
+  { x: 20, z: 0, r: 0.5, top: 1.5 },
+];
+buildObstacleGrid(state.obstacles);
+state.obstacles = [{ x: -20, z: 0, r: 0.5, top: 1.5 }];
+
+assert.doesNotThrow(
+  () => avoidObstacles(19.8, 0, 20, 0, 0, 0.1, 0.25),
+  'stale obstacle-grid indices should fall back to the current obstacle array during async world rebuilds'
+);

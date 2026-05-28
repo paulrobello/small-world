@@ -4,13 +4,13 @@ import * as THREE from "three";
 // In dev mode, reads from the env var; in production, inlined by define.
 export const APP_VERSION = __APP_VERSION__;
 
-export const ISLAND_SIZE_BASE = 50;
+export const ISLAND_SIZE_BASE = 100;
 export const ISLAND_RADIUS_BASE = ISLAND_SIZE_BASE * 0.462;
-// Density anchor for biome flora/creature counts. The biome tables in
-// biomes.js were tuned against a 38-unit base; when the base grows we scale
-// counts by ISLAND_SIZE / DENSITY_BASE so larger worlds stay cutely populated
-// instead of going sparse. Don't touch this without also rebalancing biomes.
-export const DENSITY_BASE = 38;
+// Density anchor for biome flora/creature counts and ground cover. The biome
+// tables were tuned against a 38-unit base, but the current island radius is
+// intentionally doubled for more breathing room. Keep this doubled too so the
+// absolute spawn counts stay near the old world size instead of doubling.
+export const DENSITY_BASE = 76;
 
 export const state = {
   ISLAND_SIZE: ISLAND_SIZE_BASE,
@@ -136,7 +136,8 @@ export const state = {
     windNoiseScale: 1.0,
     windPanelOpen: false,
     grassEnabled: true,
-    grassDensity: 12.5,
+    grassDensity: 25,
+    grassDensityBase: 25,
     grassHeight: 0.96,
     groundMarkLifeScale: 2.0,
     grassPanelOpen: false,

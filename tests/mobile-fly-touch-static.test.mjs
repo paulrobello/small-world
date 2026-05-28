@@ -39,6 +39,7 @@ assert(
   uiSource.includes('lookX: 0,')
     && uiSource.includes('lookY: 0,')
     && uiSource.includes('function setFlyTouchJoystick(x, y)')
+    && uiSource.includes('const lookSpeed = 0.95;')
     && uiSource.includes('fp.yaw -= fp.lookX * lookSpeed * dt;')
     && uiSource.includes('fp.pitch -= fp.lookY * lookSpeed * dt;')
     && uiSource.includes('updateFlyTouchJoystick(e);'),

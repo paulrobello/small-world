@@ -154,6 +154,7 @@ function buildReport({ state, scene, renderer, timings, phaseFrames }) {
     shadowLod: {
       microFloraShadows: biome?.shadowLod?.microFloraShadows ?? true,
       leafballCanopyProxy: biome?.shadowLod?.leafballCanopyProxy ?? false,
+      staticCasterRadiusFrac: biome?.shadowLod?.staticCasterRadiusFrac ?? null,
     },
     timing: summarizeTimings(timings),
     phaseTimings: summarizePhaseTimings(phaseFrames),

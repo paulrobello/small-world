@@ -29,6 +29,15 @@ const _v = new THREE.Vector3();
 const _q = new THREE.Quaternion();
 const _s = new THREE.Vector3();
 const _ZERO = new THREE.Matrix4().makeScale(0, 0, 0);
+const CONTACT_SHADOW_LOD_DISTANCE = 28;
+const CONTACT_SHADOW_LOD_DISTANCE_SQ = CONTACT_SHADOW_LOD_DISTANCE * CONTACT_SHADOW_LOD_DISTANCE;
+
+function isWithinContactShadowLod(position, focus) {
+  if (!focus) return true;
+  const dx = position.x - (focus?.x ?? 0);
+  const dz = position.z - (focus?.z ?? 0);
+  return dx * dx + dz * dz <= CONTACT_SHADOW_LOD_DISTANCE_SQ;
+}
 
 export function makeShadowDisks(biome) {
   const tex = getShadowTexture();
@@ -64,7 +73,7 @@ export function makeShadowDisks(biome) {
   return mesh;
 }
 
-export function stepShadowDisks(disks, heightFn) {
+export function stepShadowDisks(disks, heightFn, focus) {
   if (!disks || !heightFn) return;
   const cap = disks.userData.capacity;
   let i = 0;
@@ -76,6 +85,10 @@ export function stepShadowDisks(disks, heightFn) {
       continue;
     }
     const p = c.group.position;
+    if (!isWithinContactShadowLod(p, focus)) {
+      disks.setMatrixAt(i++, _ZERO);
+      continue;
+    }
     const y = heightFn(p.x, p.z);
     _v.set(p.x, y + 0.02, p.z);
     let scale = c.scale * 1.6;
@@ -99,6 +112,10 @@ export function stepShadowDisks(disks, heightFn) {
     }
     // Single disc beneath the head segment is enough — body follows trail.
     const seg = c.segments[0];
+    if (!isWithinContactShadowLod(seg.position, focus)) {
+      disks.setMatrixAt(i++, _ZERO);
+      continue;
+    }
     const y = heightFn(seg.position.x, seg.position.z);
     _v.set(seg.position.x, y + 0.02, seg.position.z);
     const scale = c.scale * 0.7;

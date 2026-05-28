@@ -149,7 +149,7 @@ export function buildObstacleGrid(obstacles) {
 
 // Return obstacle indices whose bounding cell overlaps the query disc.
 function nearbyObstacleIndices(x, z, radius) {
-  if (!_grid || !_gridObs) return null; // fallback — no grid built
+  if (!_grid || _gridObs !== state.obstacles) return null; // fallback — no grid built, or grid is stale
   const minCX = Math.floor((x - radius) / GRID_CELL);
   const maxCX = Math.floor((x + radius) / GRID_CELL);
   const minCZ = Math.floor((z - radius) / GRID_CELL);

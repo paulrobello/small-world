@@ -28,6 +28,21 @@ export const LOWFX =
   _forceLowfx === "0" ? false :
   _autoLowfx();
 
+export function isMobileViewport() {
+  if (typeof window === "undefined") return false;
+  const forced = new URLSearchParams(window.location.search).get("mobile");
+  if (forced === "1") return true;
+  if (forced === "0") return false;
+  const shortSide = Math.min(window.innerWidth, window.innerHeight);
+  const coarsePointer = window.matchMedia?.("(pointer: coarse)")?.matches ?? false;
+  return coarsePointer && shortSide > 0 && shortSide <= 900;
+}
+
+export function rendererPixelRatioCap() {
+  if (isMobileViewport()) return 1;
+  return LOWFX ? 1 : 2;
+}
+
 // Multiplier applied to particle counts and ground-cover instance counts when
 // LOWFX is on. ~40% keeps the world readable while halving most per-frame work.
 export const LOWFX_DENSITY = 0.4;

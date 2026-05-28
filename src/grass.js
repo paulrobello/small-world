@@ -21,9 +21,9 @@ const PUSH_RADIUS_SCALE = 0.9;
 // Upper bound on the user's grass-density slider. Sets how much headroom
 // makeGrassField pre-allocates so the slider can go past 100% without
 // needing a regen. The slider labels 100% as the user's preferred lush
-// look (internally a 12.5× multiplier on biome stock); slider max 300%
-// corresponds to a 37.5× internal multiplier, so the cap here matches.
-const MAX_DENSITY_MULTIPLIER = 37.5;
+// look (internally a 25× multiplier on biome stock); slider max 300%
+// corresponds to a 75× internal multiplier, so the cap here matches.
+const MAX_DENSITY_MULTIPLIER = 75;
 
 const _lowfxScale = (n) => (LOWFX ? Math.max(1, Math.round(n * LOWFX_DENSITY)) : n);
 const _coverScale = (n, gain = 1) =>

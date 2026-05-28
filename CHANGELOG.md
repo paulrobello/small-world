@@ -1,5 +1,41 @@
 # Changelog
 
+## 1.3.9 - 2026-05-28
+
+### Added
+- Added static regression coverage for doubled island sizing without increasing flora or creature spawn counts.
+- Added static regression coverage for island-aware orbit framing, renderer pixel-ratio caps, contact-shadow LOD, and Verdant static shadow LOD.
+- Added static regression coverage for Mossy Ruins using the mist edge ring.
+
+### Changed
+- Doubled the base island size while keeping flora and creature counts tied to the old density target so islands have more breathing room.
+- Changed the default orbit camera to frame the generated island from its actual layout radius.
+- Lowered the renderer pixel-ratio cap for mobile viewports.
+- Added Verdant Grove shadow LOD so far static flora no longer all submit to the shadow map.
+- Limited creature and caterpillar contact-shadow discs to the active camera or orbit focus area.
+- Changed Mossy Ruins from the black grass-edge ring to a translucent mist ring.
+- Doubled default grass density for grass-enabled biomes, including a saved-setting migration so existing browsers move from the old 12.5 baseline to the new 25 baseline.
+- Extended the perf probe output with the active static shadow LOD radius.
+
+### Fixed
+- Reduced the mobile fly joystick look sensitivity by 50%.
+- Fixed stale obstacle-grid reuse during async world generation so fauna steering falls back to the current obstacle array.
+
+### Verified
+- Verified with focused JS tests for grass density, island sizing, mobile fly touch, fauna obstacle avoidance, Mossy Ruins mist ring, orbit/render/shadow LOD, and perf-probe reporting.
+- Verified with rendered Chrome smoke tests for Verdant Grove and Mossy Ruins, including a Verdant probe showing doubled grass count from `276950` to `553900` with FX disabled.
+- Verified with `make checkall` and `graphify update .`.
+
+## 1.3.8 - 2026-05-28
+
+### Changed
+- Reworked mobile fly controls into circular touch controls pinned above the bottom HUD.
+- Replaced the mobile fly direction arrows with a left-side look joystick.
+- Changed the right-side mobile fly buttons to drive forward and backward movement.
+
+### Verified
+- Verified with `node tests/mobile-fly-touch-static.test.mjs`, `make checkall`, a mobile viewport smoke test, and `graphify update .`.
+
 ## 1.3.7 - 2026-05-28
 
 ### Added

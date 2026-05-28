@@ -102,6 +102,30 @@ function readPortalTargetBiomeIdFromUrl() {
   return new URLSearchParams(window.location.search).get("portal");
 }
 
+function findFloraShadowRoot(object) {
+  let cursor = object;
+  while (cursor) {
+    if (cursor.userData?.inspect?.category === "flora") return cursor;
+    cursor = cursor.parent;
+  }
+  return null;
+}
+
+function applyStaticShadowLod(worldState, biome) {
+  const staticCasterRadiusFrac = biome.shadowLod?.staticCasterRadiusFrac;
+  if (!staticCasterRadiusFrac) return;
+  const radius = (worldState.currentLayout?.boundRadius ?? worldState.ISLAND_RADIUS) * staticCasterRadiusFrac;
+  const radiusSq = radius * radius;
+  worldState.world.traverse((object) => {
+    if (!object.castShadow) return;
+    const root = findFloraShadowRoot(object);
+    if (!root) return;
+    const dx = root.position.x;
+    const dz = root.position.z;
+    if (dx * dx + dz * dz > radiusSq) object.castShadow = false;
+  });
+}
+
 function findNextPortalBiome(sourceBiome, excludedIds) {
   const biomeIndex = BIOMES.findIndex((b) => b.id === sourceBiome.id);
   for (let offset = 1; offset <= BIOMES.length; offset++) {
@@ -1549,6 +1573,7 @@ export async function generateWorld(seed, context = createWorldBuildContext()) {
   worldState.world.add(worldState.particles);
 
   // Soft circular ground shadows under creatures + caterpillars.
+  applyStaticShadowLod(worldState, biome);
   worldState.shadowDisks = makeShadowDisks(biome);
   worldState.world.add(worldState.shadowDisks);
 
