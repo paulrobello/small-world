@@ -389,6 +389,12 @@ export function stepStroll(dt) {
   // by ws so traversal time stays roughly constant across scales.
   const wsMove = state.userSettings.worldScale ?? 1;
   const speed = (keys.shift ? 12 : 6) * wsMove * dt;
+  if (fly && (fp.lookX || fp.lookY)) {
+    const lookSpeed = 1.9;
+    fp.yaw -= fp.lookX * lookSpeed * dt;
+    fp.pitch -= fp.lookY * lookSpeed * dt;
+    clampFirstPersonPitch(fp);
+  }
   let fx = 0;
   let fz = 0;
   if (keys.w) fz -= 1;
@@ -568,7 +574,10 @@ export function initUi({ camera, canvas, controls, renderer }) {
   const flyModeBtn = document.getElementById("setting-fly-mode");
   const flyToggle = document.getElementById("fly-toggle");
   const flyTouchControls = document.getElementById("fly-touch-controls");
+  const flyTouchJoystick = document.getElementById("fly-touch-look");
+  const flyTouchJoystickKnob = flyTouchJoystick?.querySelector(".fly-touch-joystick-knob");
   const flyTouchButtons = [...flyTouchControls.querySelectorAll("[data-fly-key]")];
+  let flyTouchJoystickPointer = null;
   let flyTouchLookPointer = null;
   let flyTouchLookX = 0;
   let flyTouchLookY = 0;
@@ -585,6 +594,20 @@ export function initUi({ camera, canvas, controls, renderer }) {
       if (_flyFP && key in _flyFP.keys) _flyFP.keys[key] = false;
       button.classList.remove("pressed");
     }
+  }
+  function setFlyTouchJoystick(x, y) {
+    if (_flyFP) {
+      _flyFP.lookX = x;
+      _flyFP.lookY = y;
+    }
+    flyTouchJoystick?.classList.toggle("pressed", x !== 0 || y !== 0);
+    if (flyTouchJoystickKnob) {
+      flyTouchJoystickKnob.style.transform = `translate(calc(-50% + ${x * 32}px), calc(-50% + ${y * 32}px))`;
+    }
+  }
+  function resetFlyTouchJoystick() {
+    flyTouchJoystickPointer = null;
+    setFlyTouchJoystick(0, 0);
   }
   function syncFlyTouchControls() {
     const shown = isFlyMode() && document.body.classList.contains("mobile");
@@ -805,6 +828,8 @@ export function initUi({ camera, canvas, controls, renderer }) {
       camera,
       controls,
       keys: { w: false, a: false, s: false, d: false, shift: false, e: false, q: false },
+      lookX: 0,
+      lookY: 0,
       yaw,
       pitch,
       fly: true,
@@ -866,6 +891,7 @@ export function initUi({ camera, canvas, controls, renderer }) {
     controls.autoRotate = savedCam.autoRotate && state.userSettings.autoRotate;
     controls.enabled = true;
     resetFlyTouchKeys();
+    resetFlyTouchJoystick();
     flyTouchLookPointer = null;
     _flyFP = null;
     applyStrollVisualComfort(false);
@@ -897,6 +923,35 @@ export function initUi({ camera, canvas, controls, renderer }) {
     button.addEventListener("pointerup", release);
     button.addEventListener("pointercancel", release);
     button.addEventListener("lostpointercapture", () => setFlyTouchKey(key, false));
+  }
+  flyTouchJoystick?.addEventListener("pointerdown", (e) => {
+    if (!_flyFP) return;
+    e.preventDefault();
+    e.stopPropagation();
+    flyTouchJoystickPointer = e.pointerId;
+    flyTouchJoystick.setPointerCapture?.(e.pointerId);
+    updateFlyTouchJoystick(e);
+  });
+  flyTouchJoystick?.addEventListener("pointermove", (e) => {
+    if (!_flyFP || flyTouchJoystickPointer !== e.pointerId) return;
+    e.preventDefault();
+    e.stopPropagation();
+    updateFlyTouchJoystick(e);
+  });
+  const clearFlyTouchJoystick = (e) => {
+    if (flyTouchJoystickPointer === e.pointerId) resetFlyTouchJoystick();
+  };
+  flyTouchJoystick?.addEventListener("pointerup", clearFlyTouchJoystick);
+  flyTouchJoystick?.addEventListener("pointercancel", clearFlyTouchJoystick);
+  flyTouchJoystick?.addEventListener("lostpointercapture", resetFlyTouchJoystick);
+  function updateFlyTouchJoystick(e) {
+    const rect = flyTouchJoystick.getBoundingClientRect();
+    const radius = Math.max(1, Math.min(rect.width, rect.height) * 0.5);
+    const dx = e.clientX - (rect.left + rect.width * 0.5);
+    const dy = e.clientY - (rect.top + rect.height * 0.5);
+    const mag = Math.hypot(dx, dy);
+    const limited = mag > radius ? radius / mag : 1;
+    setFlyTouchJoystick((dx * limited) / radius, (dy * limited) / radius);
   }
   canvas.addEventListener("pointerdown", (e) => {
     if (!_flyFP || !document.body.classList.contains("mobile")) return;

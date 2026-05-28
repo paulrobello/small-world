@@ -117,15 +117,12 @@
   <div class="corner corner-br">+</div>
 
   <div class="fly-touch-controls" id="fly-touch-controls" aria-hidden="true">
-    <div class="fly-touch-pad" aria-label="fly movement">
-      <button class="fly-touch-button fly-touch-forward" data-fly-key="w" aria-label="move forward">↑</button>
-      <button class="fly-touch-button fly-touch-left" data-fly-key="a" aria-label="move left">←</button>
-      <button class="fly-touch-button fly-touch-right" data-fly-key="d" aria-label="move right">→</button>
-      <button class="fly-touch-button fly-touch-back" data-fly-key="s" aria-label="move back">↓</button>
+    <div class="fly-touch-pad" id="fly-touch-look" role="application" aria-label="look joystick">
+      <div class="fly-touch-joystick-knob" aria-hidden="true"></div>
     </div>
-    <div class="fly-touch-altitude" aria-label="fly altitude">
-      <button class="fly-touch-button" data-fly-key="e" aria-label="rise">↑</button>
-      <button class="fly-touch-button" data-fly-key="q" aria-label="descend">↓</button>
+    <div class="fly-touch-altitude" aria-label="fly movement">
+      <button class="fly-touch-button" data-fly-key="w" aria-label="move forward">↑</button>
+      <button class="fly-touch-button" data-fly-key="s" aria-label="move back">↓</button>
     </div>
   </div>
 
@@ -218,7 +215,7 @@
         <dt>pinch</dt><dd>zoom in / out.</dd>
         <dt>two-finger drag</dt><dd>zoom and rotate together.</dd>
         <dt>tap a creature</dt><dd>follow it — the camera tracks it around the island.</dd>
-        <dt>fly camera</dt><dd>tap orbit/fly, drag the open view to look, and hold the edge arrows to move.</dd>
+        <dt>fly camera</dt><dd>tap orbit/fly, use the left joystick to look, and hold the right arrows to move.</dd>
       </dl>
     </section>
 
