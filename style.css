@@ -604,7 +604,8 @@ body.mobile .help-panel.open {
   min-width: 126px;
 }
 .fly-toggle {
-  min-width: 112px;
+  min-width: 148px;
+  padding-inline: 18px;
 }
 .mode-toggle:hover,
 .mode-toggle.active,
@@ -619,23 +620,51 @@ body.mobile .help-panel.open {
   background: var(--ink);
 }
 .pov-glyph,
-.fly-glyph {
+.fly-option,
+.fly-divider {
   display: inline-block;
   font-size: 12px;
   line-height: 1;
+}
+.fly-option {
+  opacity: 0.48;
+  transition: opacity 0.25s ease;
+}
+.fly-toggle:not(.active) .fly-option-orbit,
+.fly-toggle.active .fly-option-fly {
+  opacity: 1;
+}
+.fly-divider {
+  color: var(--ink-dim);
+  margin-inline: -2px;
 }
 
 @media (max-width: 720px) {
   .controls-row {
     display: grid;
-    grid-template-columns: repeat(5, 44px) minmax(0, 1fr) minmax(0, 1fr);
+    grid-template-columns: repeat(3, 44px) minmax(54px, 0.8fr) minmax(76px, 1.2fr);
     gap: 6px;
   }
-  .pov-label,
-  .fly-label { display: none; }
+  .pov-label { display: none; }
   .mode-toggle {
     min-width: 44px;
     padding: 0;
+  }
+  .fly-toggle {
+    min-width: 0;
+    padding-inline: 6px;
+    gap: 5px;
+  }
+  .fly-option,
+  .fly-divider {
+    font-size: 10px;
+    letter-spacing: 0.08em;
+  }
+  #regen-same-biome {
+    grid-column: 1 / 4;
+  }
+  #regen-random-biome {
+    grid-column: 4 / 6;
   }
 }
 

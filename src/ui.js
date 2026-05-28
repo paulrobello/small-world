@@ -588,6 +588,7 @@ export function initUi({ camera, canvas, controls, renderer }) {
     flyToggle.setAttribute("aria-pressed", on ? "true" : "false");
     flyToggle.setAttribute("aria-label", on ? "exit fly camera" : "enter fly camera");
     flyToggle.title = on ? "return to orbit" : "orbit / fly";
+    flyToggle.dataset.mode = on ? "fly" : "orbit";
   }
   function requestStrollPointerLock(armRetry = false) {
     canvas.requestPointerLock?.().catch(() => {});

@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.3.6 - 2026-05-28
+
+### Changed
+- Changed the footer fly control into an explicit orbit/fly toggle with clearer active-state text.
+- Improved the mobile footer grid so camera toggles and regenerate actions keep balanced touch targets on narrow screens.
+
+### Verified
+- Verified with `node tests/pov-toggle-static.test.mjs`, `make checkall`, and a 390px-wide Playwright mobile render/click check.
+
 ## 1.3.3 - 2026-05-26
 
 ### Added
