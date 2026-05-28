@@ -444,11 +444,11 @@ body {
     width: 44px;
     min-height: 44px;
   }
-  .pov-toggle {
+  .mode-toggle {
     flex: 0 0 auto;
-    min-width: 54px;
+    min-width: 44px;
     min-height: 44px;
-    padding: 0 10px;
+    padding: 0 8px;
     font-size: 10px;
   }
   .regen:hover {
@@ -581,14 +581,14 @@ body.mobile .help-panel.open {
 }
 .settings-toggle:hover .settings-glyph { transform: rotate(72deg); }
 
-.pov-toggle {
+.mode-toggle {
   z-index: 11;
-  min-width: 74px;
-  min-height: 44px;
+  min-height: 48px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 8px;
+  gap: 10px;
+  padding: 0 24px;
   background: rgba(0, 0, 0, 0.5);
   border: 1px solid var(--ink-dim);
   color: var(--ink);
@@ -600,24 +600,40 @@ body.mobile .help-panel.open {
   backdrop-filter: blur(4px);
   transition: border-color 0.4s ease, background 0.4s ease, color 0.4s ease;
 }
+.pov-toggle {
+  min-width: 126px;
+}
+.fly-toggle {
+  min-width: 112px;
+}
+.mode-toggle:hover,
+.mode-toggle.active,
 .pov-toggle:hover,
-.pov-toggle.active {
+.pov-toggle.active,
+.fly-toggle.active {
   border-color: var(--ink);
   background: rgba(245, 240, 230, 0.1);
 }
-.pov-toggle.active {
+.mode-toggle.active {
   color: #111;
   background: var(--ink);
 }
-.pov-glyph {
+.pov-glyph,
+.fly-glyph {
   display: inline-block;
   font-size: 12px;
   line-height: 1;
 }
 
-@media (max-width: 420px) {
-  .pov-label { display: none; }
-  .pov-toggle {
+@media (max-width: 720px) {
+  .controls-row {
+    display: grid;
+    grid-template-columns: repeat(5, 44px) minmax(0, 1fr) minmax(0, 1fr);
+    gap: 6px;
+  }
+  .pov-label,
+  .fly-label { display: none; }
+  .mode-toggle {
     min-width: 44px;
     padding: 0;
   }

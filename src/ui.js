@@ -560,6 +560,7 @@ export function initUi({ camera, canvas, controls, renderer }) {
   const strollBtn = document.getElementById("setting-stroll");
   const strollToggle = document.getElementById("stroll-toggle");
   const flyModeBtn = document.getElementById("setting-fly-mode");
+  const flyToggle = document.getElementById("fly-toggle");
   function syncStrollButton() {
     const on = isStrolling();
     strollBtn.classList.toggle("active", on);
@@ -583,6 +584,10 @@ export function initUi({ camera, canvas, controls, renderer }) {
     flyModeBtn.querySelector(".setting-button-hint").textContent = on
       ? "wasd · e/q · mouse-look · esc to exit"
       : "v · wasd · e/q · mouse-look";
+    flyToggle.classList.toggle("active", on);
+    flyToggle.setAttribute("aria-pressed", on ? "true" : "false");
+    flyToggle.setAttribute("aria-label", on ? "exit fly camera" : "enter fly camera");
+    flyToggle.title = on ? "return to orbit" : "orbit / fly";
   }
   function requestStrollPointerLock(armRetry = false) {
     canvas.requestPointerLock?.().catch(() => {});
@@ -836,6 +841,10 @@ export function initUi({ camera, canvas, controls, renderer }) {
     syncFlyModeButton();
   }
   flyModeBtn.addEventListener("click", () => {
+    if (_flyFP) exitFlyMode();
+    else enterFlyMode();
+  });
+  flyToggle.addEventListener("click", () => {
     if (_flyFP) exitFlyMode();
     else enterFlyMode();
   });
