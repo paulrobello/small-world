@@ -698,6 +698,86 @@ body.mobile .help-panel.open {
   transform: translateY(-1px);
 }
 
+/* ─── Mobile fly controls ───────────────────────────────────────────── */
+.fly-touch-controls {
+  display: none;
+  position: fixed;
+  inset: 0;
+  z-index: 13;
+  pointer-events: none;
+}
+body.mobile.fly-mode .fly-touch-controls {
+  display: block;
+}
+.fly-touch-pad,
+.fly-touch-altitude {
+  position: absolute;
+  pointer-events: auto;
+  touch-action: none;
+  opacity: 0.72;
+  transition: opacity 0.25s ease;
+}
+.fly-touch-pad {
+  left: max(16px, env(safe-area-inset-left));
+  bottom: calc(max(16px, env(safe-area-inset-bottom)) + 118px);
+  width: 96px;
+  height: 96px;
+  display: grid;
+  grid-template-areas:
+    ". up ."
+    "left . right"
+    ". down .";
+  grid-template-columns: repeat(3, 30px);
+  grid-template-rows: repeat(3, 30px);
+  place-content: center;
+  gap: 3px;
+}
+.fly-touch-altitude {
+  right: max(16px, env(safe-area-inset-right));
+  bottom: calc(max(16px, env(safe-area-inset-bottom)) + 118px);
+  display: grid;
+  grid-template-rows: repeat(2, 42px);
+  gap: 8px;
+}
+.fly-touch-forward { grid-area: up; }
+.fly-touch-left { grid-area: left; }
+.fly-touch-right { grid-area: right; }
+.fly-touch-back { grid-area: down; }
+.fly-touch-button {
+  width: 42px;
+  height: 42px;
+  border: 1px solid rgba(245, 240, 230, 0.55);
+  background: rgba(8, 6, 14, 0.36);
+  color: rgba(245, 240, 230, 0.86);
+  font-family: "DM Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 16px;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  backdrop-filter: blur(5px);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.22);
+  touch-action: none;
+  -webkit-tap-highlight-color: transparent;
+  transition: background 0.12s ease, color 0.12s ease, border-color 0.12s ease;
+}
+.fly-touch-button.pressed,
+.fly-touch-button:active {
+  background: rgba(245, 240, 230, 0.86);
+  border-color: var(--ink);
+  color: #111;
+}
+@media (min-width: 721px) {
+  .fly-touch-controls { display: none !important; }
+}
+@media (max-height: 680px) {
+  .fly-touch-pad,
+  .fly-touch-altitude {
+    bottom: calc(max(12px, env(safe-area-inset-bottom)) + 96px);
+  }
+}
+
 .help-panel {
   position: fixed;
   top: 50%;

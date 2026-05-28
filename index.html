@@ -116,6 +116,19 @@
   <div class="corner corner-bl">+</div>
   <div class="corner corner-br">+</div>
 
+  <div class="fly-touch-controls" id="fly-touch-controls" aria-hidden="true">
+    <div class="fly-touch-pad" aria-label="fly movement">
+      <button class="fly-touch-button fly-touch-forward" data-fly-key="w" aria-label="move forward">↑</button>
+      <button class="fly-touch-button fly-touch-left" data-fly-key="a" aria-label="move left">←</button>
+      <button class="fly-touch-button fly-touch-right" data-fly-key="d" aria-label="move right">→</button>
+      <button class="fly-touch-button fly-touch-back" data-fly-key="s" aria-label="move back">↓</button>
+    </div>
+    <div class="fly-touch-altitude" aria-label="fly altitude">
+      <button class="fly-touch-button" data-fly-key="e" aria-label="rise">↑</button>
+      <button class="fly-touch-button" data-fly-key="q" aria-label="descend">↓</button>
+    </div>
+  </div>
+
   <div class="fps-counter" id="fps-counter" hidden>FPS <span id="fps-value">--</span></div>
 
   <aside class="help-panel" id="help-panel" aria-hidden="true">
@@ -205,6 +218,7 @@
         <dt>pinch</dt><dd>zoom in / out.</dd>
         <dt>two-finger drag</dt><dd>zoom and rotate together.</dd>
         <dt>tap a creature</dt><dd>follow it — the camera tracks it around the island.</dd>
+        <dt>fly camera</dt><dd>tap orbit/fly, drag the open view to look, and hold the edge arrows to move.</dd>
       </dl>
     </section>
 
@@ -270,7 +284,7 @@
       <div class="settings-section-label">camera</div>
 
       <label class="setting setting-checkbox">
-        <input type="checkbox" id="setting-auto-rotate" checked />
+        <input type="checkbox" id="setting-auto-rotate" />
         <span class="setting-label">auto-rotate</span>
       </label>
 

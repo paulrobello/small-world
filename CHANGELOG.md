@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.3.7 - 2026-05-28
+
+### Added
+- Added compact mobile touch controls for fly camera mode, with edge-pinned movement and altitude buttons plus touch-drag look on the open view.
+- Added static regression coverage for the mobile fly camera touch controls.
+
+### Changed
+- Changed the fresh-load auto-rotate camera setting to default off in both runtime state and the static settings markup.
+
+### Verified
+- Verified with `node tests/mobile-fly-touch-static.test.mjs`, the focused auto-rotate unittest, `make checkall`, and `git diff --check`.
+
 ## 1.3.6 - 2026-05-28
 
 ### Changed

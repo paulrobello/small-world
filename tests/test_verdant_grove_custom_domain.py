@@ -249,6 +249,7 @@ class VerdantGroveCustomDomainTest(unittest.TestCase):
         inspect = (ROOT / "src" / "inspect.js").read_text()
         state = (ROOT / "src" / "state.js").read_text()
         main = (ROOT / "main.js").read_text()
+        index = (ROOT / "index.html").read_text()
 
         self.assertIn("INSPECT_VIEW_DIRECTIONS", inspect)
         for view in ["default", "top", "left", "right", "front", "back", "up"]:
@@ -271,6 +272,8 @@ class VerdantGroveCustomDomainTest(unittest.TestCase):
         self.assertIn("controls.autoRotate = !_paused", inspect)
         self.assertIn("autoRotate: false", state)
         self.assertIn("controls.autoRotate = false", main)
+        self.assertIn('id="setting-auto-rotate"', index)
+        self.assertNotIn('id="setting-auto-rotate" checked', index)
 
     def test_inspect_wind_toggle_defaults_off(self) -> None:
         inspect = (ROOT / "src" / "inspect.js").read_text()

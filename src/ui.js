@@ -228,6 +228,12 @@ function applyStrollVisualComfort(on) {
   }
 }
 
+function clampFirstPersonPitch(fp) {
+  const lim = Math.PI / 2 - 0.05;
+  if (fp.pitch > lim) fp.pitch = lim;
+  if (fp.pitch < -lim) fp.pitch = -lim;
+}
+
 export function setStrollLocalPose(localX, localZ, yaw) {
   if (!_stroll) return false;
   const ws = state.userSettings.worldScale ?? 1;
@@ -561,6 +567,30 @@ export function initUi({ camera, canvas, controls, renderer }) {
   const strollToggle = document.getElementById("stroll-toggle");
   const flyModeBtn = document.getElementById("setting-fly-mode");
   const flyToggle = document.getElementById("fly-toggle");
+  const flyTouchControls = document.getElementById("fly-touch-controls");
+  const flyTouchButtons = [...flyTouchControls.querySelectorAll("[data-fly-key]")];
+  let flyTouchLookPointer = null;
+  let flyTouchLookX = 0;
+  let flyTouchLookY = 0;
+
+  function setFlyTouchKey(key, down) {
+    if (!_flyFP || !(key in _flyFP.keys)) return;
+    _flyFP.keys[key] = down;
+    const button = flyTouchButtons.find((btn) => btn.dataset.flyKey === key);
+    if (button) button.classList.toggle("pressed", down);
+  }
+  function resetFlyTouchKeys() {
+    for (const button of flyTouchButtons) {
+      const key = button.dataset.flyKey;
+      if (_flyFP && key in _flyFP.keys) _flyFP.keys[key] = false;
+      button.classList.remove("pressed");
+    }
+  }
+  function syncFlyTouchControls() {
+    const shown = isFlyMode() && document.body.classList.contains("mobile");
+    flyTouchControls.classList.toggle("active", shown);
+    flyTouchControls.setAttribute("aria-hidden", shown ? "false" : "true");
+  }
   function syncStrollButton() {
     const on = isStrolling();
     strollBtn.classList.toggle("active", on);
@@ -589,6 +619,8 @@ export function initUi({ camera, canvas, controls, renderer }) {
     flyToggle.setAttribute("aria-label", on ? "exit fly camera" : "enter fly camera");
     flyToggle.title = on ? "return to orbit" : "orbit / fly";
     flyToggle.dataset.mode = on ? "fly" : "orbit";
+    document.body.classList.toggle("fly-mode", on);
+    syncFlyTouchControls();
   }
   function requestStrollPointerLock(armRetry = false) {
     canvas.requestPointerLock?.().catch(() => {});
@@ -691,9 +723,7 @@ export function initUi({ camera, canvas, controls, renderer }) {
       const sens = 0.0022;
       _stroll.yaw -= e.movementX * sens;
       _stroll.pitch -= e.movementY * sens;
-      const lim = Math.PI / 2 - 0.05;
-      if (_stroll.pitch > lim) _stroll.pitch = lim;
-      if (_stroll.pitch < -lim) _stroll.pitch = -lim;
+      clampFirstPersonPitch(_stroll);
     };
     const onKey = (down) => (e) => {
       if (!_stroll) return;
@@ -792,9 +822,7 @@ export function initUi({ camera, canvas, controls, renderer }) {
       const sens = 0.0022;
       _flyFP.yaw -= e.movementX * sens;
       _flyFP.pitch -= e.movementY * sens;
-      const lim = Math.PI / 2 - 0.05;
-      if (_flyFP.pitch > lim) _flyFP.pitch = lim;
-      if (_flyFP.pitch < -lim) _flyFP.pitch = -lim;
+      clampFirstPersonPitch(_flyFP);
     };
     const onKey = (down) => (e) => {
       if (!_flyFP) return;
@@ -837,6 +865,8 @@ export function initUi({ camera, canvas, controls, renderer }) {
     if (document.pointerLockElement === canvas) document.exitPointerLock?.();
     controls.autoRotate = savedCam.autoRotate && state.userSettings.autoRotate;
     controls.enabled = true;
+    resetFlyTouchKeys();
+    flyTouchLookPointer = null;
     _flyFP = null;
     applyStrollVisualComfort(false);
     syncFlyModeButton();
@@ -849,6 +879,50 @@ export function initUi({ camera, canvas, controls, renderer }) {
     if (_flyFP) exitFlyMode();
     else enterFlyMode();
   });
+  for (const button of flyTouchButtons) {
+    const key = button.dataset.flyKey;
+    const press = (e) => {
+      if (!_flyFP) return;
+      e.preventDefault();
+      e.stopPropagation();
+      button.setPointerCapture?.(e.pointerId);
+      setFlyTouchKey(key, true);
+    };
+    const release = (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      setFlyTouchKey(key, false);
+    };
+    button.addEventListener("pointerdown", press);
+    button.addEventListener("pointerup", release);
+    button.addEventListener("pointercancel", release);
+    button.addEventListener("lostpointercapture", () => setFlyTouchKey(key, false));
+  }
+  canvas.addEventListener("pointerdown", (e) => {
+    if (!_flyFP || !document.body.classList.contains("mobile")) return;
+    if (e.pointerType !== "touch" && e.pointerType !== "pen") return;
+    if (e.target.closest?.(".fly-touch-controls")) return;
+    flyTouchLookPointer = e.pointerId;
+    flyTouchLookX = e.clientX;
+    flyTouchLookY = e.clientY;
+    canvas.setPointerCapture?.(e.pointerId);
+    e.preventDefault();
+  }, { passive: false });
+  canvas.addEventListener("pointermove", (e) => {
+    if (!_flyFP || flyTouchLookPointer !== e.pointerId) return;
+    const sens = 0.004;
+    _flyFP.yaw -= (e.clientX - flyTouchLookX) * sens;
+    _flyFP.pitch -= (e.clientY - flyTouchLookY) * sens;
+    clampFirstPersonPitch(_flyFP);
+    flyTouchLookX = e.clientX;
+    flyTouchLookY = e.clientY;
+    e.preventDefault();
+  }, { passive: false });
+  const clearFlyTouchLook = (e) => {
+    if (flyTouchLookPointer === e.pointerId) flyTouchLookPointer = null;
+  };
+  canvas.addEventListener("pointerup", clearFlyTouchLook);
+  canvas.addEventListener("pointercancel", clearFlyTouchLook);
   syncFlyModeButton();
 
   // Expose for the Escape handler below
@@ -2211,6 +2285,7 @@ export function initUi({ camera, canvas, controls, renderer }) {
     document.body.classList.add("mobile");
     const header = document.querySelector(".hud-top");
     header.classList.add("mobile");
+    syncFlyTouchControls();
     let _headerTimer = null;
     function scheduleHeaderFade() {
       clearTimeout(_headerTimer);
