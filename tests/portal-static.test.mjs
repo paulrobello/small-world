@@ -12,9 +12,8 @@ const uiSource = readFileSync(new URL('../src/ui.js', import.meta.url), 'utf8');
 const grassSource = readFileSync(new URL('../src/grass.js', import.meta.url), 'utf8');
 
 assert(
-  stateSource.includes('portal: null')
-    && stateSource.includes('portals: []'),
-  'Shared state should track the active biome portal plus every placed portal for render-loop updates and disposal.'
+  stateSource.includes('portals: []'),
+  'Shared state should track every placed portal in the portals array for render-loop updates and disposal.'
 );
 
 assert(
@@ -199,7 +198,6 @@ assert(
   worldSource.includes('createBiomePortal')
     && worldSource.includes('newRandomSeed')
     && worldSource.includes('disposeWorldPortals(worldState)')
-    && worldSource.includes('worldState.portal = null')
     && worldSource.includes('worldState.portals = []')
     && worldSource.includes('function getPortalTargetBiomes')
     && worldSource.includes('worldState.userSettings.portalDoublePlacement === true')

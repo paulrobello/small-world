@@ -24,6 +24,13 @@ export default {
         entryFileNames: "assets/[name]-[hash].js",
         chunkFileNames: "assets/[name]-[hash].js",
         assetFileNames: "assets/[name]-[hash][extname]",
+        // Split rarely-changing vendor libraries into their own stable-hash
+        // chunks so app-code edits don't force repeat visitors to re-download
+        // three.js on every deploy.
+        manualChunks: (id) => {
+          if (id.includes("node_modules/three")) return "three";
+          if (id.includes("node_modules/simplex-noise")) return "simplex";
+        },
       },
     },
     // esbuild minifier is built-in and fast; no extra install needed.

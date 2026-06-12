@@ -1,6 +1,6 @@
 import * as THREE from "three";
 import { state } from "./state.js";
-import { LOWFX } from "./lowfx.js";
+import { LOWFX, MIDFX } from "./lowfx.js";
 
 // Build a small dedicated scene containing clones of the sky elements so we
 // can render a sky-only reflection into a low-res render target without
@@ -10,8 +10,8 @@ import { LOWFX } from "./lowfx.js";
 
 export function makeWaterReflection(_biome) {
   const rt = new THREE.WebGLRenderTarget(
-    LOWFX ? 128 : 256,
-    LOWFX ? 128 : 256,
+    LOWFX || MIDFX ? 128 : 256,
+    LOWFX || MIDFX ? 128 : 256,
     { depthBuffer: false }
   );
   const scene = new THREE.Scene();

@@ -133,8 +133,7 @@ function shouldShowFirstVisitHelp() {
 }
 
 function eachPortal(fn) {
-  const portals = state.portals?.length ? state.portals : (state.portal ? [state.portal] : []);
-  for (const portal of portals) fn(portal);
+  for (const portal of state.portals ?? []) fn(portal);
 }
 
 function disposeStatePortals() {
@@ -142,15 +141,15 @@ function disposeStatePortals() {
     portal.group?.parent?.remove(portal.group);
     disposePortal(portal);
   });
-  state.portal = null;
   state.portals = [];
   state.obstacles = state.obstacles.filter((o) => o.kind !== "portal");
   buildObstacleGrid(state.obstacles);
 }
 
+const _portalClickCam = new THREE.Vector3();
 function getPortalClickSide(portal, camera) {
   const center = portal.group.position;
-  const cameraLocal = state.world.worldToLocal(camera.position.clone());
+  const cameraLocal = state.world.worldToLocal(_portalClickCam.copy(camera.position));
   const yaw = portal.group.rotation.y;
   const nx = Math.sin(yaw);
   const nz = Math.cos(yaw);
@@ -1333,7 +1332,7 @@ export function initUi({ camera, canvas, controls, renderer }) {
     state.userSettings.portalEnabled = portalEnabledEl.checked;
     if (!portalEnabledEl.checked) {
       disposeStatePortals();
-    } else if (!state.portal && !state.portals?.length && !state.isGeneratingWorld) {
+    } else if (!state.portals?.length && !state.isGeneratingWorld) {
       void generateWorld(state.currentSeed);
     }
     saveSettings();
@@ -1370,11 +1369,10 @@ export function initUi({ camera, canvas, controls, renderer }) {
 
   fxDetailsEl.open = !!state.userSettings.fxPanelOpen;
   bloomEl.checked = state.userSettings.bloom;
-  // Slider 0-300% feeds postfx.setBloomRadius. Below 100% it scales the
-  // per-pass radius on the 3 base blur pairs; above 100% it pins per-pass
-  // radius at 1.0 (the no-gap zone for the 5-tap kernel) and adds more
-  // pairs — convolving N narrow kernels gives effective σ ≈ √N × σ_base
-  // with no pointillist sample-grid at any slider value.
+  // Slider 0-300% feeds postfx.setBloomRadius, which maps it to the bloom
+  // mip chain's per-step upsample weight ("scatter") — higher values let the
+  // deeper, blurrier mips contribute more, widening the halo smoothly with
+  // no sample-grid artifacts at any slider value.
   const bloomRadius = state.userSettings.bloomRadius ?? 0.5;
   bloomRadiusEl.value = String(Math.round(bloomRadius * 100));
   bloomRadiusValueEl.textContent = bloomRadiusEl.value + "%";
@@ -2428,7 +2426,7 @@ export function initUi({ camera, canvas, controls, renderer }) {
       return;
     }
     if (!_photoFP && !_flyFP) {
-      const portals = state.portals?.length ? state.portals : (state.portal ? [state.portal] : []);
+      const portals = state.portals ?? [];
       const portalHits = _raycaster.intersectObjects(portals.map((portal) => portal.group), true);
       if (portalHits.length) {
         let portalRoot = portalHits[0].object;

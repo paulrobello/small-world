@@ -1,10 +1,125 @@
 import * as THREE from "three";
 import { EffectComposer } from "three/addons/postprocessing/EffectComposer.js";
-import { RenderPass } from "three/addons/postprocessing/RenderPass.js";
 import { ShaderPass } from "three/addons/postprocessing/ShaderPass.js";
-import { Pass } from "three/addons/postprocessing/Pass.js";
+import { Pass, FullScreenQuad } from "three/addons/postprocessing/Pass.js";
 import { state } from "./state.js";
 import { LOWFX } from "./lowfx.js";
+
+// Mip-chain bloom — the project's only bloom pipeline.
+// Progressive filtered downsample + tent upsample à la Jimenez (SIGGRAPH 2014
+// "Next Generation Post Processing in Call of Duty"): blur work happens at
+// 1/2..1/32 resolution for a fraction of the stacked-pair Gaussian's fragment
+// cost. The wide-footprint 13-tap downsample (+ Karis average on the first
+// step, which kills single-pixel fireflies) and the 3×3 tent upsamples are
+// what prevent the pixelation/shimmer that naive half-res bloom produces —
+// no step ever point-samples, and no upsample ever magnifies more than 2×.
+const _bloomDownsampleShader = {
+  uniforms: {
+    tDiffuse: { value: null },
+    uTexel: { value: new THREE.Vector2(1, 1) }, // 1 / source resolution
+    uKaris: { value: 0.0 },                     // 1.0 on the first (full→half) step
+  },
+  vertexShader: `
+    varying vec2 vUv;
+    void main() {
+      vUv = uv;
+      gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+    }
+  `,
+  fragmentShader: `
+    precision highp float;
+    uniform sampler2D tDiffuse;
+    uniform vec2 uTexel;
+    uniform float uKaris;
+    varying vec2 vUv;
+
+    float luma(vec3 c) { return dot(c, vec3(0.2126, 0.7152, 0.0722)); }
+
+    void main() {
+      vec2 t = uTexel;
+      // Jimenez 13-tap downsample: a 6x6 footprint sampled as 13 bilinear
+      // fetches. Every source pixel contributes — that's the anti-aliasing
+      // property a plain bilinear 2x2 downsample lacks.
+      vec3 a = texture2D(tDiffuse, vUv + t * vec2(-2.0,  2.0)).rgb;
+      vec3 b = texture2D(tDiffuse, vUv + t * vec2( 0.0,  2.0)).rgb;
+      vec3 c = texture2D(tDiffuse, vUv + t * vec2( 2.0,  2.0)).rgb;
+      vec3 d = texture2D(tDiffuse, vUv + t * vec2(-2.0,  0.0)).rgb;
+      vec3 e = texture2D(tDiffuse, vUv).rgb;
+      vec3 f = texture2D(tDiffuse, vUv + t * vec2( 2.0,  0.0)).rgb;
+      vec3 g = texture2D(tDiffuse, vUv + t * vec2(-2.0, -2.0)).rgb;
+      vec3 h = texture2D(tDiffuse, vUv + t * vec2( 0.0, -2.0)).rgb;
+      vec3 i = texture2D(tDiffuse, vUv + t * vec2( 2.0, -2.0)).rgb;
+      vec3 j = texture2D(tDiffuse, vUv + t * vec2(-1.0,  1.0)).rgb;
+      vec3 k = texture2D(tDiffuse, vUv + t * vec2( 1.0,  1.0)).rgb;
+      vec3 l = texture2D(tDiffuse, vUv + t * vec2(-1.0, -1.0)).rgb;
+      vec3 m = texture2D(tDiffuse, vUv + t * vec2( 1.0, -1.0)).rgb;
+
+      if (uKaris > 0.5) {
+        // Karis average: weight the five overlapping 2x2 boxes by 1/(1+luma)
+        // so an isolated ultra-bright pixel can't dominate its box — the
+        // primary cause of temporal flicker in reduced-res bloom.
+        vec3 g0 = (a + b + d + e) * 0.25;
+        vec3 g1 = (b + c + e + f) * 0.25;
+        vec3 g2 = (d + e + g + h) * 0.25;
+        vec3 g3 = (e + f + h + i) * 0.25;
+        vec3 g4 = (j + k + l + m) * 0.25;
+        float w0 = 0.125 / (1.0 + luma(g0));
+        float w1 = 0.125 / (1.0 + luma(g1));
+        float w2 = 0.125 / (1.0 + luma(g2));
+        float w3 = 0.125 / (1.0 + luma(g3));
+        float w4 = 0.5   / (1.0 + luma(g4));
+        vec3 col = (g0 * w0 + g1 * w1 + g2 * w2 + g3 * w3 + g4 * w4)
+                 / (w0 + w1 + w2 + w3 + w4);
+        gl_FragColor = vec4(col, 1.0);
+      } else {
+        vec3 col = e * 0.125
+                 + (a + c + g + i) * 0.03125
+                 + (b + d + f + h) * 0.0625
+                 + (j + k + l + m) * 0.125;
+        gl_FragColor = vec4(col, 1.0);
+      }
+    }
+  `,
+};
+
+// 3x3 tent-filter upsample, rendered with additive blending into the next
+// larger mip. Each step only magnifies 2x through the tent kernel, so
+// bilinear texel blocks never become visible; uScatter weights each step's
+// contribution (deeper mips contribute scatter^n — the radius control).
+const _bloomUpsampleShader = {
+  uniforms: {
+    tDiffuse: { value: null },
+    uTexel: { value: new THREE.Vector2(1, 1) }, // 1 / source (smaller mip) resolution
+    uScatter: { value: 0.6 },
+  },
+  vertexShader: `
+    varying vec2 vUv;
+    void main() {
+      vUv = uv;
+      gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+    }
+  `,
+  fragmentShader: `
+    precision highp float;
+    uniform sampler2D tDiffuse;
+    uniform vec2 uTexel;
+    uniform float uScatter;
+    varying vec2 vUv;
+    void main() {
+      vec2 t = uTexel;
+      vec3 col = texture2D(tDiffuse, vUv).rgb * 4.0;
+      col += texture2D(tDiffuse, vUv + vec2( t.x, 0.0)).rgb * 2.0;
+      col += texture2D(tDiffuse, vUv + vec2(-t.x, 0.0)).rgb * 2.0;
+      col += texture2D(tDiffuse, vUv + vec2(0.0,  t.y)).rgb * 2.0;
+      col += texture2D(tDiffuse, vUv + vec2(0.0, -t.y)).rgb * 2.0;
+      col += texture2D(tDiffuse, vUv + t).rgb;
+      col += texture2D(tDiffuse, vUv - t).rgb;
+      col += texture2D(tDiffuse, vUv + vec2( t.x, -t.y)).rgb;
+      col += texture2D(tDiffuse, vUv + vec2(-t.x,  t.y)).rgb;
+      gl_FragColor = vec4(col * (1.0 / 16.0) * uScatter, 1.0);
+    }
+  `,
+};
 
 // Selective bloom render layer. Meshes opted-in to bloom (glow eyes, glow
 // flowers, crystal cores, lantern orbs, obsidian shards) call
@@ -68,58 +183,6 @@ const _srgbOutputShader = {
     }
   `,
 };
-
-// Separable 5-tap linear-sampling Gaussian for the bloom blur. Each tap
-// between center and edge pairs two adjacent Gaussian samples by reading at
-// their weighted midpoint, letting hardware bilinear filtering sum them in
-// one fetch — same shape as a 9-tap kernel with ~half the fetches.
-//
-// Weights / base offsets derived from a 9-tap Gaussian (sigma ≈ 2):
-//   center            : 0.227
-//   pair (taps 1,2)   : combined 0.315, weighted offset ≈ 1.384
-//   pair (taps 3,4)   : combined 0.070, weighted offset ≈ 3.229
-//
-// Offsets are multiplied by `uRadius` (in physical pixels) at draw time so
-// the settings panel can scale the halo live. Weights stay sigma=2-shaped —
-// stretching the offsets is mathematically a non-Gaussian kernel, but for
-// tight isolated emissives the visual result is indistinguishable from a
-// wider sigma.
-function _blurShader(axis, radiusUniform) {
-  const dirExpr = axis === "h" ? "vec2(px.x, 0.0)" : "vec2(0.0, px.y)";
-  return {
-    uniforms: {
-      tDiffuse: { value: null },
-      uResolution: { value: new THREE.Vector2(1, 1) },
-      uStrength: { value: 1.0 },
-      uRadius: radiusUniform,
-    },
-    vertexShader: `
-      varying vec2 vUv;
-      void main() {
-        vUv = uv;
-        gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
-      }
-    `,
-    fragmentShader: `
-      precision highp float;
-      uniform sampler2D tDiffuse;
-      uniform vec2 uResolution;
-      uniform float uStrength;
-      uniform float uRadius;
-      varying vec2 vUv;
-      void main() {
-        vec2 px = 1.0 / uResolution;
-        vec2 d = ${dirExpr};
-        vec3 c = texture2D(tDiffuse, vUv).rgb * 0.227;
-        c += texture2D(tDiffuse, vUv + d * 1.384 * uRadius).rgb * 0.315;
-        c += texture2D(tDiffuse, vUv - d * 1.384 * uRadius).rgb * 0.315;
-        c += texture2D(tDiffuse, vUv + d * 3.229 * uRadius).rgb * 0.070;
-        c += texture2D(tDiffuse, vUv - d * 3.229 * uRadius).rgb * 0.070;
-        gl_FragColor = vec4(c * uStrength, 1.0);
-      }
-    `,
-  };
-}
 
 // Additive composite of the bloom-only blurred image on top of the main
 // render. tBloom is the bloom composer's output (layer-1 scene blurred by
@@ -480,20 +543,14 @@ export function initPostFX(renderer, scene, camera) {
   // Expose for depth-based post-processing passes.
   state.depthTexture = depthTexture;
 
-  // Bloom-only composer. The camera is layer-filtered to BLOOM_LAYER for
-  // the bloom render (see the render() body) so only emissive meshes
-  // rasterize. RT is UnsignedByte (not the EffectComposer default
-  // HalfFloat) — HalfFloat is ~2× the bandwidth per sample on integrated
-  // GPUs and bloom doesn't need HDR (emissives are near-1.0 already).
-  // depthTexture is shared with the depth pre-pass: the bloom render runs
-  // with autoClearDepth=false (see render() body) so the scene depth from
-  // the pre-pass is preserved, and emissives' depthTest culls anything
-  // behind opaque geometry. EffectComposer.clone()s the RT for its
-  // ping-pong RT2, which would clone the depth attachment too — we then
-  // re-point RT2's depthTexture back to the shared one so the final blur
-  // pass (which writes into RT2 or RT1 depending on pass count) doesn't
-  // diverge from the pre-pass depth. Custom RT pins the composer's
-  // _pixelRatio to 1, so size args here are physical pixels.
+  // Bloom emissive-capture RT. The camera is layer-filtered to BLOOM_LAYER
+  // for this render (see renderBloomChain) so only emissive meshes
+  // rasterize. Captured at full physical resolution so the depth attachment
+  // can be shared with the depth pre-pass — the capture runs with
+  // autoClearDepth=false, preserving the scene depth so emissives behind
+  // opaque geometry are culled by depthTest instead of shining through.
+  // The capture itself is cheap (sparse fragments); all blur work happens
+  // down the mip chain at 1/2..1/32 resolution.
   const bloomPhysSize = new THREE.Vector2(
     Math.max(1, Math.round(size.x * pixelRatio)),
     Math.max(1, Math.round(size.y * pixelRatio))
@@ -511,78 +568,106 @@ export function initPostFX(renderer, scene, camera) {
       depthTexture,
     }
   );
-  const bloomComposer = new EffectComposer(renderer, bloomRT);
-  bloomComposer.renderToScreen = false;
-  // EffectComposer.clone() produced an orphan DepthTexture on RT2 — dispose
-  // it and share the pre-pass depth so depth is consistent across the
-  // ping-pong.
-  if (bloomComposer.renderTarget2.depthTexture &&
-      bloomComposer.renderTarget2.depthTexture !== depthTexture) {
-    bloomComposer.renderTarget2.depthTexture.dispose();
-    bloomComposer.renderTarget2.depthTexture = depthTexture;
+
+  // ── Mip-chain bloom resources ────────────────────────────────────────────
+  const BLOOM_MAX_MIPS = 5;
+  const bloomScatterUniform = { value: 0.6 };
+  let bloomMips = [];
+  function bloomMipsResize(pw, ph) {
+    for (const m of bloomMips) m.dispose();
+    bloomMips = [];
+    let w = pw >> 1;
+    let h = ph >> 1;
+    for (let i = 0; i < BLOOM_MAX_MIPS && w >= 8 && h >= 8; i++) {
+      bloomMips.push(new THREE.WebGLRenderTarget(w, h, {
+        type: THREE.HalfFloatType, // HDR headroom + no banding, same as bloomRT
+        format: THREE.RGBAFormat,
+        depthBuffer: false,
+      }));
+      w >>= 1;
+      h >>= 1;
+    }
+  }
+  bloomMipsResize(bloomPhysSize.x, bloomPhysSize.y);
+  const bloomDownMat = new THREE.ShaderMaterial({
+    uniforms: THREE.UniformsUtils.clone(_bloomDownsampleShader.uniforms),
+    vertexShader: _bloomDownsampleShader.vertexShader,
+    fragmentShader: _bloomDownsampleShader.fragmentShader,
+    depthTest: false,
+    depthWrite: false,
+  });
+  const bloomUpMat = new THREE.ShaderMaterial({
+    uniforms: THREE.UniformsUtils.clone(_bloomUpsampleShader.uniforms),
+    vertexShader: _bloomUpsampleShader.vertexShader,
+    fragmentShader: _bloomUpsampleShader.fragmentShader,
+    depthTest: false,
+    depthWrite: false,
+    blending: THREE.AdditiveBlending, // accumulate into the larger mip
+  });
+  bloomUpMat.uniforms.uScatter = bloomScatterUniform; // share the live ref
+  const bloomQuad = new FullScreenQuad(bloomDownMat);
+  const _bloomClearColor = new THREE.Color(0, 0, 0);
+  const _prevClearColor = new THREE.Color();
+
+  // Capture emissives into bloomRT at full res (against the preserved scene
+  // depth, exactly like the legacy path — occlusion is unchanged), then run
+  // the down/up chain. Output lands in bloomMips[0] (half res); the
+  // composite's bilinear fetch handles the final 2× — invisible on content
+  // this blurred.
+  function renderBloomChain(s, cam) {
+    const prevBackground = s.background;
+    const prevLayerMask = cam.layers.mask;
+    const prevAutoClear = renderer.autoClear;
+    renderer.getClearColor(_prevClearColor);
+    const prevClearAlpha = renderer.getClearAlpha();
+    s.background = null;
+    cam.layers.set(BLOOM_LAYER);
+    renderer.setClearColor(_bloomClearColor, 1);
+    renderer.autoClearDepth = false; // keep the pre-pass scene depth
+    renderer.setRenderTarget(bloomRT);
+    renderer.clear(true, false, false); // color only
+    renderer.render(s, cam);
+    renderer.autoClearDepth = true;
+    cam.layers.mask = prevLayerMask;
+    s.background = prevBackground;
+    renderer.setClearColor(_prevClearColor, prevClearAlpha);
+
+    // autoClear must be off: downsamples overwrite every pixel anyway, and
+    // the additive upsamples must NOT clear the mip they accumulate into.
+    renderer.autoClear = false;
+    bloomQuad.material = bloomDownMat;
+    let srcTex = bloomRT.texture;
+    let srcW = bloomRT.width;
+    let srcH = bloomRT.height;
+    for (let i = 0; i < bloomMips.length; i++) {
+      bloomDownMat.uniforms.tDiffuse.value = srcTex;
+      bloomDownMat.uniforms.uTexel.value.set(1 / srcW, 1 / srcH);
+      bloomDownMat.uniforms.uKaris.value = i === 0 ? 1.0 : 0.0;
+      renderer.setRenderTarget(bloomMips[i]);
+      bloomQuad.render(renderer);
+      srcTex = bloomMips[i].texture;
+      srcW = bloomMips[i].width;
+      srcH = bloomMips[i].height;
+    }
+    bloomQuad.material = bloomUpMat;
+    for (let i = bloomMips.length - 1; i >= 1; i--) {
+      bloomUpMat.uniforms.tDiffuse.value = bloomMips[i].texture;
+      bloomUpMat.uniforms.uTexel.value.set(
+        1 / bloomMips[i].width, 1 / bloomMips[i].height
+      );
+      renderer.setRenderTarget(bloomMips[i - 1]);
+      bloomQuad.render(renderer);
+    }
+    renderer.autoClear = prevAutoClear;
+    renderer.setRenderTarget(null);
+    return bloomMips[0]?.texture ?? bloomRT.texture;
   }
 
-  const bloomRenderPass = new RenderPass(scene, camera);
-  // Black background for the bloom-only pass — non-layer-1 meshes are clipped
-  // out, so we don't want the regular sky/biome BG bleeding in.
-  bloomRenderPass.clearColor = new THREE.Color(0, 0, 0);
-  bloomRenderPass.clearAlpha = 1;
-  bloomRenderPass.clear = true;
-  bloomComposer.addPass(bloomRenderPass);
-  // Tight halo: separable 5-tap linear-sampling Gaussian (H then V). Disable
-  // depthTest/depthWrite on the blur quads — the RTs have a preserved depth
-  // attachment, and we want the fullscreen quad to always rasterize.
-  // Shared radius uniform so both blur passes resize together. Default 1.0
-  // keeps the 5 taps overlapping (no visible "pointillist" gaps); values
-  // above ~1.5 start to space the taps apart and a sample-hit dot grid
-  // appears. The settings panel slider stays within that no-gap range.
-  //
-  // ShaderPass constructor deep-clones the supplied uniforms via
-  // UniformsUtils.clone, so each pass would get its own disconnected
-  // {value: 1.0}. After construction we re-point uRadius back at the
-  // shared reference so setBloomRadius can update both passes at once.
-  const bloomRadiusUniform = { value: state.userSettings.bloomRadius ?? 1.0 };
-  // Multi-pass blur — 3 H+V pairs convolve to effective sigma ≈ √3 × σ
-  // base ≈ 3.5px at radius=1, giving a wide soft halo. Each individual
-  // pass stays at the safe tap spacing, so widening the radius slider can't
-  // produce pointillist gaps the way a single big-radius pass would.
-  // Pre-allocate up to BLOOM_MAX_PAIRS H+V pairs. Slider beyond 100% enables
-  // more pairs rather than widening per-pass offsets — each pass stays at
-  // radius ≤ 1 (the safe no-gap zone for the 5-tap kernel), and stacked
-  // convolutions give effective σ ≈ √N × σ_base. Unused pairs are
-  // `enabled = false` so EffectComposer skips them.
-  const BLOOM_BASE_PAIRS = 3;   // active at slider ≤ 100%
-  const BLOOM_MAX_PAIRS = 8;    // active at slider 300%
-  const bloomBlurPasses = [];
-  function makeBlurPass(axis) {
-    const pass = new ShaderPass(_blurShader(axis, bloomRadiusUniform));
-    pass.uniforms.uRadius = bloomRadiusUniform; // ShaderPass clones uniforms
-    pass.material.depthTest = false;
-    pass.material.depthWrite = false;
-    pass.uniforms.uResolution.value.copy(bloomPhysSize);
-    bloomBlurPasses.push(pass);
-    return pass;
-  }
-  for (let i = 0; i < BLOOM_MAX_PAIRS; i++) {
-    bloomComposer.addPass(makeBlurPass("h"));
-    bloomComposer.addPass(makeBlurPass("v"));
-  }
   function applyBloomRadiusSetting(sliderUnit) {
-    // sliderUnit ∈ [0, 3]. ≤1: scale per-pass radius on base pair count;
-    // >1: clamp per-pass radius at 1 and grow the active pair count linearly
-    // up to BLOOM_MAX_PAIRS at sliderUnit=3.
-    let activePairs, perPass;
-    if (sliderUnit <= 1.0) {
-      activePairs = BLOOM_BASE_PAIRS;
-      perPass = sliderUnit * 2.0;
-    } else {
-      perPass = sliderUnit * 2.0;
-      activePairs = BLOOM_BASE_PAIRS;
-    }
-    bloomRadiusUniform.value = perPass;
-    for (let i = 0; i < bloomBlurPasses.length; i++) {
-      bloomBlurPasses[i].enabled = Math.floor(i / 2) < activePairs;
-    }
+    // sliderUnit ∈ [0, 3]. Maps to the per-step upsample weight ("scatter") —
+    // deeper mips contribute scatter^n, so higher values read as a wider,
+    // softer halo.
+    bloomScatterUniform.value = THREE.MathUtils.clamp(0.4 + 0.2 * sliderUnit, 0.2, 1.0);
   }
   applyBloomRadiusSetting(state.userSettings.bloomRadius ?? 1.0);
 
@@ -599,10 +684,8 @@ export function initPostFX(renderer, scene, camera) {
   // Composite the bloom-only blurred output onto the main render. Whole
   // pass is `enabled = false` when bloom is off so the composer skips it.
   const bloomCompositePass = new ShaderPass(_bloomCompositeShader);
-  // Composite weight. Multi-pass blur spreads energy thinner across more
-  // pixels — at BLOOM_BASE_PAIRS=3 the peak halo pixel sits roughly 3× dimmer
-  // than a single H+V pass, so the strength compensates.
-  const BLOOM_COMPOSITE_STRENGTH = 4.5;
+  // Composite weight — tuned against the mip chain's accumulated pyramid.
+  const BLOOM_COMPOSITE_STRENGTH = 1.8;
   bloomCompositePass.uniforms.uStrength.value =
     state.userSettings.bloom ? BLOOM_COMPOSITE_STRENGTH : 0.0;
   // Skip the composite pass entirely when bloom is off — one fewer
@@ -666,24 +749,9 @@ export function initPostFX(renderer, scene, camera) {
       inputPass.setSourceTexture(depthRT.texture);
       renderer.setRenderTarget(prevTarget);
 
-      bloomRenderPass.scene = s;
-      bloomRenderPass.camera = cam;
       if (state.userSettings.bloom) {
-        // Bloom render: restrict the camera to BLOOM_LAYER so only emissive
-        // meshes are rasterized. The bloom RT shares the depth attachment
-        // with the scene render above — autoClearDepth=false preserves that
-        // depth so emissives behind opaque geometry are properly occluded.
-        // scene.background would render as a full-frame fill, so null it.
-        const prevBackground = s.background;
-        const prevLayerMask = cam.layers.mask;
-        s.background = null;
-        cam.layers.set(BLOOM_LAYER);
-        renderer.autoClearDepth = false;
-        bloomComposer.render();
-        renderer.autoClearDepth = true;
-        cam.layers.mask = prevLayerMask;
-        s.background = prevBackground;
-        bloomCompositePass.uniforms.tBloom.value = bloomComposer.readBuffer.texture;
+        // Emissive capture + down/up mip pyramid; output lands at half res.
+        bloomCompositePass.uniforms.tBloom.value = renderBloomChain(s, cam);
       }
       composer.render();
     },
@@ -695,8 +763,13 @@ export function initPostFX(renderer, scene, camera) {
       // so we pass physical pixels directly.
       const pw = Math.max(1, Math.round(w * pr));
       const ph = Math.max(1, Math.round(h * pr));
-      bloomComposer.setSize(pw, ph);
-      for (const p of bloomBlurPasses) p.uniforms.uResolution.value.set(pw, ph);
+      // bloomRT shares its depth attachment with depthRT — BOTH must resize
+      // to the same physical size, or three throws "Attached DepthTexture is
+      // initialized to the incorrect size" on the next bind and every frame
+      // after (black canvas). setSize() disposes the GL objects; the shared
+      // depth texture re-initializes at the new size on next bind.
+      bloomRT.setSize(pw, ph);
+      bloomMipsResize(pw, ph);
       tiltShiftPass.uniforms.uResolution.value.set(w, h);
       depthFXPass.uniforms.uResolution.value.set(w, h);
       depthRT.setSize(pw, ph);

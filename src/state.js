@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { MIDFX } from "./lowfx.js";
 
 // App version — injected by Vite at build time from package.json.
 // In dev mode, reads from the env var; in production, inlined by define.
@@ -48,7 +49,8 @@ export const state = {
   cloudSwirl: null,
   shadowDisks: null,
   waterReflection: null,
-  portal: null,
+  // Biome portals for the current world. Always an array — one entry per
+  // placed portal (two in double-placement mode). Rebuilt on every regen.
   portals: [],
   mountainBasePos: null,
   dustKicks: [],
@@ -119,9 +121,12 @@ export const state = {
     autoRegenMinutes: 2,
     bloom: true,
     tiltShift: false,
-    outline: true,
-    ao: true,
-    depthFog: true,
+    // Depth-driven FX default off on mid-tier mobile (MIDFX) — the combined
+    // depth-FX pass is a large share of mobile GPU frame time. These are only
+    // defaults: saved user settings loaded by ui.js still override them.
+    outline: !MIDFX,
+    ao: !MIDFX,
+    depthFog: !MIDFX,
     fxPanelOpen: false,
     portalEnabled: false,
     portalDoublePlacement: false,

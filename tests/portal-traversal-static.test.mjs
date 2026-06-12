@@ -104,7 +104,7 @@ assert(
 assert(
   uiSource.includes('getPortalSideEntryPose')
     && uiSource.includes('function getPortalClickSide')
-    && uiSource.includes('state.world.worldToLocal(camera.position.clone())')
+    && uiSource.includes('state.world.worldToLocal(_portalClickCam.copy(camera.position))')
     && uiSource.includes('_raycaster.intersectObjects(portals.map((portal) => portal.group), true)')
     && uiSource.includes('enterStrollFromPortal(pose.x, pose.z, pose.yaw)'),
   'Clicking a portal should enter first-person on the clicked side facing into the ring.'

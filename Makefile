@@ -2,7 +2,7 @@ PORT := 2001
 DEV_PID_FILE := .vite-dev.pid
 DEV_LOG_FILE := .vite-dev.log
 
-.PHONY: dev dev-start dev-stop dev-restart build preview lint checkall clean
+.PHONY: dev dev-start dev-stop dev-restart build preview lint test checkall clean
 
 # Vite dev server with hot reload (foreground, port 2001)
 dev:
@@ -73,13 +73,17 @@ preview:
 lint:
 	npx eslint main.js src/
 
-# Run all tests and local verification
-checkall:
+# Run all tests. `|| exit 1` is load-bearing: without it the for-loop's exit
+# status is the last test's only, and earlier failures silently pass make.
+test:
 	@for test in tests/*.test.mjs; do \
 		echo "node $$test"; \
-		node "$$test"; \
+		node "$$test" || exit 1; \
 	done
 	python3 -m unittest discover -s tests -p 'test_*.py'
+
+# Run all tests and local verification
+checkall: test
 	$(MAKE) lint
 	$(MAKE) build
 

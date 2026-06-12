@@ -1,3 +1,9 @@
+// ?perf=1 performance probe: waits for the world to settle, then samples N frame
+// timings (?perfFrames, ?perfSettle) plus optional per-phase breakdowns wired in
+// by main.js via beginPerfFrame / measurePerfPhase / endPerfFrame. startPerfProbe
+// kicks off the async run and publishes the result on window.__swPerf (and logs
+// "[small-world:perf]") for automated capture. No-op unless ?perf=1 is set, so the
+// instrumentation hooks stay cheap (early-out on activeProbe) in normal runs.
 function getSearchParams() {
   if (typeof window === "undefined") return null;
   return new URLSearchParams(window.location.search);

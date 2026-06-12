@@ -1,5 +1,9 @@
 # Reddit Release Announcement
 
+> Marketing draft — title options and post copy for announcing the project on
+> Reddit. Not part of the build or runtime; kept here for reuse on the next
+> public update.
+
 ## Title Options
 
 - Small World: a browser-based floating island terrarium with fully procedural biomes and creatures

@@ -47,6 +47,9 @@ const EDGE_RIM_Y = 0.0;
 // Below this the noise amplitude fades and height converges to a flat rim.
 const RIM_LEVEL_START = 0.35;
 
+// `layout` is captured by reference at call time — mutating layout.centers
+// after this call has no effect on the returned closure. Re-enable-archipelago
+// work that adds/removes centers must rebuild the height function.
 export function makeHeightFn(noise2D, layout, amp = 3.0) {
   return (x, z) => {
     let falloff = 0;

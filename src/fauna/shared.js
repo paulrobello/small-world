@@ -13,14 +13,16 @@ export const WATER_AVOID_Y = 0.0;
 
 /**
  * Sample terrain normal at (x, z) via central finite differences.
- * Returns a unit Vector3.
+ * Returns a unit Vector3 — a shared module-scope scratch, overwritten on the
+ * next call. Consume (or copy) it before calling again.
  */
+const _terrainNormal = new THREE.Vector3();
 export function sampleTerrainNormal(x, z, heightFn, eps = 0.1) {
   const yl = heightFn(x - eps, z);
   const yr = heightFn(x + eps, z);
   const yf = heightFn(x, z - eps);
   const yb = heightFn(x, z + eps);
-  return new THREE.Vector3(yl - yr, 2 * eps, yf - yb).normalize();
+  return _terrainNormal.set(yl - yr, 2 * eps, yf - yb).normalize();
 }
 
 const SLOPE_LIMIT = 2;
@@ -28,18 +30,20 @@ const clampSlope = (v) => Math.max(-SLOPE_LIMIT, Math.min(SLOPE_LIMIT, v));
 
 /**
  * Convert cached world-space terrain gradients into heading-local pitch/roll.
+ * Returns a shared module-scope scratch object, overwritten on the next call
+ * (including via sampleSlopes) — consume the fields before calling again.
  */
+const _slopeTargets = { pitchTarget: 0, rollTarget: 0, slopeFwd: 0, slopeRight: 0 };
 export function slopeTargetsFromGradient(gradientX, gradientZ, heading) {
   const ch = Math.cos(heading);
   const sh = Math.sin(heading);
   const slopeFwd = ch * gradientX + sh * gradientZ;
   const slopeRight = sh * gradientX - ch * gradientZ;
-  return {
-    pitchTarget: -Math.atan(clampSlope(slopeFwd)),
-    rollTarget: Math.atan(clampSlope(slopeRight)),
-    slopeFwd,
-    slopeRight,
-  };
+  _slopeTargets.pitchTarget = -Math.atan(clampSlope(slopeFwd));
+  _slopeTargets.rollTarget = Math.atan(clampSlope(slopeRight));
+  _slopeTargets.slopeFwd = slopeFwd;
+  _slopeTargets.slopeRight = slopeRight;
+  return _slopeTargets;
 }
 
 /**
@@ -49,6 +53,9 @@ export function slopeTargetsFromGradient(gradientX, gradientZ, heading) {
  * World-space gradients are included for callers that cache slopes across
  * heading changes.
  */
+const _slopeSample = {
+  pitchTarget: 0, rollTarget: 0, slopeFwd: 0, slopeRight: 0, gradientX: 0, gradientZ: 0,
+};
 export function sampleSlopes(x, z, heading, ds, heightFn) {
   const ch = Math.cos(heading);
   const sh = Math.sin(heading);
@@ -60,11 +67,16 @@ export function sampleSlopes(x, z, heading, ds, heightFn) {
   const slopeRight = (yR - yL) / (2 * ds);
   const gradientX = ch * slopeFwd + sh * slopeRight;
   const gradientZ = sh * slopeFwd - ch * slopeRight;
-  return {
-    ...slopeTargetsFromGradient(gradientX, gradientZ, heading),
-    gradientX,
-    gradientZ,
-  };
+  // Shared module-scope scratch — overwritten on the next call; consume the
+  // fields (or copy them, like the walker slope cache does) before re-calling.
+  const targets = slopeTargetsFromGradient(gradientX, gradientZ, heading);
+  _slopeSample.pitchTarget = targets.pitchTarget;
+  _slopeSample.rollTarget = targets.rollTarget;
+  _slopeSample.slopeFwd = targets.slopeFwd;
+  _slopeSample.slopeRight = targets.slopeRight;
+  _slopeSample.gradientX = gradientX;
+  _slopeSample.gradientZ = gradientZ;
+  return _slopeSample;
 }
 
 /**
@@ -148,28 +160,37 @@ export function buildObstacleGrid(obstacles) {
 }
 
 // Return obstacle indices whose bounding cell overlaps the query disc.
-function nearbyObstacleIndices(x, z, radius) {
+// Results are written into the caller-supplied `out` array (cleared first) so
+// the hot path allocates nothing. Callers own a dedicated module-scope scratch
+// array each — avoidObstacles' outer candidate list must survive the nested
+// wedge-check query, so the two must not share one array. The dedup Set is
+// shared: it's only live during a single fill, which never nests.
+const _nearbySeen = new Set();
+function nearbyObstacleIndices(x, z, radius, out) {
   if (!_grid || _gridObs !== state.obstacles) return null; // fallback — no grid built, or grid is stale
   const minCX = Math.floor((x - radius) / GRID_CELL);
   const maxCX = Math.floor((x + radius) / GRID_CELL);
   const minCZ = Math.floor((z - radius) / GRID_CELL);
   const maxCZ = Math.floor((z + radius) / GRID_CELL);
-  const out = [];
-  const seen = new Set();
+  out.length = 0;
+  _nearbySeen.clear();
   for (let cx = minCX; cx <= maxCX; cx++) {
     for (let cz = minCZ; cz <= maxCZ; cz++) {
       const bucket = _grid.get(cellKey(cx, cz));
       if (!bucket) continue;
       for (let j = 0; j < bucket.length; j++) {
         const idx = bucket[j];
-        if (seen.has(idx)) continue;
-        seen.add(idx);
+        if (_nearbySeen.has(idx)) continue;
+        _nearbySeen.add(idx);
         out.push(idx);
       }
     }
   }
   return out;
 }
+const _candidateScratch = [];
+const _wedgeScratch = [];
+const _pushScratch = [];
 
 // Color similarity test for the herding check. Cheap RGB distance — fine for
 // the small biome palettes used here.
@@ -188,7 +209,8 @@ const smoothstep01 = (v) => {
   const t = clamp01(v);
   return t * t * (3 - 2 * t);
 };
-const wrapAngle = (a) =>
+// Wrap an angle (or angle difference) to [-π, π) for shortest-arc turns.
+export const wrapAngle = (a) =>
   ((a + Math.PI) % (Math.PI * 2) + Math.PI * 2) % (Math.PI * 2) - Math.PI;
 
 // Combined obstacle avoidance for grounded movers (walkers + caterpillars).
@@ -222,7 +244,7 @@ export function avoidObstacles(
   if (obs && obs.length > 0) {
     const skipping = skipX !== undefined && skipZ !== undefined;
     // Use spatial grid to narrow the candidate set.
-    const candidates = nearbyObstacleIndices(nx, nz, cr + 2) || obs.map((_, i) => i);
+    const candidates = nearbyObstacleIndices(nx, nz, cr + 2, _candidateScratch) || obs.map((_, i) => i);
     let proactive = null;
     for (let ci = 0; ci < candidates.length; ci++) {
       const i = candidates[ci];
@@ -272,7 +294,7 @@ export function avoidObstacles(
       const sz = pz + tz * step;
       let wedged = false;
       // Use spatial grid for wedge check too.
-      const wedgeCandidates = nearbyObstacleIndices(sx, sz, cr + 2) || obs.map((_, j) => j);
+      const wedgeCandidates = nearbyObstacleIndices(sx, sz, cr + 2, _wedgeScratch) || obs.map((_, j) => j);
       for (let wj = 0; wj < wedgeCandidates.length; wj++) {
         const j = wedgeCandidates[wj];
         if (j === i) continue;
@@ -346,7 +368,7 @@ export function pushOutOfObstacles(pos, vel, bodyR) {
   const obs = state.obstacles;
   if (!obs || obs.length === 0) return;
   // Use spatial grid for O(nearby) lookups.
-  const candidates = nearbyObstacleIndices(pos.x, pos.z, bodyR + 2);
+  const candidates = nearbyObstacleIndices(pos.x, pos.z, bodyR + 2, _pushScratch);
   if (candidates) {
     for (let ci = 0; ci < candidates.length; ci++) {
       const o = obs[candidates[ci]];

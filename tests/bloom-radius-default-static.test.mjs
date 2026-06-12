@@ -5,7 +5,7 @@ const stateSource = readFileSync(new URL('../src/state.js', import.meta.url), 'u
 const htmlSource = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
 
 assert(
-  htmlSource.includes('id="setting-bloom-radius" min="0" max="110" step="1" value="50"')
+  htmlSource.includes('id="setting-bloom-radius" min="0" max="300" step="1" value="50"')
     && htmlSource.includes('id="setting-bloom-radius-value">50%</span>'),
   'Bloom radius control should present 50% as the default UI value.'
 );

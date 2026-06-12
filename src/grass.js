@@ -88,8 +88,8 @@ export function grassHeightScaleAt(x, z, index) {
 // Build the blade geometry + grass shader material. Shared between the
 // production world field (placed by pickGroundPoint across an island) and
 // the inspect-mode disc fill (placed by rejection-sampling a unit disc).
-// `opts.disableFade = true` pushes uFadeStart/End past any plausible
-// inspect-distance so all blades stay full-height regardless of camera.
+// `opts.disableFade = true` zeroes the uFadeEnabled uniform so all blades
+// stay full-height regardless of camera distance (inspect mode).
 export function makeGrassMaterial(biome, opts = {}) {
   const { disableFade = false } = opts;
 

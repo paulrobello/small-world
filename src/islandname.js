@@ -1,3 +1,8 @@
+// Procedural island names: generateIslandName(seed) deterministically combines a
+// whimsical PREFIX + SUFFIX (e.g. "Mossvale", "Brambrook") via a fresh mulberry32
+// stream seeded from the world seed. It uses its own RNG instance rather than the
+// shared Math.random so it can be called any time without disturbing the seeded
+// determinism window in generateWorld.
 import { mulberry32 } from "./seed.js";
 
 const PREFIXES = [

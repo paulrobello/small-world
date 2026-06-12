@@ -6,7 +6,7 @@ const source = readFileSync(new URL('../src/fauna/creature.js', import.meta.url)
 assert(
   source.includes('const recoveringStrayFlier =') &&
     source.includes('c.flies &&') &&
-    source.includes('currentDist > nextDist') &&
+    source.includes('currentDist2 > nextDist2') &&
     source.includes('pos.x = nx;') &&
     source.includes('pos.z = nz;'),
   'A flier already beyond the island edge should be allowed to commit inward movement instead of freezing outside.'

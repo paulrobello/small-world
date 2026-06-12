@@ -12,7 +12,9 @@ assert(
   lowfxSource.includes('export function rendererPixelRatioCap()')
     && lowfxSource.includes('isMobileViewport()')
     && lowfxSource.includes('return 1;')
-    && lowfxSource.includes('return LOWFX ? 1 : 2;'),
+    && lowfxSource.includes('if (LOWFX) return 1;')
+    && lowfxSource.includes('if (MIDFX) return 1.5;')
+    && lowfxSource.includes('return 2;'),
   'Renderer pixel ratio limits should be centralized and force mobile viewports to DPR 1 without changing desktop caps.'
 );
 
@@ -27,7 +29,7 @@ assert(
 assert(
   mainSource.includes('function frameDefaultOrbitToIsland()')
     && mainSource.includes('state.currentLayout?.boundRadius')
-    && mainSource.includes('const scale = Math.max(1, radius / DEFAULT_ORBIT_RADIUS_ANCHOR);')
+    && mainSource.includes('const scale = Math.max(1, radius / DEFAULT_ORBIT_RADIUS_ANCHOR) * DEFAULT_ORBIT_CLOSENESS;')
     && mainSource.includes('controls.maxDistance = Math.max(DEFAULT_ORBIT_MAX_DISTANCE, radius * 2.4);')
     && mainSource.includes('frameDefaultOrbitToIsland();')
     && mainSource.indexOf('frameDefaultOrbitToIsland();') < mainSource.indexOf('enterPortalArrivalIfRequested();'),

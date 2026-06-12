@@ -28,11 +28,52 @@ A fairy ring in the verdant grove:
 - **Twelve biomes** — each with a unique palette, weather, flora mix, creature variants, and original instrumental music score.
 - **Procedural fauna** — big-eyed creatures that wander, sleep, burrow, and travel in families; caterpillars, butterflies, bees, will-o'-wisps, and flocks of birds. Fuzzy biomes (mossy ruins, cloud island, frozen vale, mushroom grove) give walkers and caterpillars a shell-fur shader for a soft hairy silhouette.
 - **Day/night cycle** — 120-second cycle with per-biome dusk and night palettes. Creatures respond to darkness: walkers curl up and sleep, fliers descend and grow drowsy, each personality (shy, bold, sleepy, bouncy) has a different sleep threshold.
-- **Visual polish** — selective bloom on emissive elements (glow flowers, lanterns, sun), optional tilt-shift miniature blur, soft circular shadows under every creature, sky reflections on water biomes, parallax mountain backdrop, GPU-particle shader with per-particle life/size, dust kicks under footsteps.
+- **Visual polish** — mip-chain selective bloom on emissive elements (glow flowers, lanterns, sun), optional tilt-shift miniature blur, soft circular shadows under every creature, sky reflections on water biomes, parallax mountain backdrop, GPU-particle shader with per-particle life/size, dust kicks under footsteps, and procedural PBR detail textures on terrain, bark, and stone.
 - **Camera modes** — orbit the island, switch to fly camera with `V` for free movement, stroll in first person among the creatures, or freeze the sim in photo mode and save a PNG.
 - **Inspect mode** (`?inspect=1`) — a neutral studio backdrop for examining a single creature or flora variant. Cycle biome/variant with keyboard, pause and frame-step animation, copy the URL to share an exact recreation.
 - **Interactive UI** — follow-a-creature camera, bookmarks, biome filter, shareable seed links, fly camera controls, wind and grass density controls, FX toggles, auto-regenerate timer, and per-biome music track selection.
-- **Mobile-friendly** — touch gestures, low-FX mode (`?lowfx=1`) on lower-end devices that drops fur, post-FX, and particle counts.
+- **Mobile-friendly** — touch gestures plus tiered rendering: a mid-tier profile (`?midfx=1`) trims the heavier depth effects while keeping bloom, and a low-FX mode (`?lowfx=1`) drops fur, post-FX, and particle counts on lower-end devices.
+
+## Controls
+
+Orbit mode (the default — drag to rotate, scroll to zoom):
+
+| Key | Action |
+|-----|--------|
+| `R` | Regenerate a fresh random world |
+| `F` | Enter/exit first-person stroll |
+| `V` | Enter/exit fly camera |
+| `P` | Toggle photo mode |
+| `L` | Toggle the locator panel |
+| `T` | Toggle the guided tour |
+| `,` | Open/close the settings panel |
+| `Space` | Pause / resume the simulation |
+| `Esc` | Exit the current mode or close the open panel |
+
+Stroll, fly, and photo modes (after pressing `F` / `V` / `P`) capture the pointer for mouse-look:
+
+| Key | Action |
+|-----|--------|
+| `W` `A` `S` `D` | Move |
+| `Q` / `E` | Down / up (fly and photo only) |
+| `Shift` | Move faster |
+| Click | Capture a photo (photo mode) |
+| `Space` | Unfreeze the sim for action shots (photo mode) |
+| `Esc` | Return to orbit |
+
+Inspect mode (`?inspect=1`):
+
+| Key | Action |
+|-----|--------|
+| `[` / `]` | Previous / next biome |
+| `,` / `.` | Previous / next variant |
+| `k` | Switch category (creature ↔ flora) |
+| `r` | Reroll the seed |
+| `f` | Toggle fur |
+| `w` | Toggle wind |
+| `s` | Save a screenshot |
+| `Space` | Pause |
+| `←` / `→` | Frame-step (while paused) |
 
 ## Running it locally
 
@@ -64,14 +105,14 @@ Edits to `main.js`, `src/*.js`, `style.css`, and `index.html` are reflected by V
 
 ## Stack
 
-- [Three.js](https://threejs.org/) r0.184, bundled by Vite
+- [Three.js](https://threejs.org/) r184, bundled by Vite
 - [simplex-noise](https://github.com/jwagner/simplex-noise.js) for terrain
 - Plain vanilla JS modules with Vite for development and production builds
 
 ## Project layout
 
 - `main.js` — boots the renderer, camera, and animation loop
-- `src/` — world generation, entities, UI, terrain, biomes, etc. (one file per concern)
+- `src/` — world generation, entities, UI, terrain, biomes, etc. (one file per concern), including `world.js` (the regen orchestrator), `postfx.js` (the bloom + depth-FX pipeline), `portal.js` (biome portals with live previews), `pbr.js` (procedural detail textures), `music.js` (biome music streaming), and `islandname.js` (procedural place names)
 - `src/fauna/` — per-entity modules (creatures, caterpillars, butterflies, bees, will-o'-wisps)
 - `index.html` / `style.css` — static HUD shell
 - `Makefile` — Vite dev/build/preview/lint shortcuts

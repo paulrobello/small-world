@@ -1,3 +1,10 @@
+// Procedural PBR detail textures: paints normal / roughness-specular (and for
+// some families color) maps into canvases at runtime, with no image assets. The
+// exported makeXPBRMaterial() helpers wrap MeshPhysicalMaterial with these maps;
+// pbrDetailPrewarmSteps(biome) returns thunks generateWorld yields between so the
+// 10-20ms canvas paints don't hitch flora placement. Built families are cached by
+// key (resetPBRTextureCache clears it) and all of this drops to plain
+// MeshStandardMaterial under LOWFX or when userSettings.pbrDetails is off.
 import * as THREE from "three";
 import { state } from "./state.js";
 import { LOWFX } from "./lowfx.js";
@@ -20,6 +27,12 @@ const UNDERSIDE_GILL_CONTRAST = 2.1;
 const _detailTextureCache = new Map();
 
 export function resetPBRTextureCache() {
+  // Dispose defensively: textures attached to world materials were already
+  // disposed by disposeGroup (double-dispose is a no-op), but prewarmed
+  // families the biome never ended up instantiating are only referenced here.
+  for (const entry of _detailTextureCache.values()) {
+    for (const tex of Object.values(entry)) tex?.dispose?.();
+  }
   _detailTextureCache.clear();
 }
 
@@ -30,6 +43,52 @@ function cachedDetailTextures(key, build) {
     _detailTextureCache.set(key, textures);
   }
   return textures;
+}
+
+// ── Detail-texture prewarming ─────────────────────────────────────────────
+// Building a texture family paints several canvases synchronously (10–20ms on
+// slower devices). Left to first use, that cost lands mid-flora-placement and
+// hitches the loading animation. generateWorld instead prewarms the families
+// the biome's flora will need, yielding between each (the builders consume no
+// Math.random, so prewarming does not perturb the seeded determinism window).
+const FLORA_KIND_TEXTURE_FAMILIES = {
+  leafballtree: ["leafball-bark", "leafball-leaf"],
+  mushroom: ["mushroom-cap", "mushroom-underside"],
+  bigmushroom: ["mushroom-cap", "mushroom-underside"],
+  fairyring: ["mushroom-cap", "mushroom-underside"],
+  rock: ["plain-rock"],
+  limestonerock: ["stone"],
+  pillar: ["stone"],
+  archstone: ["stone"],
+  deadtree: ["deadtree-bark"],
+  flyer_nest: ["flyer-nest-twigs"],
+};
+const TEXTURE_FAMILY_BUILDERS = {
+  "leafball-bark": () => cachedDetailTextures("leafball-bark", buildLeafballBarkTextures),
+  "leafball-leaf": () => cachedDetailTextures("leafball-leaf", buildLeafballLeafTextures),
+  "mushroom-cap": () => cachedDetailTextures("mushroom-cap", buildMushroomCapTextures),
+  "mushroom-underside": () => cachedDetailTextures("mushroom-underside", buildMushroomUndersideTextures),
+  "plain-rock": () => cachedDetailTextures("plain-rock", buildPlainRockTextures),
+  "stone": () => cachedDetailTextures("stone", buildStoneTextures),
+  "deadtree-bark": () => cachedDetailTextures("deadtree-bark", buildDeadTreeBarkTextures),
+  "flyer-nest-twigs": () => cachedDetailTextures("flyer-nest-twigs", buildFlyerNestTwigTextures),
+};
+
+// Returns thunks that each build one detail-texture family into the cache.
+// Callers in an async context should yield between thunks. A kind missing
+// from the map simply builds lazily at first use, as before.
+export function pbrDetailPrewarmSteps(biome) {
+  if (LOWFX || state.userSettings.pbrDetails === false) return [];
+  const families = new Set();
+  for (const kind of biome.flora ?? []) {
+    for (const fam of FLORA_KIND_TEXTURE_FAMILIES[kind] ?? []) families.add(fam);
+  }
+  // Grove mushroom families decorate other flora's bases when enabled.
+  if (biome.groveDetails?.mushroomFamilies) {
+    families.add("mushroom-cap");
+    families.add("mushroom-underside");
+  }
+  return [...families].map((fam) => TEXTURE_FAMILY_BUILDERS[fam]);
 }
 
 function clamp01(value) {

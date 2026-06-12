@@ -1,5 +1,35 @@
 # Changelog
 
+> Versioning is semantic (major.minor.patch) and tracks `package.json`. Versions
+> 1.3.4 and 1.3.5 were never cut as separate releases — work in that range was
+> folded into the adjacent 1.3.3 and 1.3.6 entries — which is why the history
+> below jumps from 1.3.3 to 1.3.6.
+
+## 1.4.0 - 2026-06-12
+
+### Added
+- Added a mid-tier mobile FX profile (`MIDFX`) that keeps bloom but defaults the depth-driven effects (outline, AO, depth fog) off, shrinks the water-reflection target, and caps the pixel ratio at 1.5 on touch devices with DPR ≥ 1.5. Overridable with `?midfx=1` / `?midfx=0`.
+- Added PBR detail-texture prewarming so the per-biome canvas paints happen between world-gen frame slices instead of hitching flora placement on slower devices.
+- Added vendor chunk splitting in the Vite build so Three.js and simplex-noise ship in stable-hash chunks that survive app-code deploys.
+- Added a `make test` target (tests without lint/build) and made the test loop fail the build on any failing file.
+
+### Changed
+- Replaced the bloom pipeline with a mip-chain bloom (filtered downsample + Karis average + tent upsample) that does its blur at 1/2–1/32 resolution — far cheaper than the previous full-resolution stacked-pair Gaussian, with no pixelation. The bloom-radius slider now drives the per-step scatter weight.
+- Moved the default orbit camera ~36% closer to the island center so worlds frame tighter on load.
+- Eliminated per-frame allocations across the fauna hot paths (obstacle-grid queries, terrain-normal/slope sampling, walker slope cache, stray-recovery distance checks) by reusing module-scope scratch objects.
+- Consolidated the redundant `state.portal` scalar into the `state.portals` array everywhere.
+- Folded the duplicated angle-wrapping loops in `creature.js` into the shared `wrapAngle` helper.
+
+### Fixed
+- Fixed the bloom-radius slider above 100% (both branches of the radius mapping were identical, so the wide-halo range never engaged) and restored its 0–300% range.
+- Fixed burrower mound sink running at 2× speed from a duplicated `stepMoundSink` call.
+- Fixed a per-regen material leak from hidden burrower mounds that `disposeGroup` could not reach.
+- Fixed corrupted `?perf=1` telemetry where the will-o'-wisp step shared a phase label with the butterfly/bee/flock step.
+- Fixed a bloom render-target resize crash ("Attached DepthTexture is initialized to the incorrect size") by resizing the shared-depth bloom target alongside the depth pre-pass target.
+
+### Verified
+- Verified with `make checkall` (all JS + Python tests, lint, production build), headed-browser bloom A/B and resize checks on glow biomes, multi-biome regen smoke tests, and `graphify update .`.
+
 ## 1.3.9 - 2026-05-28
 
 ### Added

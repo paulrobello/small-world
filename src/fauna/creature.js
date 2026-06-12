@@ -29,11 +29,12 @@ function ensureMoundMesh(c) {
 }
 
 // Position and orient a mound at (x, z) aligned to terrain normal.
+const _UP = new THREE.Vector3(0, 1, 0);
 function placeMoundAt(c, x, z, heightFn) {
   ensureMoundMesh(c);
   const y = heightFn(x, z);
   const normal = sampleTerrainNormal(x, z, heightFn);
-  c.moundMesh.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), normal);
+  c.moundMesh.quaternion.setFromUnitVectors(_UP, normal);
   c.moundMesh.position.set(x, y - 0.02, z);
 }
 
@@ -145,7 +146,7 @@ function findEmergePoint(c, heightFn) {
 import { applyShellFur } from "../fur.js";
 import { BLOOM_LAYER } from "../postfx.js";
 import { makePool } from "../pool.js";
-import { WATER_AVOID_Y, avoidObstacles, colorsClose, sampleTerrainNormal, sampleSlopes, slopeTargetsFromGradient, addAntennae } from "./shared.js";
+import { WATER_AVOID_Y, avoidObstacles, colorsClose, sampleTerrainNormal, sampleSlopes, slopeTargetsFromGradient, addAntennae, wrapAngle } from "./shared.js";
 
 // Personality presets — picked once per creature at spawn, tweak how it walks,
 // thinks, hops, herds, and sleeps. Subtle multipliers; the cute baseline is
@@ -1002,9 +1003,7 @@ function herdInfluence(c) {
   // Too close → drift apart slightly. Sweet spot 1.4–4 units → pull toward.
   const sign = d < 1.2 ? -1 : 1;
   const targetH = Math.atan2(op.z - me.z, op.x - me.x);
-  let diff = targetH - c.heading;
-  while (diff > Math.PI) diff -= Math.PI * 2;
-  while (diff < -Math.PI) diff += Math.PI * 2;
+  const diff = wrapAngle(targetH - c.heading);
   c.heading += sign * diff * c.herdStrength * 0.4;
 }
 
@@ -1331,9 +1330,6 @@ export function stepCreature(c, dt, t, heightFn) {
     if (c.burrowState === "burrowed" || c.burrowState === "sinking" || c.burrowState === "moundRising") return;
   }
 
-  // ── mound sink for emerging/surface (1s-delayed hide) ──
-  if (c.isBurrower) stepMoundSink(c, dt);
-
   // ── flier landing state machine ────────────────────────────────────────
   // Fish never land — they always float.
   if (c.flies && !c.isFish) {
@@ -1498,9 +1494,7 @@ export function stepCreature(c, dt, t, heightFn) {
     const dx = perchPoint.x - c.group.position.x;
     const dz = perchPoint.z - c.group.position.z;
     const target = Math.atan2(dz, dx);
-    let diff = target - c.heading;
-    while (diff > Math.PI) diff -= Math.PI * 2;
-    while (diff < -Math.PI) diff += Math.PI * 2;
+    const diff = wrapAngle(target - c.heading);
     const xz2 = dx * dx + dz * dz;
     const turnRate = xz2 < 4 ? 9 : 5;
     c.heading += diff * Math.min(1, dt * turnRate);
@@ -1517,9 +1511,7 @@ export function stepCreature(c, dt, t, heightFn) {
     if (d > 2.2) {
       const target = Math.atan2(dz, dx);
       // shortest-arc lerp toward parent heading
-      let diff = target - c.heading;
-      while (diff > Math.PI) diff -= Math.PI * 2;
-      while (diff < -Math.PI) diff += Math.PI * 2;
+      const diff = wrapAngle(target - c.heading);
       c.heading += diff * Math.min(1, dt * 1.2);
     }
   }
@@ -1583,13 +1575,18 @@ export function stepCreature(c, dt, t, heightFn) {
     }
 
     if (wouldStray) {
-      const currentDist = target ? Math.hypot(pos.x - target.cx, pos.z - target.cz) : 0;
-      const nextDist = target ? Math.hypot(nx - target.cx, nz - target.cz) : currentDist;
+      // Squared distances — only the > comparison matters, skip the sqrts.
+      const currentDist2 = target
+        ? (pos.x - target.cx) * (pos.x - target.cx) + (pos.z - target.cz) * (pos.z - target.cz)
+        : 0;
+      const nextDist2 = target
+        ? (nx - target.cx) * (nx - target.cx) + (nz - target.cz) * (nz - target.cz)
+        : currentDist2;
       const recoveringStrayFlier =
         c.flies &&
         c.landState !== "landed" &&
         !c.isFish &&
-        currentDist > nextDist;
+        currentDist2 > nextDist2;
       if (c.isFish) {
         c.heading += Math.PI + (Math.random() - 0.5) * 0.7;
       } else {
@@ -1762,10 +1759,8 @@ export function stepCreature(c, dt, t, heightFn) {
 
   // face heading (smoothed)
   const targetRot = -c.heading + Math.PI / 2;
-  let cur = c.group.rotation.y;
-  let diff = targetRot - cur;
-  while (diff > Math.PI) diff -= Math.PI * 2;
-  while (diff < -Math.PI) diff += Math.PI * 2;
+  const cur = c.group.rotation.y;
+  const diff = wrapAngle(targetRot - cur);
   c.group.rotation.y = cur + diff * Math.min(1, dt * 6);
 
   // Look-at-camera override — when the user hovers/taps a creature, pull its
@@ -1776,10 +1771,8 @@ export function stepCreature(c, dt, t, heightFn) {
     const camDz = state.camera.position.z - c.group.position.z;
     const camHeading = Math.atan2(camDz, camDx);
     const lookRot = -camHeading + Math.PI / 2;
-    let lcur = c.group.rotation.y;
-    let ldiff = lookRot - lcur;
-    while (ldiff > Math.PI) ldiff -= Math.PI * 2;
-    while (ldiff < -Math.PI) ldiff += Math.PI * 2;
+    const lcur = c.group.rotation.y;
+    const ldiff = wrapAngle(lookRot - lcur);
     c.group.rotation.y = lcur + ldiff * Math.min(1, dt * 9);
   }
 
@@ -1811,11 +1804,18 @@ export function stepCreature(c, dt, t, heightFn) {
       pitchTarget = slopes.pitchTarget;
       rollTarget = slopes.rollTarget;
       // Cache world-space gradients (independent of heading so they stay
-      // valid as long as position doesn't change much).
-      c._slopeCache = {
-        gradientX: slopes.gradientX,
-        gradientZ: slopes.gradientZ,
-      };
+      // valid as long as position doesn't change much). Mutate the existing
+      // cache object in place — moving walkers miss every few frames, so a
+      // fresh object per miss adds steady GC churn.
+      if (c._slopeCache) {
+        c._slopeCache.gradientX = slopes.gradientX;
+        c._slopeCache.gradientZ = slopes.gradientZ;
+      } else {
+        c._slopeCache = {
+          gradientX: slopes.gradientX,
+          gradientZ: slopes.gradientZ,
+        };
+      }
       c._slopeCacheX = pos.x;
       c._slopeCacheZ = pos.z;
     }

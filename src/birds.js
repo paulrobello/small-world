@@ -118,6 +118,9 @@ export function stepFlock(flock, dt, t) {
   const W_SEP   = 2.6;
   const W_WAY   = 0.5;
 
+  // O(N²) boid pairs — fine for the current flock sizes (N ≤ ~9). A spatial
+  // structure is only worth it above N ≈ 15; revisit before raising flock
+  // counts in biomes.js.
   for (let i = 0; i < N; i++) {
     const b = birds[i];
     const pos = b.group.position;

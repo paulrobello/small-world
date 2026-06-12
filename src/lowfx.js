@@ -12,7 +12,11 @@
 // so small screen alone is no longer a reliable weakness signal.
 // Read once at import time so every module sees the same flag without
 // parsing the URL or re-querying media queries repeatedly.
-const _params = new URLSearchParams(window.location.search);
+// Window-safe at module scope — node-based tests bundle this module (via
+// state.js) without a DOM.
+const _params = new URLSearchParams(
+  typeof window === "undefined" ? "" : window.location.search
+);
 const _forceLowfx = _params.get("lowfx");
 function _autoLowfx() {
   if (typeof window === "undefined") return false;
@@ -28,6 +32,27 @@ export const LOWFX =
   _forceLowfx === "0" ? false :
   _autoLowfx();
 
+// Mid-tier mobile profile — touch-first devices with high DPR pass the LOWFX
+// weak-hardware check but many (DPR-2 mid-range phones, tablets) still can't
+// sustain 60fps under the full pipeline: bloom at physical resolution plus the
+// combined depth-FX pass plus the reflection RT. MIDFX keeps bloom (the
+// signature look) while defaulting the depth-driven FX off (see userSettings
+// in state.js — saved user choices still override), shrinking the water
+// reflection RT, and capping the pixel ratio at 1.5.
+//   ?midfx=1 force on, ?midfx=0 force off, otherwise auto-detect.
+const _forceMidfx = _params.get("midfx");
+function _autoMidfx() {
+  if (typeof window === "undefined") return false;
+  if (LOWFX) return false; // LOWFX already strips the whole pipeline
+  const dpr = window.devicePixelRatio || 1;
+  const coarsePointer = window.matchMedia?.("(pointer: coarse)")?.matches ?? false;
+  return coarsePointer && dpr >= 1.5;
+}
+export const MIDFX =
+  _forceMidfx === "1" ? true :
+  _forceMidfx === "0" ? false :
+  _autoMidfx();
+
 export function isMobileViewport() {
   if (typeof window === "undefined") return false;
   const forced = new URLSearchParams(window.location.search).get("mobile");
@@ -40,7 +65,9 @@ export function isMobileViewport() {
 
 export function rendererPixelRatioCap() {
   if (isMobileViewport()) return 1;
-  return LOWFX ? 1 : 2;
+  if (LOWFX) return 1;
+  if (MIDFX) return 1.5;
+  return 2;
 }
 
 // Multiplier applied to particle counts and ground-cover instance counts when

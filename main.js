@@ -114,9 +114,12 @@ controls.touches = {
   TWO: THREE.TOUCH.DOLLY_ROTATE,
 };
 
+// The pure radius-proportional fit frames the island too far away — pull the
+// default camera closer to the island center (0.8 × 0.8 ≈ 36% closer overall).
+const DEFAULT_ORBIT_CLOSENESS = 0.64;
 function frameDefaultOrbitToIsland() {
   const radius = state.currentLayout?.boundRadius ?? state.ISLAND_RADIUS;
-  const scale = Math.max(1, radius / DEFAULT_ORBIT_RADIUS_ANCHOR);
+  const scale = Math.max(1, radius / DEFAULT_ORBIT_RADIUS_ANCHOR) * DEFAULT_ORBIT_CLOSENESS;
   camera.position.copy(DEFAULT_ORBIT_POSITION).multiplyScalar(scale);
   controls.target.set(0, 1.5, 0);
   controls.maxDistance = Math.max(DEFAULT_ORBIT_MAX_DISTANCE, radius * 2.4);
@@ -162,7 +165,7 @@ let portalTravelInProgress = false;
 const PORTAL_ARRIVAL_RETRY_LIMIT = 45;
 
 function getActivePortals() {
-  return state.portals?.length ? state.portals : (state.portal ? [state.portal] : []);
+  return state.portals ?? [];
 }
 
 function travelThroughPortalIfNeeded() {
@@ -186,7 +189,9 @@ function enterPortalArrivalIfRequested(attempt = 0) {
   const params = new URLSearchParams(window.location.search);
   const portalParam = params.get("portal");
   if (!portalParam) return;
-  const arrivalPortal = getActivePortals().find((candidate) => candidate.targetBiome?.id === portalParam) ?? state.portal;
+  // Fall back to the first portal when none matches the param's biome id —
+  // preserves arrival on worlds whose portal set changed since the link was made.
+  const arrivalPortal = getActivePortals().find((candidate) => candidate.targetBiome?.id === portalParam) ?? getActivePortals()[0];
   if (!arrivalPortal) {
     if (attempt < PORTAL_ARRIVAL_RETRY_LIMIT) requestAnimationFrame(() => enterPortalArrivalIfRequested(attempt + 1));
     return;
@@ -364,7 +369,7 @@ function animate() {
     stepShadowDisks(state.shadowDisks, state.heightFn, contactShadowFocus);
     stepClouds(state.clouds, dt);
   });
-  measurePerfPhase("airborneMovement", () => {
+  measurePerfPhase("willowispMovement", () => {
     for (const w of state.willowisps) stepWillOWisp(w, dt, t, state.heightFn);
   });
 

@@ -1,3 +1,10 @@
+// Creature first-person camera: syncCreaturePovCamera places the camera at a
+// followed creature's eye center (midpoint of eyeParts[0] and eyeParts[2],
+// falling back to an offset along the body's forward axis) looking out along its
+// facing. setCreaturePovRenderHidden / restoreCreaturePovRenderHidden toggle the
+// creature's own group.visible so it doesn't occlude its own view. The anchor is
+// segments[0] when present (caterpillar/snail pattern) or group otherwise, matching
+// the follow-camera gotcha in main.js. Module-scoped scratch vectors avoid per-frame allocation.
 import * as THREE from "three";
 import { state } from "./state.js";
 

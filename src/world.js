@@ -59,7 +59,7 @@ import {
 import { makeWaterReflection, disposeWaterReflection } from "./reflection.js";
 import { createBiomePortal, disposePortal, makeSeededPortalPlacement } from "./portal.js";
 import { LOWFX, LOWFX_DENSITY } from "./lowfx.js";
-import { resetPBRTextureCache } from "./pbr.js";
+import { resetPBRTextureCache, pbrDetailPrewarmSteps } from "./pbr.js";
 
 let _scene = null;
 let _controls = null;
@@ -160,14 +160,10 @@ function getPortalTargetBiomes(sourceBiome, portalTargetBiomeId, doublePlacement
 }
 
 function disposeWorldPortals(worldState) {
-  const portals = worldState.portals?.length
-    ? worldState.portals
-    : (worldState.portal ? [worldState.portal] : []);
-  for (const portal of portals) {
+  for (const portal of worldState.portals ?? []) {
     portal.group?.parent?.remove(portal.group);
     disposePortal(portal);
   }
-  worldState.portal = null;
   worldState.portals = [];
 }
 
@@ -351,6 +347,17 @@ export async function generateWorld(seed, context = createWorldBuildContext()) {
   worldState.world = new THREE.Group();
   worldState.world.scale.setScalar(worldState.userSettings.worldScale ?? 1);
   worldScene.add(worldState.world);
+  // Burrower mounds are added/removed from the world group dynamically; a
+  // mound that's hidden at regen time isn't parented anywhere, so disposeGroup
+  // can't reach its per-creature material — dispose it explicitly. The mound
+  // geometry is a shared module-scope constant and must not be disposed.
+  for (const c of worldState.creatures) {
+    if (c.moundMesh) {
+      c.moundMesh.parent?.remove(c.moundMesh);
+      c.moundMesh.material.dispose();
+      c.moundMesh = null;
+    }
+  }
   worldState.creatures = [];
   worldState.flocks = [];
   worldState.caterpillars = [];
@@ -652,7 +659,6 @@ export async function generateWorld(seed, context = createWorldBuildContext()) {
         targetSeed,
         previewSettings: worldState.userSettings,
       });
-      if (!worldState.portal) worldState.portal = portal;
       worldState.portals.push(portal);
       worldState.world.add(portal.group);
       floraPlacementBlocks.push(portal.blocker);
@@ -949,6 +955,16 @@ export async function generateWorld(seed, context = createWorldBuildContext()) {
       }
       return out;
     };
+  }
+
+  // Pre-build the PBR detail-texture families this biome's flora needs, one
+  // family per frame-budget slice. Each family paints several canvases
+  // synchronously (10–20ms on slower devices); built lazily it would hitch
+  // the loading animation when the first instance of a kind constructs. The
+  // builders consume no Math.random, so the seeded window is unaffected.
+  for (const prewarm of pbrDetailPrewarmSteps(biome)) {
+    prewarm();
+    await yieldIfNeeded(true);
   }
 
   let groveGiantPlaced = false;
