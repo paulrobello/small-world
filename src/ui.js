@@ -523,6 +523,7 @@ export function initUi({ camera, canvas, controls, renderer }) {
   const settingsToggle = document.getElementById("settings-toggle");
   const settingsClose = document.getElementById("settings-close");
   const settingsResetDefaults = document.getElementById("setting-reset-defaults");
+  const catalogToggle = document.getElementById("catalog-toggle");
   const catalogButton = document.getElementById("setting-catalog");
   const catalogClose = document.getElementById("catalog-close");
   const catalogList = document.getElementById("catalog-list");
@@ -642,9 +643,18 @@ export function initUi({ camera, canvas, controls, renderer }) {
   function setCatalogOpen(open) {
     _catalogOpen = open;
     _catalogPanel.classList.toggle("open", open);
+    catalogToggle.classList.toggle("active", open);
     _catalogPanel.setAttribute("aria-hidden", open ? "false" : "true");
     if (open) void renderCatalogPanel();
     else clearCatalogObjectUrls();
+  }
+
+  function toggleCatalogPanel() {
+    const opening = !_catalogOpen;
+    setSettingsOpen(false);
+    setHelpOpen(false);
+    setLocatorOpen(false);
+    setCatalogOpen(opening);
   }
 
   // Settings and help share the same bottom-right corner — opening one
@@ -674,13 +684,8 @@ export function initUi({ camera, canvas, controls, renderer }) {
     setHelpOpen(true);
   }
 
-  catalogButton.addEventListener("click", () => {
-    const opening = !_catalogOpen;
-    setSettingsOpen(false);
-    setHelpOpen(false);
-    setLocatorOpen(false);
-    setCatalogOpen(opening);
-  });
+  catalogButton.addEventListener("click", () => toggleCatalogPanel());
+  catalogToggle.addEventListener("click", () => toggleCatalogPanel());
   catalogClose.addEventListener("click", () => setCatalogOpen(false));
 
   _followButton.addEventListener("click", () => {
@@ -2780,6 +2785,10 @@ export function initUi({ camera, canvas, controls, renderer }) {
       e.preventDefault();
       if (_stroll || _flyFP || document.body.classList.contains("photo-mode")) return;
       setLocatorOpen(!_locatorOpen);
+    } else if (e.key === "g" || e.key === "G") {
+      e.preventDefault();
+      if (_stroll || _flyFP || document.body.classList.contains("photo-mode")) return;
+      toggleCatalogPanel();
     } else if (e.key === "t" || e.key === "T") {
       e.preventDefault();
       toggleTour();

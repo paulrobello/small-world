@@ -46,7 +46,7 @@ assert(
     && cssSource.includes('.pov-toggle.active')
     && cssSource.includes('.fly-toggle.active')
     && cssSource.includes('padding: 0 24px;')
-    && cssSource.includes('grid-template-columns: repeat(3, 44px) minmax(54px, 0.8fr) minmax(76px, 1.2fr);')
+    && cssSource.includes('grid-template-columns: repeat(4, 44px) minmax(54px, 0.8fr) minmax(76px, 1.2fr);')
     && cssSource.includes('.pov-label { display: none; }')
     && cssSource.includes('#regen-same-biome')
     && cssSource.includes('#regen-random-biome'),

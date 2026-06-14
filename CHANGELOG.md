@@ -5,6 +5,14 @@
 > folded into the adjacent 1.3.3 and 1.3.6 entries — which is why the history
 > below jumps from 1.3.3 to 1.3.6.
 
+## 1.5.1 - 2026-06-14
+
+### Added
+- Added a persistent on-screen Field Guide button and a `G` hotkey for opening the biome photo catalog without visiting Settings.
+
+### Verified
+- Verified with focused catalog UI and POV static tests, `make checkall`, an agentchrome browser smoke for the HUD button and `G` hotkey, and `graphify update .`.
+
 ## 1.5.0 - 2026-06-14
 
 ### Added

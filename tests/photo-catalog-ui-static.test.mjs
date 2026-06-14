@@ -7,9 +7,10 @@ const cssSource = readFileSync(new URL('../style.css', import.meta.url), 'utf8')
 
 assert(
   htmlSource.includes('id="setting-catalog"')
+    && htmlSource.includes('id="catalog-toggle"')
     && htmlSource.includes('id="catalog-panel"')
     && htmlSource.includes('id="catalog-list"'),
-  'Markup should expose a settings entry point and catalog panel.'
+  'Markup should expose settings and on-screen entry points plus the catalog panel.'
 );
 
 assert(
@@ -22,6 +23,13 @@ assert(
 assert(
   uiSource.includes('const catalogStore = makeCatalogStore()'),
   'ui.js should create one catalog store for photo review and catalog rendering.'
+);
+
+assert(
+  uiSource.includes('const catalogToggle = document.getElementById("catalog-toggle");')
+    && uiSource.includes('catalogToggle.addEventListener("click"')
+    && uiSource.includes('e.key === "g" || e.key === "G"'),
+  'Catalog should be available from a visible HUD button and the G hotkey.'
 );
 
 assert(

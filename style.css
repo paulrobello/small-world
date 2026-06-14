@@ -543,7 +543,8 @@ body.mobile .help-panel.open {
 }
 
 .settings-toggle,
-.help-toggle {
+.help-toggle,
+.catalog-toggle {
   z-index: 11;
   width: 40px;
   min-height: 44px;
@@ -560,12 +561,15 @@ body.mobile .help-panel.open {
   transition: border-color 0.4s ease, background 0.4s ease;
 }
 .settings-toggle:hover,
-.help-toggle:hover {
+.help-toggle:hover,
+.catalog-toggle:hover,
+.catalog-toggle.active {
   border-color: var(--ink);
   background: rgba(245, 240, 230, 0.1);
 }
 .settings-glyph,
-.help-glyph {
+.help-glyph,
+.catalog-glyph {
   display: inline-block;
   font-family: "DM Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   line-height: 1;
@@ -577,6 +581,11 @@ body.mobile .help-panel.open {
 .help-glyph {
   font-size: 20px;
   font-weight: 500;
+  transform: translateY(-1px);
+}
+.catalog-glyph {
+  font-size: 12px;
+  letter-spacing: 0.04em;
   transform: translateY(-1px);
 }
 .settings-toggle:hover .settings-glyph { transform: rotate(72deg); }
@@ -642,7 +651,7 @@ body.mobile .help-panel.open {
 @media (max-width: 720px) {
   .controls-row {
     display: grid;
-    grid-template-columns: repeat(3, 44px) minmax(54px, 0.8fr) minmax(76px, 1.2fr);
+    grid-template-columns: repeat(4, 44px) minmax(54px, 0.8fr) minmax(76px, 1.2fr);
     gap: 6px;
   }
   .pov-label { display: none; }
@@ -661,10 +670,10 @@ body.mobile .help-panel.open {
     letter-spacing: 0.08em;
   }
   #regen-same-biome {
-    grid-column: 1 / 4;
+    grid-column: 1 / 5;
   }
   #regen-random-biome {
-    grid-column: 4 / 6;
+    grid-column: 5 / 7;
   }
 }
 
