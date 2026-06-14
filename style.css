@@ -1835,6 +1835,24 @@ body.photo-mode .photo-seed { opacity: 0.85; pointer-events: auto; }
   text-transform: lowercase;
   color: var(--ink-dim);
 }
+.photo-review-frame-label {
+  min-width: 112px;
+  max-width: min(360px, calc(100vw - 32px));
+  padding: 4px 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  background: rgba(255, 255, 255, 0.86);
+  border: 1px solid rgba(20, 20, 24, 0.28);
+  color: rgba(18, 16, 20, 0.92);
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.22);
+  text-shadow: none;
+  text-transform: none;
+}
+.photo-review-catalog-status {
+  color: rgba(18, 16, 20, 0.8);
+  text-shadow: 0 1px 8px rgba(255, 255, 255, 0.8);
+}
 .photo-review-compare {
   display: grid;
   grid-template-columns: repeat(2, minmax(120px, 1fr));
@@ -1885,6 +1903,16 @@ body.photo-mode .photo-action { pointer-events: auto; }
 .photo-action:hover {
   border-color: var(--ink);
   background: rgba(245, 240, 230, 0.08);
+}
+.photo-review-catalog .photo-action {
+  background: rgba(18, 16, 20, 0.82);
+  border-color: rgba(245, 240, 230, 0.5);
+  color: #fff;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.35);
+}
+.photo-review-catalog .photo-action:hover {
+  background: rgba(18, 16, 20, 0.94);
+  border-color: #fff;
 }
 /* Touch-first devices have no keyboard hints; bigger tap targets. */
 @media (hover: none) {

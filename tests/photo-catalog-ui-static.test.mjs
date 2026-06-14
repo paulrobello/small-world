@@ -40,9 +40,11 @@ assert(
 assert(
   uiSource.includes('new catalog entry')
     && uiSource.includes('already in catalog')
+    && uiSource.includes('frameLabel.className = "photo-review-frame-label"')
+    && uiSource.includes('frameLabel.textContent = subject.label')
     && uiSource.includes('photo-review-keep')
     && uiSource.includes('photo-review-replace'),
-  'Photo review should render new-entry and existing-entry catalog actions.'
+  'Photo review should render the subject name on the frame plus new-entry and existing-entry catalog actions.'
 );
 
 assert(
@@ -56,6 +58,8 @@ assert(
   cssSource.includes('.catalog-panel')
     && cssSource.includes('.catalog-grid')
     && cssSource.includes('.catalog-card')
+    && cssSource.includes('.photo-review-frame-label')
+    && cssSource.includes('.photo-review-catalog .photo-action:hover')
     && cssSource.includes('.photo-review-compare'),
-  'Catalog and compare UI should have dedicated styles.'
+  'Catalog, frame label, action contrast, and compare UI should have dedicated styles.'
 );

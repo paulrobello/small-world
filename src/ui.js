@@ -2036,6 +2036,11 @@ export function initUi({ camera, canvas, controls, renderer }) {
       return;
     }
 
+    const frameLabel = document.createElement("div");
+    frameLabel.className = "photo-review-frame-label";
+    frameLabel.textContent = subject.label;
+    catalogEl.appendChild(frameLabel);
+
     const existing = catalogStore.getEntry(subject.key);
     const status = document.createElement("div");
     status.className = "photo-review-catalog-status";

@@ -5,6 +5,14 @@
 > folded into the adjacent 1.3.3 and 1.3.6 entries — which is why the history
 > below jumps from 1.3.3 to 1.3.6.
 
+## 1.5.2 - 2026-06-14
+
+### Fixed
+- Fixed photo-review catalog actions losing contrast over the bright photo border, and added a readable subject-name label to the frame.
+
+### Verified
+- Verified with focused catalog UI tests, `make checkall`, an in-app Browser photo-review smoke on `0x2676`, and `graphify update .`.
+
 ## 1.5.1 - 2026-06-14
 
 ### Added
