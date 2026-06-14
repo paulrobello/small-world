@@ -14,6 +14,7 @@ const { BIOMES } = await import('../src/biomes.js');
 const verdant = BIOMES.find((biome) => biome.id === 'verdant');
 const coral = BIOMES.find((biome) => biome.id === 'coral');
 const desert = BIOMES.find((biome) => biome.id === 'desert');
+const ashen = BIOMES.find((biome) => biome.id === 'ashen');
 
 assert.equal(
   buildCatalogKey({ category: 'fauna', variant: 'snail', biomeId: 'grove' }),
@@ -55,6 +56,9 @@ assert(!coralKeys.has('flora:water:coral'), 'Water should not be catalogable eve
 const desertKeys = new Set(getBiomeCatalogEntries(desert).map((entry) => entry.key));
 assert(!desertKeys.has('fauna:butterfly:desert'), 'Biomes with noButterflies should not list butterflies.');
 assert(!desertKeys.has('fauna:bee:desert'), 'Biomes without nectar should not list bees.');
+
+const ashenKeys = new Set(getBiomeCatalogEntries(ashen).map((entry) => entry.key));
+assert(!ashenKeys.has('fauna:butterfly:ashen'), 'Ashen Wastes should not ask for impossible butterfly photos.');
 
 const marsh = BIOMES.find((biome) => biome.id === 'marsh');
 const marshEntries = getBiomeCatalogEntries(marsh);

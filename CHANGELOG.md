@@ -5,6 +5,14 @@
 > folded into the adjacent 1.3.3 and 1.3.6 entries — which is why the history
 > below jumps from 1.3.3 to 1.3.6.
 
+## 1.5.5 - 2026-06-14
+
+### Fixed
+- Removed butterflies from Ashen Wastes spawning and catalog requirements.
+
+### Verified
+- Verified with focused catalog/Ashen checks, `make checkall`, an in-app Browser Ashen catalog/locator smoke, and `graphify update .`.
+
 ## 1.5.4 - 2026-06-14
 
 ### Changed

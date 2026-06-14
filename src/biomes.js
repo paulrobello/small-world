@@ -186,6 +186,7 @@ export const BIOMES = [
     particle: "cinder",
     creatureColors: ["#e63946", "#f77f00", "#fcbf49", "#ffd166"],
     creatureCount: [6, 10],
+    noButterflies: true,
     darkBiome: true,
     edgeAura: {
       pattern: "mist",
