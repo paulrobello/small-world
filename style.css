@@ -614,7 +614,9 @@ body.mobile .help-panel.open {
   transition: border-color 0.4s ease, background 0.4s ease, color 0.4s ease;
 }
 .pov-toggle {
-  min-width: 126px;
+  width: 48px;
+  min-width: 48px;
+  padding: 0;
 }
 .fly-toggle {
   min-width: 148px;
@@ -632,12 +634,21 @@ body.mobile .help-panel.open {
   color: #111;
   background: var(--ink);
 }
-.pov-glyph,
 .fly-option,
 .fly-divider {
   display: inline-block;
   font-size: 12px;
   line-height: 1;
+}
+.pov-icon {
+  width: 22px;
+  height: 22px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  display: block;
 }
 .fly-option {
   opacity: 0.48;
@@ -655,13 +666,15 @@ body.mobile .help-panel.open {
 @media (max-width: 720px) {
   .controls-row {
     display: grid;
-    grid-template-columns: repeat(4, 44px) minmax(54px, 0.8fr) minmax(76px, 1.2fr);
+    grid-template-columns: repeat(5, 44px) minmax(76px, 1.2fr);
     gap: 6px;
   }
-  .pov-label { display: none; }
   .mode-toggle {
     min-width: 44px;
     padding: 0;
+  }
+  .pov-toggle {
+    width: 44px;
   }
   .fly-toggle {
     min-width: 0;
@@ -1648,12 +1661,25 @@ body.photo-mode .catalog-panel {
   gap: 8px;
 }
 .catalog-biome-title {
+  appearance: none;
+  width: 100%;
+  background: transparent;
   font-size: 10px;
   letter-spacing: 0.18em;
   text-transform: uppercase;
   color: var(--ink-dim);
+  font-family: "DM Mono", monospace;
   border-bottom: 1px solid rgba(245, 240, 230, 0.12);
+  border-left: 0;
+  border-right: 0;
+  border-top: 0;
   padding-bottom: 6px;
+  text-align: left;
+  cursor: pointer;
+}
+.catalog-biome-title:hover {
+  color: var(--ink);
+  border-bottom-color: rgba(245, 240, 230, 0.32);
 }
 .catalog-section-title {
   font-size: 9px;
@@ -1668,6 +1694,7 @@ body.photo-mode .catalog-panel {
   gap: 8px;
 }
 .catalog-card {
+  appearance: none;
   min-height: 116px;
   border: 1px solid rgba(245, 240, 230, 0.16);
   background: rgba(245, 240, 230, 0.04);
@@ -1682,7 +1709,8 @@ body.photo-mode .catalog-panel {
   gap: 6px;
   text-align: left;
 }
-.catalog-card.unlocked {
+.catalog-card.unlocked,
+.catalog-card.locked {
   cursor: pointer;
 }
 .catalog-card.locked {

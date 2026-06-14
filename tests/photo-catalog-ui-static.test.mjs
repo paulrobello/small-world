@@ -63,6 +63,20 @@ assert(
 );
 
 assert(
+  uiSource.includes('async function loadCatalogBiome(biome)')
+    && uiSource.includes('await generateWorld(state.currentSeed, undefined, { biomeId: biome.id })')
+    && uiSource.includes('const title = document.createElement("button");')
+    && uiSource.includes('const card = document.createElement("button");')
+    && uiSource.includes('card.addEventListener("click", () => {\n              void loadCatalogBiome(biome);'),
+  'Catalog biome titles and locked photo slots should load that biome with the current seed.'
+);
+
+assert(
+  uiSource.includes('await generateWorld(seed, undefined, { biomeId: saved.biomeId })'),
+  'Saved catalog entries should revisit their saved seed and biome together.'
+);
+
+assert(
   uiSource.includes('const LOCATOR_HIDDEN_FLORA_VARIANTS = new Set([')
     && uiSource.includes('"pebble"')
     && uiSource.includes('if (inspect?.category === "flora" && LOCATOR_HIDDEN_FLORA_VARIANTS.has(inspect.variant)) return;')
@@ -74,6 +88,7 @@ assert(
   cssSource.includes('.catalog-panel')
     && cssSource.includes('.catalog-grid')
     && cssSource.includes('.catalog-card')
+    && cssSource.includes('.catalog-biome-title:hover')
     && cssSource.includes('.photo-review-frame-label')
     && cssSource.includes('.photo-review-catalog-empty-status')
     && cssSource.includes('.photo-review-catalog .photo-action:hover')

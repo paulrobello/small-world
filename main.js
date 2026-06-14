@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { state } from "./src/state.js";
-import { readSeedFromUrl, newRandomSeed, formatSeed } from "./src/seed.js";
+import { readSeedFromUrl, readBiomeFromUrl, newRandomSeed, formatSeed } from "./src/seed.js";
 import {
   generateWorld,
   updateDayNight,
@@ -517,7 +517,7 @@ if (INSPECT) {
   setupInspect(scene, renderer, camera, controls);
 } else {
   const initialSeed = readSeedFromUrl() ?? newRandomSeed();
-  void generateWorld(initialSeed).then(() => {
+  void generateWorld(initialSeed, undefined, { biomeId: readBiomeFromUrl() }).then(() => {
     frameDefaultOrbitToIsland();
     enterPortalArrivalIfRequested();
   }).catch((error) => {

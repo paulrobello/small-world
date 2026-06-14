@@ -30,9 +30,19 @@ export function readSeedFromUrl() {
   return parseSeed(new URLSearchParams(window.location.search).get("seed"));
 }
 
-export function writeSeedToUrl(seed) {
+export function readBiomeFromUrl() {
+  const biomeId = new URLSearchParams(window.location.search).get("biome");
+  return BIOMES.some((biome) => biome.id === biomeId) ? biomeId : null;
+}
+
+export function writeSeedToUrl(seed, { biomeId = null } = {}) {
   const url = new URL(window.location.href);
   url.searchParams.set("seed", formatSeed(seed));
+  if (biomeId && BIOMES.some((biome) => biome.id === biomeId)) {
+    url.searchParams.set("biome", biomeId);
+  } else {
+    url.searchParams.delete("biome");
+  }
   history.replaceState(null, "", url.toString());
 }
 

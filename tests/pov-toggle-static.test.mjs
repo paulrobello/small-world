@@ -8,8 +8,14 @@ const uiSource = readFileSync(new URL('../src/ui.js', import.meta.url), 'utf8');
 assert(
   indexSource.includes('id="stroll-toggle"')
     && indexSource.includes('aria-label="enter first-person stroll"')
-    && indexSource.includes('<span class="pov-glyph">POV</span>'),
-  'The footer controls should expose first-person stroll without requiring the help panel.'
+    && indexSource.includes('class="pov-icon"'),
+  'The footer controls should expose first-person stroll as an icon button without requiring the help panel.'
+);
+
+assert(
+  !indexSource.includes('<span class="pov-glyph">POV</span>')
+    && !indexSource.includes('<span class="pov-label">stroll</span>'),
+  'The first-person stroll toggle should not show POV/stroll text in the HUD.'
 );
 
 assert(
@@ -45,9 +51,9 @@ assert(
     && cssSource.includes('.fly-toggle')
     && cssSource.includes('.pov-toggle.active')
     && cssSource.includes('.fly-toggle.active')
+    && cssSource.includes('.pov-icon')
     && cssSource.includes('padding: 0 24px;')
-    && cssSource.includes('grid-template-columns: repeat(4, 44px) minmax(54px, 0.8fr) minmax(76px, 1.2fr);')
-    && cssSource.includes('.pov-label { display: none; }')
+    && cssSource.includes('grid-template-columns: repeat(5, 44px) minmax(76px, 1.2fr);')
     && cssSource.includes('#regen-same-biome')
     && cssSource.includes('#regen-random-biome'),
   'The visible mode controls should have desktop padding and collapse into a balanced mobile grid.'

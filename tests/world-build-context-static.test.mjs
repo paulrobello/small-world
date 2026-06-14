@@ -9,8 +9,8 @@ assert(
 );
 
 assert(
-  worldSource.includes('export async function generateWorld(seed, context = createWorldBuildContext())'),
-  'generateWorld should accept an optional explicit build context.'
+  worldSource.includes('export async function generateWorld(seed, context = createWorldBuildContext(), options = {})'),
+  'generateWorld should accept optional explicit build context and generation options.'
 );
 
 assert(
@@ -75,4 +75,18 @@ assert(
     && generateBody.includes('pickGroundPoint(maxRadiusFrac, { ...opts, layout: worldState.currentLayout })')
     && generateBody.includes('makeTerrain(biome, worldState.heightFn, worldState)'),
   'generateWorld should pass context layout and world size into terrain helpers instead of relying on global terrain state.'
+);
+
+assert(
+  generateBody.includes('const seedBiome = BIOMES[Math.floor(Math.random() * BIOMES.length)];')
+    && generateBody.includes('const forcedBiome = options.biomeId ? BIOMES.find((candidate) => candidate.id === options.biomeId) : null;')
+    && generateBody.includes('const biome = forcedBiome ?? seedBiome;')
+    && generateBody.includes('context.writeSeed(seed, { biomeId: forcedBiome ? biome.id : null });'),
+  'generateWorld should support forced-biome catalog navigation while preserving the seed RNG stream and URL state.'
+);
+
+assert(
+  generateBody.includes('const shouldGuaranteeBurrower = biome.id === "marsh" && allowGroundVariants;')
+    && generateBody.includes('placeOnGround(makeCreature(biome, { burrower: true }), { maxTries: 120 })'),
+  'Lavender Marsh should reserve one current-world creature slot for a burrower so its catalog and locator always include one.'
 );

@@ -1,6 +1,6 @@
 import * as THREE from "three";
 import { state } from "./state.js";
-import { readSeedFromUrl, newRandomSeed, formatSeed } from "./seed.js";
+import { readSeedFromUrl, readBiomeFromUrl, newRandomSeed, formatSeed } from "./seed.js";
 import { generateWorld, setFollowReleaseCallback } from "./world.js";
 import { islandFalloff, nearestCenter } from "./terrain.js";
 import { buildObstacleGrid, wakeCreature, lookAtCreature } from "./fauna.js";
@@ -568,6 +568,13 @@ export function initUi({ camera, canvas, controls, renderer }) {
     });
     let rendered = 0;
 
+    async function loadCatalogBiome(biome) {
+      setCatalogOpen(false);
+      await generateWorld(state.currentSeed, undefined, { biomeId: biome.id }).catch((error) => {
+        console.warn("Failed to load catalog biome", error);
+      });
+    }
+
     for (const biome of biomes) {
       const baseEntries = getBiomeCatalogEntries(biome);
       const savedKeys = new Set(baseEntries
@@ -581,9 +588,13 @@ export function initUi({ camera, canvas, controls, renderer }) {
         : baseEntries;
       const biomeEl = document.createElement("section");
       biomeEl.className = "catalog-biome";
-      const title = document.createElement("div");
+      const title = document.createElement("button");
+      title.type = "button";
       title.className = "catalog-biome-title";
       title.textContent = biome.name;
+      title.addEventListener("click", () => {
+        void loadCatalogBiome(biome);
+      });
       biomeEl.appendChild(title);
 
       for (const category of ["fauna", "flora"]) {
@@ -598,9 +609,9 @@ export function initUi({ camera, canvas, controls, renderer }) {
 
         for (const entry of categoryEntries) {
           const saved = catalogStore.getEntry(entry.key);
-          const card = document.createElement(saved ? "button" : "div");
+          const card = document.createElement("button");
+          card.type = "button";
           card.className = `catalog-card ${saved ? "unlocked" : "locked"}`;
-          if (saved) card.type = "button";
 
           if (saved) {
             const blob = await catalogStore.getPhotoBlob(entry.key);
@@ -641,10 +652,14 @@ export function initUi({ camera, canvas, controls, renderer }) {
               const seed = Number.parseInt(String(saved.seed).replace(/^0x/i, ""), 16);
               if (Number.isFinite(seed)) {
                 setCatalogOpen(false);
-                await generateWorld(seed).catch((error) => {
+                await generateWorld(seed, undefined, { biomeId: saved.biomeId }).catch((error) => {
                   console.warn("Failed to load catalog seed", error);
                 });
               }
+            });
+          } else {
+            card.addEventListener("click", () => {
+              void loadCatalogBiome(biome);
             });
           }
 
@@ -2590,8 +2605,8 @@ export function initUi({ camera, canvas, controls, renderer }) {
   // Also regenerate when seed changes via back/forward navigation.
   window.addEventListener("popstate", () => {
     const s = readSeedFromUrl();
-    if (s !== null && s !== state.currentSeed) {
-      void generateWorld(s).catch((error) => {
+    if (s !== null) {
+      void generateWorld(s, undefined, { biomeId: readBiomeFromUrl() }).catch((error) => {
         console.error("World generation failed", error);
       });
     }

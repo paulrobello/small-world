@@ -282,7 +282,7 @@ export function updateDayNight(t) {
   }
 }
 
-export async function generateWorld(seed, context = createWorldBuildContext()) {
+export async function generateWorld(seed, context = createWorldBuildContext(), options = {}) {
   const worldState = context.state;
   const worldScene = context.scene;
   const worldControls = context.controls;
@@ -323,7 +323,11 @@ export async function generateWorld(seed, context = createWorldBuildContext()) {
   try {
 
   // Pick biome from the seed itself, so one number reproduces everything.
-  const biome = BIOMES[Math.floor(Math.random() * BIOMES.length)];
+  // Forced-biome catalog navigation still consumes this roll before swapping
+  // the biome, preserving the rest of the seed's layout/random stream.
+  const seedBiome = BIOMES[Math.floor(Math.random() * BIOMES.length)];
+  const forcedBiome = options.biomeId ? BIOMES.find((candidate) => candidate.id === options.biomeId) : null;
+  const biome = forcedBiome ?? seedBiome;
   function attachCatalogMetadata(object) {
     if (!object?.userData?.inspect) return;
     object.userData.catalog = catalogSubjectFromInspect(object.userData.inspect, biome);
@@ -1370,6 +1374,7 @@ export async function generateWorld(seed, context = createWorldBuildContext()) {
   // so the actual headcount can be slightly higher than the configured range.
   const ncreatures = Math.max(1, Math.round(randInt(...biome.creatureCount) * densityScale));
   const allowGroundVariants = biome.creatureKind !== "fish";
+  const shouldGuaranteeBurrower = biome.id === "marsh" && allowGroundVariants;
   let budget = ncreatures;
   // In water biomes, raise the minimum-Y threshold so ground creatures don't
   // spawn submerged. Fish are the exception: they spawn on underwater shelves
@@ -1402,7 +1407,7 @@ export async function generateWorld(seed, context = createWorldBuildContext()) {
     worldState.creatures.push(c);
     return true;
   }
-  function placeOnGround(c) {
+  function placeOnGround(c, { maxTries = 40 } = {}) {
     if (c.isFish && biome.water) {
       const placedFish = placeFishUnderwater(c);
       if (!placedFish) disposeGroup(c.group);
@@ -1411,7 +1416,7 @@ export async function generateWorld(seed, context = createWorldBuildContext()) {
     let p = { x: 0, z: 0 };
     let y = -10;
     let found = false;
-    for (let tries = 0; tries < 40; tries++) {
+    for (let tries = 0; tries < maxTries; tries++) {
       p = pickWorldGroundPoint(0.65);
       y = worldState.heightFn(p.x, p.z);
       if (y >= groundMinY && !blocksPlacement(p.x, p.z, 0.35, GROUND_CREATURE_BLOCK_KINDS)) {
@@ -1427,6 +1432,9 @@ export async function generateWorld(seed, context = createWorldBuildContext()) {
     worldState.world.add(c.group);
     worldState.creatures.push(c);
     return true;
+  }
+  if (shouldGuaranteeBurrower && budget > 0) {
+    if (placeOnGround(makeCreature(biome, { burrower: true }), { maxTries: 120 })) budget--;
   }
   let creatureAttempts = 0;
   while (budget > 0 && creatureAttempts < ncreatures * 10) {
@@ -1656,7 +1664,7 @@ export async function generateWorld(seed, context = createWorldBuildContext()) {
 
   // restore the user's auto-rotate preference (regen shouldn't override it)
   if (worldControls) worldControls.autoRotate = worldState.userSettings.autoRotate;
-  context.writeSeed(seed);
+  context.writeSeed(seed, { biomeId: forcedBiome ? biome.id : null });
 
   // Build the spatial grid for static obstacle queries so avoidObstacles()
   // can use O(nearby) lookups instead of scanning the full list.

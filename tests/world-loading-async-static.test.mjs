@@ -28,7 +28,7 @@ assert(
 );
 
 assert(
-  worldSource.includes('export async function generateWorld(seed, context = createWorldBuildContext())')
+  worldSource.includes('export async function generateWorld(seed, context = createWorldBuildContext(), options = {})')
     && worldSource.includes('context.setLoading(true)')
     && worldSource.includes('context.setLoading(false)')
     && worldSource.includes('await nextGenerationFrame()')
@@ -41,8 +41,9 @@ assert(
 
 assert(
   mainSource.includes('state.isGeneratingWorld || isSelectingCreature() || isManualPaused()')
-    && mainSource.includes('void generateWorld(initialSeed).then'),
-  'The animation loop should pause simulation during generation and boot should not block on generation.'
+    && mainSource.includes('readBiomeFromUrl')
+    && mainSource.includes('void generateWorld(initialSeed, undefined, { biomeId: readBiomeFromUrl() }).then'),
+  'The animation loop should pause simulation during generation and boot should not block on generation or ignore URL biome overrides.'
 );
 
 assert(
@@ -50,6 +51,6 @@ assert(
     && uiSource.includes('await generateWorld(pickSeed())')
     && uiSource.includes('text.addEventListener("click", async () =>')
     && uiSource.includes('await generateWorld(bm.seed)')
-    && uiSource.includes('void generateWorld(s).catch'),
-  'Regenerate, bookmarks, and browser history should use the async generation API.'
+    && uiSource.includes('void generateWorld(s, undefined, { biomeId: readBiomeFromUrl() }).catch'),
+  'Regenerate, bookmarks, and browser history should use the async generation API and preserve URL biome overrides.'
 );

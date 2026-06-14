@@ -5,6 +5,18 @@
 > folded into the adjacent 1.3.3 and 1.3.6 entries — which is why the history
 > below jumps from 1.3.3 to 1.3.6.
 
+## 1.5.4 - 2026-06-14
+
+### Changed
+- Replaced the first-person stroll HUD button's visible `POV`/`stroll` text with a compact icon.
+- Made Field Guide biome titles and locked photo slots load that biome with the current seed, preserving the selected biome in the URL.
+
+### Fixed
+- Guaranteed Lavender Marsh worlds reserve at least one burrower so the Field Guide and locator can always include that biome-specific entry.
+
+### Verified
+- Verified with the focused POV/catalog/world-generation static tests, `make checkall`, an in-app Browser HUD/catalog/locator smoke on `0xA366`, and `graphify update .`.
+
 ## 1.5.3 - 2026-06-14
 
 ### Fixed
