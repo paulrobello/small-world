@@ -568,8 +568,7 @@ body.mobile .help-panel.open {
   background: rgba(245, 240, 230, 0.1);
 }
 .settings-glyph,
-.help-glyph,
-.catalog-glyph {
+.help-glyph {
   display: inline-block;
   font-family: "DM Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   line-height: 1;
@@ -583,10 +582,15 @@ body.mobile .help-panel.open {
   font-weight: 500;
   transform: translateY(-1px);
 }
-.catalog-glyph {
-  font-size: 12px;
-  letter-spacing: 0.04em;
-  transform: translateY(-1px);
+.catalog-icon {
+  width: 21px;
+  height: 21px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  display: block;
 }
 .settings-toggle:hover .settings-glyph { transform: rotate(72deg); }
 
@@ -1809,6 +1813,7 @@ body:not(.photo-mode) .photo-hud { display: none; }
   color: var(--ink-dim);
 }
 body.photo-mode .photo-seed { opacity: 0.85; pointer-events: auto; }
+body.photo-mode .photo-seed[aria-hidden="true"] { opacity: 0; pointer-events: none; }
 
 .photo-review-actions {
   position: fixed;
@@ -1852,6 +1857,14 @@ body.photo-mode .photo-seed { opacity: 0.85; pointer-events: auto; }
 .photo-review-catalog-status {
   color: rgba(18, 16, 20, 0.8);
   text-shadow: 0 1px 8px rgba(255, 255, 255, 0.8);
+}
+.photo-review-catalog-empty-status {
+  padding: 5px 12px;
+  background: rgba(18, 16, 20, 0.78);
+  border: 1px solid rgba(245, 240, 230, 0.36);
+  color: #fff;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.32);
+  text-shadow: none;
 }
 .photo-review-compare {
   display: grid;

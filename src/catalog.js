@@ -139,6 +139,11 @@ export function getBiomeCatalogEntries(biome) {
   );
 }
 
+export function filterCatalogEntriesForWorld(entries, { availableKeys, savedKeys = new Set() }) {
+  if (!availableKeys?.size) return entries;
+  return entries.filter((entry) => availableKeys.has(entry.key) || savedKeys.has(entry.key));
+}
+
 export function getAllCatalogEntries(biomes = BIOMES) {
   return biomes.flatMap((biome) => getBiomeCatalogEntries(biome));
 }

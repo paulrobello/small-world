@@ -8,9 +8,15 @@ const cssSource = readFileSync(new URL('../style.css', import.meta.url), 'utf8')
 assert(
   htmlSource.includes('id="setting-catalog"')
     && htmlSource.includes('id="catalog-toggle"')
+    && htmlSource.includes('class="catalog-icon"')
     && htmlSource.includes('id="catalog-panel"')
     && htmlSource.includes('id="catalog-list"'),
-  'Markup should expose settings and on-screen entry points plus the catalog panel.'
+  'Markup should expose settings and on-screen icon entry points plus the catalog panel.'
+);
+
+assert(
+  !htmlSource.includes('<span class="catalog-glyph">FG</span>'),
+  'Catalog HUD button should use an icon instead of visible FG text.'
 );
 
 assert(
@@ -40,11 +46,13 @@ assert(
 assert(
   uiSource.includes('new catalog entry')
     && uiSource.includes('already in catalog')
+    && uiSource.includes('emptyStatus.className = "photo-review-catalog-status photo-review-catalog-empty-status"')
+    && uiSource.includes('emptyStatus.textContent = "no catalog subject in reticle"')
     && uiSource.includes('frameLabel.className = "photo-review-frame-label"')
     && uiSource.includes('frameLabel.textContent = subject.label')
     && uiSource.includes('photo-review-keep')
     && uiSource.includes('photo-review-replace'),
-  'Photo review should render the subject name on the frame plus new-entry and existing-entry catalog actions.'
+  'Photo review should render styled no-subject, frame-label, new-entry, and existing-entry catalog states.'
 );
 
 assert(
@@ -55,10 +63,19 @@ assert(
 );
 
 assert(
+  uiSource.includes('const LOCATOR_HIDDEN_FLORA_VARIANTS = new Set([')
+    && uiSource.includes('"pebble"')
+    && uiSource.includes('if (inspect?.category === "flora" && LOCATOR_HIDDEN_FLORA_VARIANTS.has(inspect.variant)) return;')
+    && uiSource.includes('const GROUND_COVER = LOCATOR_HIDDEN_FLORA_VARIANTS;'),
+  'Current-biome locked catalog entries should use the same hidden ground-cover exclusions as the locator.'
+);
+
+assert(
   cssSource.includes('.catalog-panel')
     && cssSource.includes('.catalog-grid')
     && cssSource.includes('.catalog-card')
     && cssSource.includes('.photo-review-frame-label')
+    && cssSource.includes('.photo-review-catalog-empty-status')
     && cssSource.includes('.photo-review-catalog .photo-action:hover')
     && cssSource.includes('.photo-review-compare'),
   'Catalog, frame label, action contrast, and compare UI should have dedicated styles.'

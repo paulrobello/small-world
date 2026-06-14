@@ -5,6 +5,7 @@ globalThis.__APP_VERSION__ = 'test';
 const {
   buildCatalogKey,
   buildCatalogSubject,
+  filterCatalogEntriesForWorld,
   getBiomeCatalogEntries,
   makeCatalogStore,
 } = await import('../src/catalog.js');
@@ -54,6 +55,16 @@ assert(!coralKeys.has('flora:water:coral'), 'Water should not be catalogable eve
 const desertKeys = new Set(getBiomeCatalogEntries(desert).map((entry) => entry.key));
 assert(!desertKeys.has('fauna:butterfly:desert'), 'Biomes with noButterflies should not list butterflies.');
 assert(!desertKeys.has('fauna:bee:desert'), 'Biomes without nectar should not list bees.');
+
+const marsh = BIOMES.find((biome) => biome.id === 'marsh');
+const marshEntries = getBiomeCatalogEntries(marsh);
+const filteredMarshKeys = new Set(filterCatalogEntriesForWorld(marshEntries, {
+  availableKeys: new Set(['fauna:walker:marsh', 'fauna:flier:marsh']),
+  savedKeys: new Set(['fauna:sleeper:marsh']),
+}).map((entry) => entry.key));
+assert(filteredMarshKeys.has('fauna:walker:marsh'), 'Current-world filtering should keep fauna present in this seed.');
+assert(filteredMarshKeys.has('fauna:sleeper:marsh'), 'Current-world filtering should keep saved entries from prior seeds.');
+assert(!filteredMarshKeys.has('fauna:burrower:marsh'), 'Current-world filtering should hide unavailable locked fauna.');
 
 const store = makeCatalogStore({
   now: () => 1000,

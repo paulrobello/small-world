@@ -19,12 +19,16 @@ import {
   tryResumeOnGesture,
 } from "./music.js";
 import { disposePortal, getPortalSideEntryPose, updatePortalPreviewSettings } from "./portal.js";
-import { getBiomeCatalogEntries, makeCatalogStore } from "./catalog.js";
+import { filterCatalogEntriesForWorld, getBiomeCatalogEntries, makeCatalogStore } from "./catalog.js";
 import { findPhotoCatalogSubject } from "./photoSubject.js";
 
 let followTarget = null;
 let selectingCreature = false;
 const catalogStore = makeCatalogStore();
+const LOCATOR_HIDDEN_FLORA_VARIANTS = new Set([
+  "grassfield", "wildflower", "pebble", "grassblade",
+  "cloudpuff", "shell", "starfish", "water",
+]);
 
 // First-person stroll state — populated when enabled, null otherwise.
 let _stroll = null;
@@ -550,6 +554,13 @@ export function initUi({ camera, canvas, controls, renderer }) {
     clearCatalogObjectUrls();
     catalogList.innerHTML = "";
     const currentId = state.currentBiome?.id ?? null;
+    const currentCatalogKeys = new Set();
+    state.world?.traverse((object) => {
+      const inspect = object.userData?.inspect;
+      if (inspect?.category === "flora" && LOCATOR_HIDDEN_FLORA_VARIANTS.has(inspect.variant)) return;
+      const key = object.userData?.catalog?.key;
+      if (key) currentCatalogKeys.add(key);
+    });
     const biomes = [...BIOMES].sort((a, b) => {
       if (a.id === currentId) return -1;
       if (b.id === currentId) return 1;
@@ -558,7 +569,16 @@ export function initUi({ camera, canvas, controls, renderer }) {
     let rendered = 0;
 
     for (const biome of biomes) {
-      const entries = getBiomeCatalogEntries(biome);
+      const baseEntries = getBiomeCatalogEntries(biome);
+      const savedKeys = new Set(baseEntries
+        .filter((entry) => catalogStore.getEntry(entry.key))
+        .map((entry) => entry.key));
+      const entries = biome.id === currentId
+        ? filterCatalogEntriesForWorld(baseEntries, {
+            availableKeys: currentCatalogKeys,
+            savedKeys,
+          })
+        : baseEntries;
       const biomeEl = document.createElement("section");
       biomeEl.className = "catalog-biome";
       const title = document.createElement("div");
@@ -2032,7 +2052,10 @@ export function initUi({ camera, canvas, controls, renderer }) {
     actions.prepend(catalogEl);
 
     if (!subject) {
-      catalogEl.textContent = "no catalog subject in reticle";
+      const emptyStatus = document.createElement("div");
+      emptyStatus.className = "photo-review-catalog-status photo-review-catalog-empty-status";
+      emptyStatus.textContent = "no catalog subject in reticle";
+      catalogEl.appendChild(emptyStatus);
       return;
     }
 
@@ -2165,6 +2188,7 @@ export function initUi({ camera, canvas, controls, renderer }) {
     `;
     document.body.appendChild(actions);
 
+    photoSeedEl.setAttribute("aria-hidden", "true");
     photoHudEl.setAttribute("aria-hidden", "true");
     _photoReview = {
       group,
@@ -2235,6 +2259,7 @@ export function initUi({ camera, canvas, controls, renderer }) {
     if (_photoFP) {
       _photoFP.reviewOpen = false;
       if (resumePhotoFp && document.body.classList.contains("photo-mode")) {
+        photoSeedEl.setAttribute("aria-hidden", "false");
         photoHudEl.setAttribute("aria-hidden", "false");
         canvas.requestPointerLock?.().catch(() => {});
       }
@@ -2480,10 +2505,7 @@ export function initUi({ camera, canvas, controls, renderer }) {
     // Flora — scan world children for inspect-tagged groups.
     // Exclude instanced ground cover (grass, wildflowers, pebbles) that blanket
     // the island — navigating to them isn't meaningful.
-    const GROUND_COVER = new Set([
-      "grassfield", "wildflower", "pebble", "grassblade",
-      "cloudpuff", "shell", "starfish", "water",
-    ]);
+    const GROUND_COVER = LOCATOR_HIDDEN_FLORA_VARIANTS;
     const floraGroups = new Map(); // variant → [mesh]
     for (const child of state.world.children) {
       const inspect = child.userData?.inspect;

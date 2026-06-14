@@ -5,6 +5,16 @@
 > folded into the adjacent 1.3.3 and 1.3.6 entries — which is why the history
 > below jumps from 1.3.3 to 1.3.6.
 
+## 1.5.3 - 2026-06-14
+
+### Fixed
+- Fixed non-catalog photo review layout so cloud/sky captures hide the photo-mode seed/hint row and show the no-subject state as a contained status above save/discard.
+- Fixed the current-biome Field Guide so locked entries are filtered to subjects the locator can actually target in the generated world, while saved entries remain visible.
+- Replaced the Field Guide HUD button's `FG` text with a compact icon.
+
+### Verified
+- Verified with focused photo-review HUD/catalog tests, `make checkall`, an in-app Browser catalog/locator smoke on `0xA366`, an agentchrome cloud/no-subject capture on `0xA366`, and `graphify update .`.
+
 ## 1.5.2 - 2026-06-14
 
 ### Fixed
