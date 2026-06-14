@@ -5,6 +5,14 @@
 > folded into the adjacent 1.3.3 and 1.3.6 entries — which is why the history
 > below jumps from 1.3.3 to 1.3.6.
 
+## 1.5.6 - 2026-06-14
+
+### Changed
+- Documented the Field Guide catalog workflow, persistence, duplicate-photo review, and catalog navigation in the README.
+
+### Verified
+- Verified with `make checkall`, README diff review, and `graphify update .`.
+
 ## 1.5.5 - 2026-06-14
 
 ### Fixed

@@ -29,7 +29,8 @@ A fairy ring in the verdant grove:
 - **Procedural fauna** — big-eyed creatures that wander, sleep, burrow, and travel in families; caterpillars, butterflies, bees, will-o'-wisps, and flocks of birds. Fuzzy biomes (mossy ruins, cloud island, frozen vale, mushroom grove) give walkers and caterpillars a shell-fur shader for a soft hairy silhouette.
 - **Day/night cycle** — 120-second cycle with per-biome dusk and night palettes. Creatures respond to darkness: walkers curl up and sleep, fliers descend and grow drowsy, each personality (shy, bold, sleepy, bouncy) has a different sleep threshold.
 - **Visual polish** — mip-chain selective bloom on emissive elements (glow flowers, lanterns, sun), optional tilt-shift miniature blur, soft circular shadows under every creature, sky reflections on water biomes, parallax mountain backdrop, GPU-particle shader with per-particle life/size, dust kicks under footsteps, and procedural PBR detail textures on terrain, bark, and stone.
-- **Camera modes** — orbit the island, switch to fly camera with `V` for free movement, stroll in first person among the creatures, or freeze the sim in photo mode and save a PNG.
+- **Camera modes** — orbit the island, switch to fly camera with `V` for free movement, stroll in first person among the creatures, or freeze the sim in photo mode to save PNGs and fill the Field Guide.
+- **Field Guide catalog** — biome-specific fauna and flora checklist that unlocks from photo-mode reticle captures. Thumbnails persist locally in the browser, duplicate photos ask whether to keep or replace the saved shot, and empty slots can jump to their biome with the current seed.
 - **Inspect mode** (`?inspect=1`) — a neutral studio backdrop for examining a single creature or flora variant. Cycle biome/variant with keyboard, pause and frame-step animation, copy the URL to share an exact recreation.
 - **Interactive UI** — follow-a-creature camera, bookmarks, biome filter, shareable seed links, fly camera controls, wind and grass density controls, FX toggles, auto-regenerate timer, and per-biome music track selection.
 - **Mobile-friendly** — touch gestures plus tiered rendering: a mid-tier profile (`?midfx=1`) trims the heavier depth effects while keeping bloom, and a low-FX mode (`?lowfx=1`) drops fur, post-FX, and particle counts on lower-end devices.
@@ -44,6 +45,7 @@ Orbit mode (the default — drag to rotate, scroll to zoom):
 | `F` | Enter/exit first-person stroll |
 | `V` | Enter/exit fly camera |
 | `P` | Toggle photo mode |
+| `G` | Toggle the Field Guide catalog |
 | `L` | Toggle the locator panel |
 | `T` | Toggle the guided tour |
 | `,` | Open/close the settings panel |
@@ -60,6 +62,12 @@ Stroll, fly, and photo modes (after pressing `F` / `V` / `P`) capture the pointe
 | Click | Capture a photo (photo mode) |
 | `Space` | Unfreeze the sim for action shots (photo mode) |
 | `Esc` | Return to orbit |
+
+## Field Guide
+
+Open the Field Guide with the on-screen book icon or `G`. Each biome has its own fauna and flora entries, and only subjects available for that biome are shown. To fill an entry, enter photo mode with `P`, frame a catalogable subject in the reticle, click to capture, then choose **save to catalog** from the review screen.
+
+The guide stores small photo thumbnails locally in your browser. If you photograph an entry that already exists, the review screen shows the current and new shots and asks whether to keep or replace the saved image. Clicking a biome title or locked photo slot loads that biome with the current seed; clicking an unlocked entry revisits the seed and biome where that photo was taken.
 
 Inspect mode (`?inspect=1`):
 
