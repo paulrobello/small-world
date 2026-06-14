@@ -60,6 +60,7 @@ import { makeWaterReflection, disposeWaterReflection } from "./reflection.js";
 import { createBiomePortal, disposePortal, makeSeededPortalPlacement } from "./portal.js";
 import { LOWFX, LOWFX_DENSITY } from "./lowfx.js";
 import { resetPBRTextureCache, pbrDetailPrewarmSteps } from "./pbr.js";
+import { catalogSubjectFromInspect } from "./catalog.js";
 
 let _scene = null;
 let _controls = null;
@@ -323,6 +324,11 @@ export async function generateWorld(seed, context = createWorldBuildContext()) {
 
   // Pick biome from the seed itself, so one number reproduces everything.
   const biome = BIOMES[Math.floor(Math.random() * BIOMES.length)];
+  function attachCatalogMetadata(object) {
+    if (!object?.userData?.inspect) return;
+    object.userData.catalog = catalogSubjectFromInspect(object.userData.inspect, biome);
+    if (!object.userData.catalog) delete object.userData.catalog;
+  }
 
   // Layout (size + shape + island count) — must be picked right after the
   // biome so it stays inside the deterministic Math.random window.
@@ -785,6 +791,7 @@ export async function generateWorld(seed, context = createWorldBuildContext()) {
 
     const f = FLORA_BUILDERS.flyer_nest(biome);
     f.userData.inspect = { category: "flora", variant: kind };
+    attachCatalogMetadata(f);
     let y = groundPose ? groundPose.y : y0 - FLORA_BURY;
     if (kind === "flyer_nest" && nestHost) y = nestHost.y - 0.08 * s;
     f.position.set(p.x, y, p.z);
@@ -902,6 +909,7 @@ export async function generateWorld(seed, context = createWorldBuildContext()) {
       const { p, y0, s, fp } = choice;
       const landmark = FLORA_BUILDERS.fairyring(biome);
       landmark.userData.inspect = { category: "flora", variant: "fairyring" };
+      attachCatalogMetadata(landmark);
       const y = Math.min(
         y0,
         worldState.heightFn(p.x + fp, p.z),
@@ -927,7 +935,7 @@ export async function generateWorld(seed, context = createWorldBuildContext()) {
       // Spawn will-o-wisps around the fairy ring
       const wispCount = landmark.userData.willowispCount ?? 0;
       for (let wi = 0; wi < wispCount; wi++) {
-        const wisp = makeWillOWisp(p.x, y, p.z, fp * 2);
+        const wisp = makeWillOWisp(p.x, y, p.z, fp * 2, biome);
         worldState.world.add(wisp.group);
         worldState.willowisps.push(wisp);
       }
@@ -1035,6 +1043,7 @@ export async function generateWorld(seed, context = createWorldBuildContext()) {
     if (CANOPY_SPACING_KINDS.has(kind) && blocksFloraPlacement(p.x, p.z, fp * CANOPY_SPACING_PAD, CANOPY_SPACING_KINDS)) continue;
     const f = FLORA_BUILDERS[kind](biome);
     f.userData.inspect = { category: "flora", variant: kind };
+    attachCatalogMetadata(f);
     const hXp = worldState.heightFn(p.x + fp, p.z);
     const hXm = worldState.heightFn(p.x - fp, p.z);
     const hZp = worldState.heightFn(p.x, p.z + fp);
@@ -1140,7 +1149,7 @@ export async function generateWorld(seed, context = createWorldBuildContext()) {
       // Canopy center: y + 1.46 * s, canopy max radius: 0.88 * s ≈ 2.64 at 3×
       const canopyCenterY = y + 1.46 * s;
       const canopyR = 1.3 * s + 0.5; // full canopy extent + padding
-      const wisp = makeWillOWisp(p.x, canopyCenterY, p.z, canopyR + 0.8);
+      const wisp = makeWillOWisp(p.x, canopyCenterY, p.z, canopyR + 0.8, biome);
       wisp.innerRadius = canopyR;
       wisp.avoidX = p.x;
       wisp.avoidY = canopyCenterY;
@@ -1293,6 +1302,7 @@ export async function generateWorld(seed, context = createWorldBuildContext()) {
       s = Math.min(s, maxScale);
       const f = FLORA_BUILDERS[kind](biome);
       f.userData.inspect = { category: "flora", variant: kind };
+      attachCatalogMetadata(f);
       f.position.set(p.x, y, p.z);
       f.rotation.y = Math.random() * Math.PI * 2;
       f.scale.setScalar(s);
@@ -1321,23 +1331,37 @@ export async function generateWorld(seed, context = createWorldBuildContext()) {
   const grass = makeGrassField(biome, worldState.heightFn, coverExclusions, grassShorteners, portalGrassClearances);
   if (grass) worldState.world.add(grass);
   if (worldState._reapplyGrassSettings) worldState._reapplyGrassSettings();
+  if (grass) attachCatalogMetadata(grass);
   await yieldIfNeeded(true);
   for (const m of makeWildflowerField(biome, worldState.heightFn, groundCoverExclusions)) {
+    attachCatalogMetadata(m);
     worldState.world.add(m);
     if (m.userData.positions) worldState.flowerSpots.push(...m.userData.positions);
   }
   await yieldIfNeeded(true);
   const groveDetails = makeVerdantGroveDetails(biome, worldState.heightFn, groundCoverExclusions);
-  if (groveDetails) worldState.world.add(groveDetails);
+  if (groveDetails) {
+    attachCatalogMetadata(groveDetails);
+    worldState.world.add(groveDetails);
+  }
   await yieldIfNeeded();
   const cloudPuffs = makeCloudPuffField(biome, worldState.heightFn, groundCoverExclusions);
-  if (cloudPuffs) worldState.world.add(cloudPuffs);
+  if (cloudPuffs) {
+    attachCatalogMetadata(cloudPuffs);
+    worldState.world.add(cloudPuffs);
+  }
   await yieldIfNeeded();
   const beachcomb = makeBeachcombField(biome, worldState.heightFn, groundCoverExclusions);
-  if (beachcomb) worldState.world.add(beachcomb);
+  if (beachcomb) {
+    attachCatalogMetadata(beachcomb);
+    worldState.world.add(beachcomb);
+  }
   await yieldIfNeeded();
   const pebbles = makePebbleField(biome, worldState.heightFn, groundCoverExclusions);
-  if (pebbles) worldState.world.add(pebbles);
+  if (pebbles) {
+    attachCatalogMetadata(pebbles);
+    worldState.world.add(pebbles);
+  }
   worldState.groundMarks = makeGroundMarks(biome);
   if (worldState.groundMarks) worldState.world.add(worldState.groundMarks);
 

@@ -12,6 +12,10 @@ assert(
   'Opening the photo review should release pointer lock so save/discard buttons are clickable.'
 );
 assert(
+  uiSource.includes('canvas.requestPointerLock?.().catch(() => {});'),
+  'Photo mode should ignore rejected pointer-lock requests so browser automation does not create unhandled rejections.'
+);
+assert(
   uiSource.includes('if (fp.reviewOpen) return;'),
   'Photo review should suspend first-person movement while the save/discard prompt is visible.'
 );

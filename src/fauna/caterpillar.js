@@ -4,6 +4,7 @@ import { jitterGeo } from "../util.js";
 import { pickGroundPoint, nearestCenter } from "../terrain.js";
 import { emitGroundMark } from "../environment.js";
 import { applyShellFur } from "../fur.js";
+import { buildCatalogSubject } from "../catalog.js";
 import { WATER_AVOID_Y, avoidObstacles, sampleSlopes, addAntennae } from "./shared.js";
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -145,6 +146,11 @@ export function makeCaterpillar(biome, opts = {}) {
     category: "creature",
     variant: isSnail ? "snail" : "caterpillar",
   };
+  group.userData.catalog = buildCatalogSubject({
+    category: group.userData.inspect.category,
+    variant: group.userData.inspect.variant,
+    biomeId: biome.id,
+  });
   const palette = biome.creatureColors;
   const baseCol = opts.color instanceof THREE.Color
     ? opts.color.clone()

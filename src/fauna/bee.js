@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { buildCatalogSubject } from "../catalog.js";
 import { pushOutOfObstacles, applyWaterFloorAndSteer } from "./shared.js";
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -15,8 +16,13 @@ export function makeSwarm() {
   };
 }
 
-export function makeBee(swarm, _biome) {
+export function makeBee(swarm, biome) {
   const group = new THREE.Group();
+  group.userData.catalog = buildCatalogSubject({
+    category: "fauna",
+    variant: "bee",
+    biomeId: biome.id,
+  });
   // tiny dark body (slightly smaller than a butterfly)
   const body = new THREE.Mesh(
     new THREE.IcosahedronGeometry(0.035, 0),

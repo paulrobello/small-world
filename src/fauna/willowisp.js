@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import { state } from "../state.js";
 import { BLOOM_LAYER } from "../postfx.js";
+import { buildCatalogSubject } from "../catalog.js";
 
 const WISP_GEO = new THREE.SphereGeometry(0.04, 8, 6);
 const WISP_COLOR = new THREE.Color("#ffc36b");
@@ -36,9 +37,16 @@ function makeSparklePool() {
 }
 
 // ── factory ──
-export function makeWillOWisp(homeX, homeY, homeZ, wanderRadius) {
+export function makeWillOWisp(homeX, homeY, homeZ, wanderRadius, biome = null) {
   const group = new THREE.Group();
   group.position.set(homeX, homeY + 0.3, homeZ);
+  if (biome) {
+    group.userData.catalog = buildCatalogSubject({
+      category: "fauna",
+      variant: "willowisp",
+      biomeId: biome.id,
+    });
+  }
 
   // Glowing orb mesh
   const mat = new THREE.MeshStandardMaterial({

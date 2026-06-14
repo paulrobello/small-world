@@ -1,11 +1,17 @@
 import * as THREE from "three";
+import { buildCatalogSubject } from "../catalog.js";
 import { pushOutOfObstacles, applyWaterFloorAndSteer } from "./shared.js";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Butterflies — small bright fliers that flutter between flowers
 // ─────────────────────────────────────────────────────────────────────────────
-export function makeButterfly(palette, _biome) {
+export function makeButterfly(palette, biome) {
   const group = new THREE.Group();
+  group.userData.catalog = buildCatalogSubject({
+    category: "fauna",
+    variant: "butterfly",
+    biomeId: biome.id,
+  });
 
   const c1 = palette[Math.floor(Math.random() * palette.length)];
   let c2 = palette[Math.floor(Math.random() * palette.length)];

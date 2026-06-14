@@ -5,6 +5,18 @@
 > folded into the adjacent 1.3.3 and 1.3.6 entries — which is why the history
 > below jumps from 1.3.3 to 1.3.6.
 
+## 1.5.0 - 2026-06-14
+
+### Added
+- Added a biome-specific field guide catalog that unlocks fauna and flora entries from photo-mode reticle captures and persists thumbnail photos locally.
+- Added catalog compare/replace review controls for re-photographing an existing entry, plus a field guide panel grouped by biome.
+
+### Changed
+- Photo review now resolves the reticle subject from scene catalog metadata while preserving regular PNG save/discard behavior.
+
+### Verified
+- Verified with focused catalog, subject, photo-review, and UI tests, `make checkall`, an agentchrome browser capture/save/keep/replace run on `0x2676`, and `graphify update .`.
+
 ## 1.4.0 - 2026-06-12
 
 ### Added

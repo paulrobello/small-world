@@ -3,6 +3,7 @@ import { state } from "../state.js";
 import { jitterGeo } from "../util.js";
 import { nearestCenter } from "../terrain.js";
 import { makeDirtPuff, makeDustKick, emitGroundMark } from "../environment.js";
+import { buildCatalogSubject } from "../catalog.js";
 
 // ── burrower dirt mound ──
 // A small flattened sphere placed where the creature went underground.
@@ -318,6 +319,11 @@ export function makeCreature(biome, opts = {}) {
                 ? "flier"
                 : "walker",
   };
+  group.userData.catalog = buildCatalogSubject({
+    category: group.userData.inspect.category,
+    variant: group.userData.inspect.variant,
+    biomeId: biome.id,
+  });
   const palette = biome.creatureColors;
   const bodyCol = opts.color instanceof THREE.Color
     ? opts.color.clone()

@@ -465,6 +465,11 @@
         <span class="setting-button-label" id="setting-photo-label">photo mode</span>
         <span class="setting-button-hint">hide hud · freeze sim</span>
       </button>
+
+      <button class="setting-button" id="setting-catalog">
+        <span class="setting-button-label">field guide</span>
+        <span class="setting-button-hint">biome photo catalog</span>
+      </button>
     </section>
 
     <section class="settings-section">
@@ -495,6 +500,16 @@
     <div class="locator-list" id="locator-list"></div>
     <div class="locator-empty" id="locator-empty">nothing here yet.</div>
     <div class="locator-hint">click to locate · <kbd>esc</kbd> to close</div>
+  </aside>
+
+  <aside class="catalog-panel" id="catalog-panel" aria-hidden="true">
+    <div class="settings-head">
+      <span class="settings-title">field guide</span>
+      <button class="settings-close" id="catalog-close" aria-label="close">×</button>
+    </div>
+    <div class="catalog-list" id="catalog-list"></div>
+    <div class="catalog-empty" id="catalog-empty">no catalog entries yet.</div>
+    <div class="catalog-hint">frame a subject in photo mode to fill this guide.</div>
   </aside>
 
   <div class="follow-banner" id="follow-banner" aria-hidden="true">

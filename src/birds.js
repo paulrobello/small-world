@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import { state } from "./state.js";
 import { jitterGeo } from "./util.js";
+import { buildCatalogSubject } from "./catalog.js";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Birds — small bodies + flapping wings, flocking with boid behaviour
@@ -70,6 +71,11 @@ export function makeFlock(biome) {
 
   for (let i = 0; i < size; i++) {
     const b = makeBird(color);
+    b.group.userData.catalog = buildCatalogSubject({
+      category: "fauna",
+      variant: "bird",
+      biomeId: biome.id,
+    });
     b.group.position.set(
       cx + (Math.random() - 0.5) * 3,
       altitude + (Math.random() - 0.5) * 1.5,

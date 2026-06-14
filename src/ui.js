@@ -19,9 +19,12 @@ import {
   tryResumeOnGesture,
 } from "./music.js";
 import { disposePortal, getPortalSideEntryPose, updatePortalPreviewSettings } from "./portal.js";
+import { getBiomeCatalogEntries, makeCatalogStore } from "./catalog.js";
+import { findPhotoCatalogSubject } from "./photoSubject.js";
 
 let followTarget = null;
 let selectingCreature = false;
+const catalogStore = makeCatalogStore();
 
 // First-person stroll state — populated when enabled, null otherwise.
 let _stroll = null;
@@ -30,6 +33,9 @@ let _flyFP = null;
 // Photo mode first-person state — populated when photo mode is active.
 let _photoFP = null;
 let _photoReview = null;
+let _catalogPanel = null;
+let _catalogOpen = false;
+let _catalogObjectUrls = [];
 // Bound exit function for the Escape handler; set inside initUi().
 let _exitStroll = () => {};
 let _enterStroll = () => {};
@@ -512,10 +518,15 @@ export function initUi({ camera, canvas, controls, renderer }) {
   _tourBanner = document.getElementById("tour-banner");
   _tourButton = document.getElementById("setting-tour");
   _locatorPanel = document.getElementById("locator-panel");
+  _catalogPanel = document.getElementById("catalog-panel");
   const locatorEyebrow = document.getElementById("locator-eyebrow");
   const settingsToggle = document.getElementById("settings-toggle");
   const settingsClose = document.getElementById("settings-close");
   const settingsResetDefaults = document.getElementById("setting-reset-defaults");
+  const catalogButton = document.getElementById("setting-catalog");
+  const catalogClose = document.getElementById("catalog-close");
+  const catalogList = document.getElementById("catalog-list");
+  const catalogEmpty = document.getElementById("catalog-empty");
 
   // Hand world.js a release callback so generateWorld() can drop a stale follow.
   setFollowReleaseCallback(() => setFollowTarget(null));
@@ -529,11 +540,118 @@ export function initUi({ camera, canvas, controls, renderer }) {
     helpPanel.setAttribute("aria-hidden", open ? "false" : "true");
   }
 
+  function clearCatalogObjectUrls() {
+    for (const url of _catalogObjectUrls) URL.revokeObjectURL(url);
+    _catalogObjectUrls = [];
+  }
+
+  async function renderCatalogPanel() {
+    clearCatalogObjectUrls();
+    catalogList.innerHTML = "";
+    const currentId = state.currentBiome?.id ?? null;
+    const biomes = [...BIOMES].sort((a, b) => {
+      if (a.id === currentId) return -1;
+      if (b.id === currentId) return 1;
+      return a.name.localeCompare(b.name);
+    });
+    let rendered = 0;
+
+    for (const biome of biomes) {
+      const entries = getBiomeCatalogEntries(biome);
+      const biomeEl = document.createElement("section");
+      biomeEl.className = "catalog-biome";
+      const title = document.createElement("div");
+      title.className = "catalog-biome-title";
+      title.textContent = biome.name;
+      biomeEl.appendChild(title);
+
+      for (const category of ["fauna", "flora"]) {
+        const categoryEntries = entries.filter((entry) => entry.category === category);
+        if (!categoryEntries.length) continue;
+        const sectionTitle = document.createElement("div");
+        sectionTitle.className = "catalog-section-title";
+        sectionTitle.textContent = category;
+        biomeEl.appendChild(sectionTitle);
+        const grid = document.createElement("div");
+        grid.className = "catalog-grid";
+
+        for (const entry of categoryEntries) {
+          const saved = catalogStore.getEntry(entry.key);
+          const card = document.createElement(saved ? "button" : "div");
+          card.className = `catalog-card ${saved ? "unlocked" : "locked"}`;
+          if (saved) card.type = "button";
+
+          if (saved) {
+            const blob = await catalogStore.getPhotoBlob(entry.key);
+            if (blob) {
+              const url = URL.createObjectURL(blob);
+              _catalogObjectUrls.push(url);
+              const img = document.createElement("img");
+              img.className = "catalog-thumb";
+              img.alt = entry.label;
+              img.src = url;
+              card.appendChild(img);
+            }
+          } else {
+            const placeholder = document.createElement("div");
+            placeholder.className = "catalog-thumb catalog-thumb-placeholder";
+            placeholder.textContent = "?";
+            card.appendChild(placeholder);
+          }
+
+          const label = document.createElement("div");
+          label.className = "catalog-card-label";
+          label.textContent = entry.label;
+          card.appendChild(label);
+
+          const meta = document.createElement("div");
+          meta.className = "catalog-card-meta";
+          meta.textContent = saved
+            ? `${saved.seed} · ${new Date(saved.updatedAt).toLocaleDateString()}`
+            : "undiscovered";
+          card.appendChild(meta);
+
+          if (saved) {
+            const action = document.createElement("div");
+            action.className = "catalog-card-action";
+            action.textContent = "visit seed";
+            card.appendChild(action);
+            card.addEventListener("click", async () => {
+              const seed = Number.parseInt(String(saved.seed).replace(/^0x/i, ""), 16);
+              if (Number.isFinite(seed)) {
+                setCatalogOpen(false);
+                await generateWorld(seed).catch((error) => {
+                  console.warn("Failed to load catalog seed", error);
+                });
+              }
+            });
+          }
+
+          grid.appendChild(card);
+        }
+        biomeEl.appendChild(grid);
+      }
+
+      catalogList.appendChild(biomeEl);
+      rendered += entries.length;
+    }
+
+    catalogEmpty.classList.toggle("visible", rendered === 0);
+  }
+
+  function setCatalogOpen(open) {
+    _catalogOpen = open;
+    _catalogPanel.classList.toggle("open", open);
+    _catalogPanel.setAttribute("aria-hidden", open ? "false" : "true");
+    if (open) void renderCatalogPanel();
+    else clearCatalogObjectUrls();
+  }
+
   // Settings and help share the same bottom-right corner — opening one
   // closes the other so the back panel isn't hidden behind the front one.
   settingsToggle.addEventListener("click", () => {
     const opening = !_settingsPanel.classList.contains("open");
-    if (opening) { setHelpOpen(false); setLocatorOpen(false); }
+    if (opening) { setHelpOpen(false); setLocatorOpen(false); setCatalogOpen(false); }
     setSettingsOpen(opening);
   });
   settingsClose.addEventListener("click", () => setSettingsOpen(false));
@@ -544,7 +662,7 @@ export function initUi({ camera, canvas, controls, renderer }) {
 
   helpToggle.addEventListener("click", () => {
     const opening = !helpPanel.classList.contains("open");
-    if (opening) { setSettingsOpen(false); setLocatorOpen(false); }
+    if (opening) { setSettingsOpen(false); setLocatorOpen(false); setCatalogOpen(false); }
     setHelpOpen(opening);
   });
   helpClose.addEventListener("click", () => setHelpOpen(false));
@@ -552,8 +670,18 @@ export function initUi({ camera, canvas, controls, renderer }) {
   if (!INSPECT && !shouldUseMobileHud() && shouldShowFirstVisitHelp()) {
     setSettingsOpen(false);
     setLocatorOpen(false);
+    setCatalogOpen(false);
     setHelpOpen(true);
   }
+
+  catalogButton.addEventListener("click", () => {
+    const opening = !_catalogOpen;
+    setSettingsOpen(false);
+    setHelpOpen(false);
+    setLocatorOpen(false);
+    setCatalogOpen(opening);
+  });
+  catalogClose.addEventListener("click", () => setCatalogOpen(false));
 
   _followButton.addEventListener("click", () => {
     if (followTarget) {
@@ -1832,6 +1960,7 @@ export function initUi({ camera, canvas, controls, renderer }) {
     }
     const seedTag = formatSeed(state.currentSeed).replace(/^0x/, "");
     const biomeTag = (state.currentBiome?.id ?? "world").replace(/\s+/g, "-");
+    const catalogHit = findPhotoCatalogSubject({ camera, root: state.world });
     const url = canvas.toDataURL("image/png");
 
     // Shutter flash (0.1s white overlay)
@@ -1843,12 +1972,116 @@ export function initUi({ camera, canvas, controls, renderer }) {
     setTimeout(() => flash.remove(), 150);
 
     // After flash, show the 3D photo review
-    setTimeout(() => showPhotoReview(url, biomeTag, seedTag), 120);
+    setTimeout(() => showPhotoReview(url, biomeTag, seedTag, catalogHit?.subject ?? null), 120);
+  }
+
+  async function photoDataUrlToBlob(dataUrl) {
+    const res = await fetch(dataUrl);
+    return res.blob();
+  }
+
+  function loadPhotoImage(dataUrl) {
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      img.onload = () => resolve(img);
+      img.onerror = reject;
+      img.src = dataUrl;
+    });
+  }
+
+  async function makeCatalogThumbnailBlob(dataUrl) {
+    try {
+      const img = await loadPhotoImage(dataUrl);
+      const maxW = 360;
+      const scale = Math.min(1, maxW / img.naturalWidth);
+      const w = Math.max(1, Math.round(img.naturalWidth * scale));
+      const h = Math.max(1, Math.round(img.naturalHeight * scale));
+      const c = document.createElement("canvas");
+      c.width = w;
+      c.height = h;
+      c.getContext("2d").drawImage(img, 0, 0, w, h);
+      return await new Promise((resolve) => {
+        c.toBlob((blob) => resolve(blob), "image/webp", 0.82);
+      }) ?? photoDataUrlToBlob(dataUrl);
+    } catch {
+      return photoDataUrlToBlob(dataUrl);
+    }
+  }
+
+  async function saveCatalogPhoto(subject, dataUrl, mode, statusEl) {
+    statusEl.textContent = "saving catalog photo...";
+    const blob = await makeCatalogThumbnailBlob(dataUrl);
+    const result = mode === "replace"
+      ? await catalogStore.replacePhoto({ subject, seed: state.currentSeed, blob })
+      : await catalogStore.savePhoto({ subject, seed: state.currentSeed, blob });
+    statusEl.textContent = result.status === "exists"
+      ? "already in catalog"
+      : "saved to catalog";
+    if (_catalogOpen) await renderCatalogPanel();
+    return result;
+  }
+
+  async function renderPhotoCatalogActions(actions, subject, dataUrl) {
+    const catalogEl = document.createElement("div");
+    catalogEl.className = "photo-review-catalog";
+    actions.prepend(catalogEl);
+
+    if (!subject) {
+      catalogEl.textContent = "no catalog subject in reticle";
+      return;
+    }
+
+    const existing = catalogStore.getEntry(subject.key);
+    const status = document.createElement("div");
+    status.className = "photo-review-catalog-status";
+    status.textContent = existing
+      ? `already in catalog · ${subject.label}`
+      : `new catalog entry · ${subject.label}`;
+    catalogEl.appendChild(status);
+
+    if (existing) {
+      const currentBlob = await catalogStore.getPhotoBlob(subject.key);
+      if (currentBlob && _photoReview) {
+        const currentUrl = URL.createObjectURL(currentBlob);
+        _photoReview.objectUrls.push(currentUrl);
+        const compare = document.createElement("div");
+        compare.className = "photo-review-compare";
+        compare.innerHTML = `
+          <figure><img src="${currentUrl}" alt="current catalog photo"><figcaption>current</figcaption></figure>
+          <figure><img src="${dataUrl}" alt="new catalog photo"><figcaption>new</figcaption></figure>
+        `;
+        catalogEl.appendChild(compare);
+      }
+      const keep = document.createElement("button");
+      keep.className = "photo-action photo-review-keep";
+      keep.type = "button";
+      keep.textContent = "keep current";
+      keep.addEventListener("click", () => closePhotoReview());
+      const replace = document.createElement("button");
+      replace.className = "photo-action photo-review-replace";
+      replace.type = "button";
+      replace.textContent = "replace";
+      replace.addEventListener("click", async () => {
+        await saveCatalogPhoto(subject, dataUrl, "replace", status);
+        closePhotoReview();
+      });
+      catalogEl.append(keep, replace);
+    } else {
+      const save = document.createElement("button");
+      save.className = "photo-action photo-review-catalog-save";
+      save.type = "button";
+      save.textContent = "save to catalog";
+      save.addEventListener("click", async () => {
+        await saveCatalogPhoto(subject, dataUrl, "save", status);
+        closePhotoReview();
+      });
+      catalogEl.appendChild(save);
+    }
   }
 
   // ── 3D Photo review ──────────────────────────────────────────────────
   _photoReview = null;
-  function showPhotoReview(dataUrl, biomeTag, seedTag) {
+  function showPhotoReview(dataUrl, biomeTag, seedTag, catalogSubject = null) {
     if (_photoReview) return;
     const tex = new THREE.TextureLoader().load(dataUrl);
     tex.colorSpace = THREE.SRGBColorSpace;
@@ -1936,8 +2169,11 @@ export function initUi({ camera, canvas, controls, renderer }) {
       biomeTag,
       seedTag,
       dataUrl,
+      catalogSubject,
+      objectUrls: [],
       screenScale,
     };
+    void renderPhotoCatalogActions(actions, catalogSubject, dataUrl);
 
     // Animate photo in
     const start = performance.now();
@@ -1967,7 +2203,8 @@ export function initUi({ camera, canvas, controls, renderer }) {
 
   function closePhotoReview({ resumePhotoFp = true } = {}) {
     if (!_photoReview) return;
-    const { group, mesh, borderMesh, dimMesh, tex, mat, borderMat, dimMat, actions } = _photoReview;
+    const { group, mesh, borderMesh, dimMesh, tex, mat, borderMat, dimMat, actions, objectUrls } = _photoReview;
+    for (const url of objectUrls ?? []) URL.revokeObjectURL(url);
     mat.opacity = 0;
     borderMat.opacity = 0;
     dimMat.opacity = 0;
@@ -1989,7 +2226,7 @@ export function initUi({ camera, canvas, controls, renderer }) {
       _photoFP.reviewOpen = false;
       if (resumePhotoFp && document.body.classList.contains("photo-mode")) {
         photoHudEl.setAttribute("aria-hidden", "false");
-        canvas.requestPointerLock?.();
+        canvas.requestPointerLock?.().catch(() => {});
       }
     }
   }
@@ -2006,6 +2243,7 @@ export function initUi({ camera, canvas, controls, renderer }) {
       if (_flyFP) exitFlyMode();
       if (tour && tour.active) stopTour();
       if (_locatorOpen) setLocatorOpen(false);
+      if (_catalogOpen) setCatalogOpen(false);
       setFollowTarget(null);
       setSelectingCreature(false);
       setSettingsOpen(false);
@@ -2049,7 +2287,7 @@ export function initUi({ camera, canvas, controls, renderer }) {
       photoSeedEl.setAttribute("aria-hidden", "false");
       photoHudEl.setAttribute("aria-hidden", "false");
       _updatePhotoZoom();
-      canvas.requestPointerLock?.();
+      canvas.requestPointerLock?.().catch(() => {});
 
       const onMove = (e) => {
         if (!_photoFP) return;
@@ -2521,6 +2759,7 @@ export function initUi({ camera, canvas, controls, renderer }) {
       else if (_stroll) _exitStroll();
       else if (_flyFP) exitFlyMode();
       else if (document.body.classList.contains("photo-mode")) setPhotoMode(false);
+      else if (_catalogOpen) setCatalogOpen(false);
       else if (_locatorOpen) setLocatorOpen(false);
       else if (selectingCreature) setSelectingCreature(false);
       else if (followTarget) setFollowTarget(null);
