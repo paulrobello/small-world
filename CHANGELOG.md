@@ -5,6 +5,14 @@
 > folded into the adjacent 1.3.3 and 1.3.6 entries — which is why the history
 > below jumps from 1.3.3 to 1.3.6.
 
+## 1.5.7 - 2026-06-14
+
+### Changed
+- Bumped dev tooling to latest: `esbuild` 0.28.0 → 0.28.1, `eslint` 10.4.0 → 10.5.0, `vite` 8.0.13 → 8.0.16. Runtime deps (`three`, `simplex-noise`) were already at latest.
+
+### Verified
+- Verified with `make checkall` (JS + 53 Python tests, lint, production build) and `npm outdated`/`npm audit` clean.
+
 ## 1.5.6 - 2026-06-14
 
 ### Changed
