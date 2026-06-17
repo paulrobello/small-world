@@ -10,6 +10,8 @@ const floraSource = [
 ].join('\n');
 const biomesSource = readFileSync(new URL('../src/biomes.js', import.meta.url), 'utf8');
 const worldSource = readFileSync(new URL('../src/world.js', import.meta.url), 'utf8');
+// ARC-002: FLORA_FOOTPRINT lives in the shared constants module now.
+const worldConstantsSource = readFileSync(new URL('../src/world-constants.js', import.meta.url), 'utf8');
 
 function extractObjectBlock(source, marker) {
   const markerIndex = source.indexOf(marker);
@@ -90,7 +92,7 @@ assert(
   'leafballtree branch reach should retain a clearance gap for leaf wind motion.'
 );
 
-const leafballFootprintMatch = worldSource.match(/leafballtree:\s*([0-9.]+)/);
+const leafballFootprintMatch = worldConstantsSource.match(/leafballtree:\s*([0-9.]+)/);
 assert(leafballFootprintMatch, 'leafballtree should have an explicit slope-plant footprint.');
 assert(
   Number.parseFloat(leafballFootprintMatch[1]) <= 0.35,

@@ -161,9 +161,11 @@ setControlsRef(controls);
 state.camera = camera;
 state.renderer = renderer;
 // Debug-only handle for poking at the running scene from devtools/agentchrome
-// during development. Safe to leave — it's just a window ref. Remove if it
-// becomes load-bearing for anything besides debugging.
-if (typeof window !== "undefined") window.__sw = { state, controls, scene, camera, renderer };
+// during development. Gated to dev builds only (SEC-006) so it is not exposed
+// on the production GitHub Pages site. `import.meta.env.DEV` is defined by Vite.
+if (import.meta.env?.DEV && typeof window !== "undefined") {
+  window.__sw = { state, controls, scene, camera, renderer };
+}
 startPerfProbe({ state, scene, renderer });
 
 // Persisted settings must be applied BEFORE initPostFX so the composer is

@@ -1,5 +1,9 @@
 import * as THREE from "three";
-import { createNoise2D } from "simplex-noise";
+import {
+  terrainNoiseFromSeed,
+  FLORA_FOOTPRINT,
+  FLORA_FOOTPRINT_DEFAULT,
+} from "./world-constants.js";
 import {
   state,
   NIGHT_SKY,
@@ -68,7 +72,6 @@ let _generationRunId = 0;
 
 const STALE_GENERATION = Symbol("stale-generation");
 const GENERATION_FRAME_BUDGET_MS = 8;
-const TERRAIN_NOISE_SEED_XOR = 0x5eed5eed;
 
 function generationNow() {
   return typeof performance !== "undefined" && performance.now
@@ -515,7 +518,7 @@ export async function generateWorld(seed, context = createWorldBuildContext(), o
   await yieldIfNeeded(true);
 
   // terrain
-  const noise2D = createNoise2D(mulberry32((seed ^ TERRAIN_NOISE_SEED_XOR) >>> 0));
+  const noise2D = terrainNoiseFromSeed(seed);
   // Cloud islands should read as soft puffs rather than rocky mountains.
   // Lowering the amplitude keeps the silhouette pillowy while preserving the
   // seeded terrain function for creature placement.
@@ -571,22 +574,8 @@ export async function generateWorld(seed, context = createWorldBuildContext(), o
   const floraTarget = LOWFX
     ? Math.max(8, Math.round(biome.floraCount * densityScale * LOWFX_DENSITY))
     : Math.round(biome.floraCount * densityScale);
-  // Per-kind footprint radius — how far around the trunk axis we sample
-  // heightFn to find the lowest ground the base needs to reach. Bigger
-  // trunks need a wider sample so the downhill side stays buried on slopes.
-  // Anything not listed falls back to FLORA_FOOTPRINT_DEFAULT.
-  const FLORA_FOOTPRINT = {
-    // Footprints describe the root/base contact patch for slope planting.
-    // Broad crowns are spaced separately by CANOPY_SPACING_KINDS; using the
-    // canopy width here samples far downhill and can bury the trunk center.
-    tree: 0.28, leafballtree: 0.32, pine: 0.28, snowpine: 0.28, deadtree: 0.22, mushroom: 0.18,
-    bigmushroom: 0.45, fairyring: 1.15, lantern: 0.18, pillar: 0.30, archstone: 0.55,
-    balloontree: 0.22, crystal: 0.30, obsidianshard: 0.28, obsidianglass: 0.34, skull: 0.22,
-    berrybush: 0.30, coral: 0.25, braincoral: 0.26, cupcoral: 0.22,
-    fern: 0.18, dandylion: 0.16, flyer_nest: 0.612, rock: 0.30, limestonerock: 0.30, reed: 0.10,
-    seaweed: 0.12, beachsucculent: 0.20, lavafissure: 1.45,
-  };
-  const FLORA_FOOTPRINT_DEFAULT = 0.20;
+  // FLORA_FOOTPRINT / FLORA_FOOTPRINT_DEFAULT are imported from
+  // ./world-constants.js (shared with the portal preview, ARC-002).
   const FLORA_BURY = 0.08; // extra sink so the seam is hidden in soft fog
   // Flora kinds tall/solid enough that walkers should route around them
   // instead of clipping through. Low-profile or soft kinds (rocks, ferns,
@@ -1344,6 +1333,10 @@ export async function generateWorld(seed, context = createWorldBuildContext(), o
   const grass = makeGrassField(biome, worldState.heightFn, coverExclusions, grassShorteners, portalGrassClearances);
   if (grass) worldState.world.add(grass);
   if (worldState._reapplyGrassSettings) worldState._reapplyGrassSettings();
+  // QA-008: reapply wind settings synchronously on regen so the user's slider
+  // values take effect this frame instead of waiting on the 250ms ui.js
+  // seed-watcher poll (which caused a visible wind flicker on every regen).
+  if (worldState._reapplyWindSettings) worldState._reapplyWindSettings();
   if (grass) attachCatalogMetadata(grass);
   await yieldIfNeeded(true);
   for (const m of makeWildflowerField(biome, worldState.heightFn, groundCoverExclusions)) {

@@ -12,6 +12,8 @@ const floraSource = [
   readFileSync(new URL('../src/flora/volcanic.js', import.meta.url), 'utf8'),
 ].join('\n');
 const worldSource = readFileSync(new URL('../src/world.js', import.meta.url), 'utf8');
+// ARC-002: FLORA_FOOTPRINT lives in the shared constants module now.
+const worldConstantsSource = readFileSync(new URL('../src/world-constants.js', import.meta.url), 'utf8');
 const creatureSource = readFileSync(new URL('../src/fauna/creature.js', import.meta.url), 'utf8');
 const pbrSource = readFileSync(new URL('../src/pbr.js', import.meta.url), 'utf8');
 const inspectSource = readFileSync(new URL('../src/inspect.js', import.meta.url), 'utf8');
@@ -97,7 +99,7 @@ assert(
 );
 
 assert(
-  worldSource.includes('flyer_nest: 0.612')
+  worldConstantsSource.includes('flyer_nest: 0.612')
     && worldSource.includes('"flyer_nest"')
     && worldSource.includes('function placeFlyerNest()')
     && worldSource.includes('const kind = "flyer_nest"')

@@ -807,5 +807,34 @@ export function initPostFX(renderer, scene, camera) {
         tiltShiftPass.uniforms.uFocusZ.value = focusZ;
       }
     },
+    // Tear down every RT/material/geometry allocated by initPostFX. Latent
+    // today (called once per page load), but any future re-init path (LOWFX
+    // toggle, hot-reload, scene rebuild) MUST call this first or every prior
+    // RT and shader leaks. The hand-rolled bloom chain (bloomRT, bloomMips[],
+    // bloom materials/quad) and the depth pre-pass (depthRT + depthTexture)
+    // live outside the composer, so they need explicit disposal here.
+    // composer.dispose() only frees its two ping-pong RTs + copyPass, so the
+    // ShaderPasses are disposed by walking composer.passes. depthRT.depthTexture
+    // === depthTexture, so a single depthTexture.dispose() covers both
+    // attachments.
+    dispose: () => {
+      for (const p of composer?.passes ?? []) p?.dispose?.();
+      for (const m of bloomMips) m?.dispose?.();
+      bloomMips = [];
+      bloomRT?.dispose?.();
+      bloomQuad?.dispose?.();          // FullScreenQuad disposes its geometry + material
+      bloomDownMat?.dispose?.();
+      bloomUpMat?.dispose?.();
+      // InputPass doesn't override Pass.dispose() — its material and quad
+      // geometry need explicit teardown.
+      inputPass?.material?.dispose?.();
+      inputPass?._quad?.geometry?.dispose?.();
+      depthRT?.dispose?.();
+      depthTexture?.dispose?.();
+      composer?.dispose?.();
+      // Drop the depthTexture ref so any stale consumer doesn't sample a
+      // disposed texture.
+      if (state.depthTexture === depthTexture) state.depthTexture = null;
+    },
   };
 }

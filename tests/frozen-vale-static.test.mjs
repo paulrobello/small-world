@@ -5,6 +5,8 @@ import { BIOMES } from '../src/biomes.js';
 const frozen = BIOMES.find((biome) => biome.id === 'frozen');
 const environmentSource = readFileSync(new URL('../src/environment.js', import.meta.url), 'utf8');
 const worldSource = readFileSync(new URL('../src/world.js', import.meta.url), 'utf8');
+// ARC-002: FLORA_FOOTPRINT lives in the shared constants module now.
+const worldConstantsSource = readFileSync(new URL('../src/world-constants.js', import.meta.url), 'utf8');
 const sizeMapStart = environmentSource.indexOf('const sizeMap = {');
 const sizeMapEnd = environmentSource.indexOf('const opacityMap = {', sizeMapStart);
 const sizeMapBlock = environmentSource.slice(sizeMapStart, sizeMapEnd);
@@ -39,7 +41,7 @@ assert(
   'snow particles should be larger than the previous 0.1 base size.'
 );
 assert(
-  worldSource.includes('tree: 0.28, leafballtree: 0.32, pine: 0.28, snowpine: 0.28'),
+  worldConstantsSource.includes('tree: 0.28, leafballtree: 0.32, pine: 0.28, snowpine: 0.28'),
   'snowpine should use the same slope-plant footprint as pine.'
 );
 assert(

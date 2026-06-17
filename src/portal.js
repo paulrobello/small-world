@@ -1,5 +1,4 @@
 import * as THREE from "three";
-import { createNoise2D } from "simplex-noise";
 import { DENSITY_BASE, disposeGroup, state } from "./state.js";
 import { makeHeightFn, pickGroundPoint, pickLayout } from "./terrain.js";
 import { FLORA_BUILDERS } from "./flora.js";
@@ -8,6 +7,11 @@ import { makeGrassField } from "./grass.js";
 import { makeSkyDome, makeMountainBackdrop, makeCloudLayer } from "./sky.js";
 import { LOWFX } from "./lowfx.js";
 import { mulberry32 } from "./seed.js";
+import {
+  terrainNoiseFromSeed,
+  FLORA_FOOTPRINT,
+  FLORA_FOOTPRINT_DEFAULT,
+} from "./world-constants.js";
 
 const PORTAL_RT_SIZE = LOWFX ? 256 : 768;
 const PORTAL_RENDER_INTERVAL_MS = LOWFX ? 180 : 90;
@@ -27,18 +31,15 @@ const PORTAL_GRASS_SHORTEN_TO = 0.14;
 const PORTAL_PREVIEW_FLATTEN_RADIUS = 4.2;
 const PORTAL_PREVIEW_FLATTEN_SIDE_RADIUS = 2.8;
 const PORTAL_PREVIEW_GROUND_SINK = 0.15;
-const TERRAIN_NOISE_SEED_XOR = 0x5eed5eed;
 const PREVIEW_WATER_Y = -0.12;
 const PREVIEW_FLORA_BURY = 0.08;
-const PREVIEW_FLORA_FOOTPRINT = {
-  tree: 0.28, leafballtree: 0.32, pine: 0.28, snowpine: 0.28, deadtree: 0.22, mushroom: 0.18,
-  bigmushroom: 0.45, fairyring: 1.15, lantern: 0.18, pillar: 0.30, archstone: 0.55,
-  balloontree: 0.22, crystal: 0.30, obsidianshard: 0.28, obsidianglass: 0.34, skull: 0.22,
-  berrybush: 0.30, coral: 0.25, braincoral: 0.26, cupcoral: 0.22,
-  fern: 0.18, dandylion: 0.16, flyer_nest: 0.612, rock: 0.30, limestonerock: 0.30, reed: 0.10,
-  seaweed: 0.12, beachsucculent: 0.20, lavafissure: 1.45,
-};
-const PREVIEW_FLORA_FOOTPRINT_DEFAULT = 0.20;
+// PREVIEW_FLORA_FOOTPRINT / PREVIEW_FLORA_FOOTPRINT_DEFAULT alias the shared
+// FLORA_FOOTPRINT table in ./world-constants.js (ARC-002) so the portal
+// preview's slope-planting matches the real destination world exactly. The
+// previous hand-copied table had silently diverged (e.g. a missing underscore
+// in `beach_succulent`) — the dedup is the fix.
+const PREVIEW_FLORA_FOOTPRINT = FLORA_FOOTPRINT;
+const PREVIEW_FLORA_FOOTPRINT_DEFAULT = FLORA_FOOTPRINT_DEFAULT;
 
 function normalizePortalPreviewSettings(settings = {}) {
   return {
@@ -224,7 +225,7 @@ function makePreviewWorldContext(targetBiome, seed) {
   return withSeededRandom(seed, () => {
     Math.random(); // consume the biome roll exactly like generateWorld
     const layout = pickLayout();
-    const noise2D = createNoise2D(mulberry32((seed ^ TERRAIN_NOISE_SEED_XOR) >>> 0));
+    const noise2D = terrainNoiseFromSeed(seed);
     const terrainAmp = targetBiome.cloudlike ? 2.15 : 3.2;
     const baseHeightFn = makeHeightFn(noise2D, layout, terrainAmp);
     const rawHeightFn = targetBiome.water
@@ -285,6 +286,61 @@ function clonePreviewObjectUnique(source) {
     }
   });
   return clone;
+}
+
+// QA-009: dispose the GPU resources of a builder-produced original that we
+// cloned-and-discard. The clone (from clonePreviewObjectUnique) already owns
+// its own geometry/material copies, so the original is fully redundant.
+//
+// We CANNOT blindly disposeGroup the original: flora/creature builders pull
+// some geometries/materials from the shared per-regen pool (`_floraPool` /
+// `_creaturePool` in src/flora/_shared.js and src/fauna/creature.js), and
+// those same pooled handles are currently referenced by the LIVE real world
+// (state.world) — disposing them would corrupt real-world flora/creatures.
+//
+// Safe policy: collect every geometry/material reachable from state.world into
+// a retained set, then dispose only the original's resources NOT in that set.
+// Per-instance (non-pooled) allocations unique to the discarded original get
+// freed; pooled/shared handles are left untouched for the pool/real world.
+function disposePreviewOriginal(original) {
+  if (!original) return;
+  const retained = new Set();
+  const collect = () => {
+    const world = state.world;
+    if (world) {
+      world.traverse((o) => {
+        if (o.geometry) retained.add(o.geometry);
+        if (o.material) {
+          if (Array.isArray(o.material)) o.material.forEach((m) => retained.add(m));
+          else retained.add(o.material);
+        }
+      });
+    }
+  };
+  collect();
+  const disposedMaterials = new Set();
+  const disposedTextures = new Set();
+  original.traverse((o) => {
+    if (o.geometry && !retained.has(o.geometry)) {
+      o.geometry.dispose();
+    }
+    if (o.material) {
+      const mats = Array.isArray(o.material) ? o.material : [o.material];
+      for (const m of mats) {
+        if (retained.has(m) || disposedMaterials.has(m)) continue;
+        disposedMaterials.add(m);
+        // Dispose only textures this material owns uniquely.
+        for (const key of Object.keys(m)) {
+          const v = m[key];
+          if (v && v.isTexture && !disposedTextures.has(v)) {
+            disposedTextures.add(v);
+            v.dispose();
+          }
+        }
+        m.dispose();
+      }
+    }
+  });
 }
 
 function withPreviewWorldState(targetBiome, layout, heightFn, fn) {
@@ -461,7 +517,9 @@ function makePreviewFlora(targetBiome, rng, heightFn, layout, portalAnchor) {
     const fp = (PREVIEW_FLORA_FOOTPRINT[kind] ?? PREVIEW_FLORA_FOOTPRINT_DEFAULT) * scaleMul;
     if (isNearPortalPreviewClearance(p.x, p.z, fp, portalAnchor)) continue;
     const builder = FLORA_BUILDERS[kind] ?? FLORA_BUILDERS.rock;
-    const obj = clonePreviewObjectUnique(builder(targetBiome));
+    const original = builder(targetBiome);
+    const obj = clonePreviewObjectUnique(original);
+    disposePreviewOriginal(original);
     obj.position.set(p.x, makePreviewFloraGroundY(kind, scaleMul, p.x, p.z, heightFn), p.z);
     obj.rotation.y = rng() * Math.PI * 2;
     obj.scale.setScalar(scaleMul);
@@ -505,7 +563,9 @@ function makePreviewCreatures(targetBiome, rng, heightFn, layout, portalAnchor) 
     if (isInPortalPreviewSightline(p.x, p.z, portalAnchor)) continue;
     const y = heightFn(p.x, p.z);
     if (y < -0.2) continue;
-    const creature = clonePreviewObjectUnique(makeCreature(targetBiome).group);
+    const creatureOriginal = makeCreature(targetBiome).group;
+    const creature = clonePreviewObjectUnique(creatureOriginal);
+    disposePreviewOriginal(creatureOriginal);
     creature.position.set(p.x, y + 0.18, p.z);
     creature.rotation.y = rng() * Math.PI * 2;
     creature.scale.setScalar(0.9 + rng() * 0.22);

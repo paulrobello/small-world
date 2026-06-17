@@ -7,6 +7,9 @@ assert(existsSync(portalUrl), 'A dedicated portal module should own portal previ
 const portalSource = readFileSync(portalUrl, 'utf8');
 const stateSource = readFileSync(new URL('../src/state.js', import.meta.url), 'utf8');
 const worldSource = readFileSync(new URL('../src/world.js', import.meta.url), 'utf8');
+// ARC-002: world-construction constants live in a single shared module that
+// both world.js and portal.js import from.
+const constantsSource = readFileSync(new URL('../src/world-constants.js', import.meta.url), 'utf8');
 const mainSource = readFileSync(new URL('../main.js', import.meta.url), 'utf8');
 const uiSource = readFileSync(new URL('../src/ui.js', import.meta.url), 'utf8');
 // PERSISTED_KEYS (the list of persisted setting names) moved to src/ui/storage.js
@@ -130,8 +133,11 @@ assert(
     && portalSource.includes('makeHeightFn')
     && portalSource.includes('pickLayout')
     && portalSource.includes('Math.random(); // consume the biome roll exactly like generateWorld')
-    && portalSource.includes('const TERRAIN_NOISE_SEED_XOR = 0x5eed5eed')
-    && portalSource.includes('createNoise2D(mulberry32((seed ^ TERRAIN_NOISE_SEED_XOR) >>> 0))')
+    // ARC-002: terrain-noise derivation is shared via src/world-constants.js
+    // so the portal preview cannot drift from the real destination world.
+    && constantsSource.includes('TERRAIN_NOISE_SEED_XOR = 0x5eed5eed')
+    && constantsSource.includes('export function terrainNoiseFromSeed(seed)')
+    && portalSource.includes('terrainNoiseFromSeed(seed)')
     && portalSource.includes('const terrainAmp = targetBiome.cloudlike ? 2.15 : 3.2')
     && portalSource.includes('targetBiome.water')
     && portalSource.includes('export function makeSeededPortalPlacement')
@@ -152,7 +158,11 @@ assert(
     && portalSource.includes('function isInPortalPreviewSightline')
     && portalSource.includes('targetBiome.flora[Math.floor(rng() * targetBiome.flora.length)]')
     && portalSource.includes('import { FLORA_BUILDERS }')
-    && portalSource.includes('clonePreviewObjectUnique(builder(targetBiome))')
+    // QA-009: builder original is captured, cloned, then disposed so its
+    // per-instance GPU resources don't leak each placement.
+    && portalSource.includes('const original = builder(targetBiome)')
+    && portalSource.includes('const obj = clonePreviewObjectUnique(original)')
+    && portalSource.includes('disposePreviewOriginal(original)')
     && portalSource.includes('makeGrassField(targetBiome, heightFn')
     && portalSource.includes('makeCreature(targetBiome).group')
     && portalSource.includes('function makePreviewFloraGroundY')
@@ -206,8 +216,8 @@ assert(
     && worldSource.includes('function getPortalTargetBiomes')
     && worldSource.includes('worldState.userSettings.portalDoublePlacement === true')
     && worldSource.includes('const portalTargets = getPortalTargetBiomes')
-    && worldSource.includes('const TERRAIN_NOISE_SEED_XOR = 0x5eed5eed')
-    && worldSource.includes('createNoise2D(mulberry32((seed ^ TERRAIN_NOISE_SEED_XOR) >>> 0))')
+    && worldSource.includes('terrainNoiseFromSeed(seed)')
+    && constantsSource.includes('TERRAIN_NOISE_SEED_XOR = 0x5eed5eed')
     && worldSource.includes('for (let portalIndex = 0; portalIndex < portalTargets.length; portalIndex++)')
     && worldSource.includes('const targetBiome = portalTargets[portalIndex]')
     && worldSource.includes('const portalPlacementAnchors = []')

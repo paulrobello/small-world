@@ -5,7 +5,7 @@ import { pickGroundPoint, nearestCenter } from "../terrain.js";
 import { emitGroundMark } from "../environment.js";
 import { applyShellFur } from "../fur.js";
 import { buildCatalogSubject } from "../catalog.js";
-import { WATER_AVOID_Y, avoidObstacles, sampleSlopes, addAntennae } from "./shared.js";
+import { WATER_AVOID_Y, avoidObstacles, sampleSlopes, addAntennae, wrapAngle } from "./shared.js";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Caterpillar — head + 3-8 body spheres, body segments follow head's trail
@@ -440,8 +440,6 @@ export function stepCaterpillar(c, dt, t, heightFn) {
   }
 
   // Slew heading toward headingTarget via shortest-angle diff.
-  const wrapAngle = (a) =>
-    ((a + Math.PI) % (2 * Math.PI) + 2 * Math.PI) % (2 * Math.PI) - Math.PI;
   const dHead = wrapAngle(c.headingTarget - c.heading);
   const maxTurn = c.turnRate * dt;
   c.heading +=

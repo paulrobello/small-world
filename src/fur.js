@@ -21,7 +21,7 @@ varying vec3 vPos;
 varying float vLayerT;
 varying vec3 vNormal;
 void main() {
-  vLayerT = uShellLayer / uLayers;
+  vLayerT = uShellLayer / max(uLayers, 1.0);
   vec3 p = position + normal * uFurLength * vLayerT;
   // Pass the ORIGINAL (un-displaced) position so the fragment shader can
   // compute a stable per-cell hash that matches across all shells — that's
@@ -101,7 +101,7 @@ void main() {
     if (patType < 1.5) {
       // Stripes — continuous bands along the Z axis
       float z = vPos.z + uStripeOffset;
-      float period = 1.0 / uStripeBandCount;
+      float period = 1.0 / max(uStripeBandCount, 0.0001);
       float phase = mod(z, period);
       float halfBand = uStripeBandWidth * period * 0.5;
       hit = (phase < halfBand || phase > period - halfBand);

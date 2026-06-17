@@ -424,9 +424,9 @@ export function makeGrassField(
       0,
       (Math.random() - 0.5) * 0.10
     );
-    colors[i * 3 + 0] = tmp.r / baseCol.r || 1;
-    colors[i * 3 + 1] = tmp.g / baseCol.g || 1;
-    colors[i * 3 + 2] = tmp.b / baseCol.b || 1;
+    colors[i * 3 + 0] = baseCol.r > 0 ? tmp.r / baseCol.r : 1;
+    colors[i * 3 + 1] = baseCol.g > 0 ? tmp.g / baseCol.g : 1;
+    colors[i * 3 + 2] = baseCol.b > 0 ? tmp.b / baseCol.b : 1;
   }
   mesh.instanceColor = new THREE.InstancedBufferAttribute(colors, 3);
   mesh.instanceColor.needsUpdate = true;

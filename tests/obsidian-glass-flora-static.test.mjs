@@ -10,6 +10,8 @@ const floraSource = readFileSync(new URL('../src/flora/volcanic.js', import.meta
 const inspectSource = readFileSync(new URL('../src/inspect.js', import.meta.url), 'utf8');
 const uiSource = readFileSync(new URL('../src/ui.js', import.meta.url), 'utf8');
 const worldSource = readFileSync(new URL('../src/world.js', import.meta.url), 'utf8');
+// ARC-002: FLORA_FOOTPRINT lives in the shared constants module now.
+const worldConstantsSource = readFileSync(new URL('../src/world-constants.js', import.meta.url), 'utf8');
 const fissureStart = floraSource.indexOf('lavafissure(biome)');
 const fissureEnd = floraSource.indexOf('obsidianglass()', fissureStart);
 const fissureBlock = floraSource.slice(fissureStart, fissureEnd);
@@ -57,7 +59,7 @@ assert(
   'obsidian glass flora should use black pointed shards and a high-shine physical material without floating glint strips.'
 );
 assert(
-  worldSource.includes('obsidianglass: 0.34')
+  worldConstantsSource.includes('obsidianglass: 0.34')
     && worldSource.includes('"obsidianglass"')
     && worldSource.includes('obsidianglass: 1.6'),
   'obsidian glass flora should participate in slope planting and obstacle routing.'
