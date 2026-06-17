@@ -291,7 +291,17 @@ export async function generateWorld(seed, context = createWorldBuildContext(), o
   worldState.isGeneratingWorld = true;
   context.setLoading(true);
   await nextGenerationFrame();
-  if (runId !== _generationRunId) return;
+  if (runId !== _generationRunId) {
+    // Superseded by a newer regen before we even started building. The
+    // superseding run owns isGeneratingWorld, but only while it is still
+    // current — if it has already finished (or thrown) we must release the
+    // flag here so the loading state can't deadlock. See QA-003.
+    if (runId === _generationRunId) {
+      worldState.isGeneratingWorld = false;
+      context.setLoading(false);
+    }
+    return;
+  }
 
   // Swap Math.random for the seeded PRNG so every Math.random() call
   // during world construction is deterministic. Per-frame animation

@@ -72,6 +72,36 @@ const renderer = new THREE.WebGLRenderer({
   // for photo-mode capture. Negligible perf cost for this scene.
   preserveDrawingBuffer: true,
 });
+
+// WebGL context-loss recovery (QA-002). On a GPU crash / driver reset /
+// mobile tab reclaim the context is lost; without preventDefault the
+// requestAnimationFrame loop dies and the canvas goes permanently black.
+// We pause the loop while lost, then on restore force Three.js to
+// re-acquire the context and rebuild the world from the current seed —
+// the safest minimal recovery that avoids the black-canvas-of-death.
+let contextLost = false;
+canvas.addEventListener("webglcontextlost", (event) => {
+  event.preventDefault();
+  contextLost = true;
+  console.warn("[small-world] WebGL context lost — pausing render loop.");
+});
+canvas.addEventListener("webglcontextrestored", () => {
+  console.warn("[small-world] WebGL context restored — rebuilding world.");
+  try {
+    renderer.forceContextRestore();
+  } catch (error) {
+    console.error("[small-world] forceContextRestore failed", error);
+  }
+  contextLost = false;
+  // Re-run world-gen for the current seed to re-upload all GPU resources
+  // that were invalidated when the context was lost.
+  const seed = state.currentSeed;
+  if (seed !== undefined && seed !== null) {
+    void generateWorld(seed).catch((error) => {
+      console.error("[small-world] post-restore regen failed", error);
+    });
+  }
+});
 renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, rendererPixelRatioCap()));
 renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.shadowMap.enabled = true;
@@ -235,6 +265,10 @@ function updateUnderwaterTint() {
 }
 function animate() {
   requestAnimationFrame(animate);
+  // While the WebGL context is lost, rendering would throw (the context is
+  // gone). Keep the rAF loop alive so we resume the instant it is restored,
+  // but skip all per-frame work. See QA-002.
+  if (contextLost) return;
   timer.update();
   const rawDt = Math.min(timer.getDelta(), 0.05);
   const rawT = timer.getElapsed();

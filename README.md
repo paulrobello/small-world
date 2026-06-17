@@ -127,3 +127,24 @@ Edits to `main.js`, `src/*.js`, `style.css`, and `index.html` are reflected by V
 - `dist/` — deployment build (GitHub Pages)
 - [`CLAUDE.md`](CLAUDE.md) — architecture notes, conventions, and the project's design constraints
 - [`ideas.md`](ideas.md) — running enhancement list
+
+## Contributing
+
+Pull requests are welcome. To set up a working copy:
+
+```sh
+npm install
+make dev        # Vite dev server with HMR at http://localhost:2001
+```
+
+Before opening a PR, run the full check and make sure it passes:
+
+```sh
+make checkall   # all JS/Python tests + ESLint + production build
+```
+
+Commit messages follow [Conventional Commits](https://www.conventionalcommits.org/) — `type(scope): summary`, e.g. `feat(postfx): mip-chain bloom`, `fix(ui): mobile fly controls`. The release commit that bumps `package.json` is `chore(release): X.Y.Z`; always bump the `version` field in `package.json` before pushing to `main` (CI reads it for the deployed build). See [`CONTRIBUTING.md`](CONTRIBUTING.md) for the full guide.
+
+## License
+
+MIT — see [`LICENSE`](LICENSE). Copyright © 2026 Paul Robello.
