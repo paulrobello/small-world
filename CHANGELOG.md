@@ -5,6 +5,33 @@
 > folded into the adjacent 1.3.3 and 1.3.6 entries — which is why the history
 > below jumps from 1.3.3 to 1.3.6.
 
+## 1.5.8 - 2026-06-16
+
+Audit-driven remediation: critical bug fixes, internal structural refactors, hardening, and a determinism regression test. No user-facing feature changes.
+
+### Added
+- `tests/determinism-seed.test.mjs` — regression test proving the same seed reproduces a byte-identical world (mechanism + fresh-process structural snapshots). The guardrail that made the structural refactors safe.
+- `CONTRIBUTING.md` and README `## License` / `## Contributing` sections.
+
+### Changed
+- Split `src/flora.js` (3,225 LOC) into per-kind modules under `src/flora/` (`_shared`, `trees`, `garden`, `rocks`, `structures`, `aquatic`, `volcanic`); `flora.js` is now a thin registry.
+- Split `stepCreature` (~860 LOC) into per-mode dispatchers (`stepSleeper` / `stepNightSleep` / `stepBurrower` / `stepFlier`) and deduplicated the sleepiness/slope-pose helpers.
+- Extracted `generateWorld`'s HUD/URL finalization phase into `src/world-hud.js` and the UI persistence layer into `src/ui/storage.js`.
+- Deduplicated world/portal construction constants into `src/world-constants.js` (single source of truth).
+- SHA-pinned all GitHub Actions in the deploy workflow to commit SHAs; gated the `window.__sw` devtools handle behind dev mode.
+
+### Fixed
+- Added WebGL context-loss/restore handling so a GPU reset no longer leaves a dead black canvas.
+- Fixed a cancelled-and-superseded regen leaving `isGeneratingWorld` stuck true.
+- Reapply wind settings synchronously on regen (no more brief wind flicker after each regen).
+- Dispose portal-preview builder originals after cloning (per-placement GPU leak), and added a `dispose()` path to the post-FX API.
+- Import the shared `wrapAngle` in `caterpillar.js` instead of re-declaring it per frame; guarded divide-by-zero in the fur shader and a zero-base-color Infinity in the grass color computation.
+- Fixed a latent portal-preview divergence (`beachsucculent` vs `beach_succulent` flora-footprint key).
+- Corrected `package.json` license to MIT and fixed several CLAUDE.md accuracy drifts (async determinism mechanism, `newRandomSeed` count/signature, perch-selection logic).
+
+### Verified
+- Verified with `make checkall` (JS + 53 Python tests, lint, production build), the new determinism regression test, and a live browser smoke (cloud-island world renders, no console errors).
+
 ## 1.5.7 - 2026-06-14
 
 ### Changed
