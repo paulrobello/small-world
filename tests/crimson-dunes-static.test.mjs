@@ -5,7 +5,9 @@ import { BIOMES, FLOWER_DENSITY, WILDFLOWER_PALETTES } from '../src/biomes.js';
 const desert = BIOMES.find((biome) => biome.id === 'desert');
 const ashen = BIOMES.find((biome) => biome.id === 'ashen');
 const environmentSource = readFileSync(new URL('../src/environment.js', import.meta.url), 'utf8');
-const floraSource = readFileSync(new URL('../src/flora.js', import.meta.url), 'utf8');
+// src/flora.js is now a registry. The pillar builder (asserted here for the
+// crimson dunes nest-host cap radius) lives in rocks.js.
+const floraSource = readFileSync(new URL('../src/flora/rocks.js', import.meta.url), 'utf8');
 const worldSource = readFileSync(new URL('../src/world.js', import.meta.url), 'utf8');
 const sizeMapStart = environmentSource.indexOf('const sizeMap = {');
 const sizeMapEnd = environmentSource.indexOf('const opacityMap = {', sizeMapStart);

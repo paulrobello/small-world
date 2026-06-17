@@ -2,7 +2,13 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { BIOMES, FLOWER_DENSITY } from '../src/biomes.js';
 
-const floraSource = readFileSync(new URL('../src/flora.js', import.meta.url), 'utf8');
+// src/flora.js is now a registry; the dandylion builder lives in garden.js and
+// the shared applyDandylionHeadWind / getDandylionFloraPalette helpers live in
+// _shared.js. Concatenate both so all flora assertions resolve.
+const floraSource = [
+  readFileSync(new URL('../src/flora/_shared.js', import.meta.url), 'utf8'),
+  readFileSync(new URL('../src/flora/garden.js', import.meta.url), 'utf8'),
+].join('\n');
 const worldSource = readFileSync(new URL('../src/world.js', import.meta.url), 'utf8');
 const inspectSource = readFileSync(new URL('../src/inspect.js', import.meta.url), 'utf8');
 

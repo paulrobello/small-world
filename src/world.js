@@ -12,8 +12,7 @@ import {
 } from "./state.js";
 import { BIOMES, WILDFLOWER_PALETTES, FLOWER_DENSITY } from "./biomes.js";
 import { switchMusic } from "./music.js";
-import { mulberry32, formatSeed, writeSeedToUrl, newRandomSeed } from "./seed.js";
-import { generateIslandName } from "./islandname.js";
+import { mulberry32, writeSeedToUrl, newRandomSeed } from "./seed.js";
 import { randInt } from "./util.js";
 import {
   makeHeightFn,
@@ -30,7 +29,6 @@ import {
   makeSwarm,
   makeWillOWisp,
   resetCreaturePool,
-  buildObstacleGrid,
 } from "./fauna.js";
 import { makeFlock } from "./birds.js";
 import { makeShadowDisks } from "./shadows.js";
@@ -61,6 +59,7 @@ import { createBiomePortal, disposePortal, makeSeededPortalPlacement } from "./p
 import { LOWFX, LOWFX_DENSITY } from "./lowfx.js";
 import { resetPBRTextureCache, pbrDetailPrewarmSteps } from "./pbr.js";
 import { catalogSubjectFromInspect } from "./catalog.js";
+import { finalizeWorldHud } from "./world-hud.js";
 
 let _scene = null;
 let _controls = null;
@@ -1635,64 +1634,19 @@ export async function generateWorld(seed, context = createWorldBuildContext(), o
   worldState.shadowDisks = makeShadowDisks(biome);
   worldState.world.add(worldState.shadowDisks);
 
-  // HUD
-  const padStat = (n) => String(n).padStart(2, "0");
-  const groundCreatureCount = worldState.creatures.filter((c) => !c.flies && !c.isFish).length + worldState.caterpillars.length;
-  const flyCreatureCount = worldState.creatures.filter((c) => c.flies && !c.isFish).length;
-  const swimCreatureCount = worldState.creatures.filter((c) => c.isFish).length;
-  document.getElementById("biome-name").textContent = biome.name;
-  const islandNameEl = document.getElementById("island-name");
-  if (islandNameEl) islandNameEl.textContent = generateIslandName(seed);
-  document.getElementById("biome-sub").textContent = biome.sub;
-  document.getElementById("ground-creature-count").textContent = padStat(groundCreatureCount);
-  document.getElementById("fly-creature-count").textContent = padStat(flyCreatureCount);
-  document.getElementById("swim-creature-count").textContent = padStat(swimCreatureCount);
-  document.getElementById("flora-count").textContent = padStat(placed);
-  document.getElementById("bird-count").textContent = padStat(totalBirds);
-  document.getElementById("seed").textContent = formatSeed(seed);
-
-  // Mobile help panel — mirror the same stats
-  const hBiome = document.getElementById("help-biome");
-  if (hBiome) hBiome.textContent = biome.name;
-  const hIsland = document.getElementById("help-island-name");
-  if (hIsland) hIsland.textContent = generateIslandName(seed);
-  const hSeed = document.getElementById("help-seed");
-  if (hSeed) hSeed.textContent = formatSeed(seed);
-  const hGround = document.getElementById("help-ground-creatures");
-  if (hGround) hGround.textContent = padStat(groundCreatureCount);
-  const hFly = document.getElementById("help-fly-creatures");
-  if (hFly) hFly.textContent = padStat(flyCreatureCount);
-  const hSwim = document.getElementById("help-swim-creatures");
-  if (hSwim) hSwim.textContent = padStat(swimCreatureCount);
-  const hFl = document.getElementById("help-flora");
-  if (hFl) hFl.textContent = padStat(placed);
-  const hBi = document.getElementById("help-birds");
-  if (hBi) hBi.textContent = padStat(totalBirds);
-
-  // Notify mobile UI that world is ready (triggers header auto-hide)
-  context.dispatchWorldReady();
-
-  // restore the user's auto-rotate preference (regen shouldn't override it)
-  if (worldControls) worldControls.autoRotate = worldState.userSettings.autoRotate;
-  context.writeSeed(seed, { biomeId: forcedBiome ? biome.id : null });
-
-  // Build the spatial grid for static obstacle queries so avoidObstacles()
-  // can use O(nearby) lookups instead of scanning the full list.
-  buildObstacleGrid(worldState.obstacles);
-
-  // Build color buckets for O(1) herding lookups — group creatures by
-  // their bodyColor hex string so herdInfluence only scans same-colored
-  // peers instead of the full creature list.
-  const buckets = {};
-  for (const c of worldState.creatures) {
-    const key = c.colorBucket;
-    if (!buckets[key]) buckets[key] = [];
-    buckets[key].push(c);
-  }
-  worldState.creatureColorBuckets = buckets;
-
-  // kick off the reveal animation — updateDayNight reads this timestamp
-  worldState.revealStart = performance.now();
+  // HUD / URL / spatial-index tail (extracted to src/world-hud.js, QA-005).
+  // Runs after every deterministic placement and the final yield — no
+  // Math.random is consumed here, so it sits outside the seeded PRNG window.
+  finalizeWorldHud({
+    worldState,
+    biome,
+    seed,
+    forcedBiome,
+    worldControls,
+    context,
+    placed,
+    totalBirds,
+  });
   } catch (error) {
     if (error !== STALE_GENERATION) throw error;
   } finally {

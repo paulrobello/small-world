@@ -2,7 +2,15 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { BIOMES } from '../src/biomes.js';
 
-const floraSource = readFileSync(new URL('../src/flora.js', import.meta.url), 'utf8');
+// src/flora.js is now a registry. flyer_nest (sliced up to deadtree) lives in
+// structures.js, balloontree (sliced up to lavafissure) lives in volcanic.js,
+// and getFlyerNestPalette lives in _shared.js. Concatenate all three so the
+// builder blocks and palette-helper assertions resolve.
+const floraSource = [
+  readFileSync(new URL('../src/flora/_shared.js', import.meta.url), 'utf8'),
+  readFileSync(new URL('../src/flora/structures.js', import.meta.url), 'utf8'),
+  readFileSync(new URL('../src/flora/volcanic.js', import.meta.url), 'utf8'),
+].join('\n');
 const worldSource = readFileSync(new URL('../src/world.js', import.meta.url), 'utf8');
 const creatureSource = readFileSync(new URL('../src/fauna/creature.js', import.meta.url), 'utf8');
 const pbrSource = readFileSync(new URL('../src/pbr.js', import.meta.url), 'utf8');

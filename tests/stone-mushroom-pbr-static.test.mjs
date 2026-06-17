@@ -1,7 +1,20 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 
-const floraSource = readFileSync(new URL('../src/flora.js', import.meta.url), 'utf8');
+// Flora builders were split out of src/flora.js (now a 57-line registry) into
+// per-kind modules under src/flora/. Reassemble the slice the assertions need:
+// shared helpers (mushroom stem/underside geometry, cap shadow underside, grove
+// family + pillar surface marks) live in _shared.js; bigmushroom/fairyring live
+// in structures.js; berrybush (the fairyRingBlock slice terminator) lives in
+// garden.js; makeStonePBRMaterial (asserted as wired through flora) is called
+// from rocks.js, so include it too.
+const floraSource = [
+  readFileSync(new URL('../src/flora/_shared.js', import.meta.url), 'utf8'),
+  readFileSync(new URL('../src/flora/trees.js', import.meta.url), 'utf8'),
+  readFileSync(new URL('../src/flora/rocks.js', import.meta.url), 'utf8'),
+  readFileSync(new URL('../src/flora/structures.js', import.meta.url), 'utf8'),
+  readFileSync(new URL('../src/flora/garden.js', import.meta.url), 'utf8'),
+].join('\n');
 const pbrSource = readFileSync(new URL('../src/pbr.js', import.meta.url), 'utf8');
 const utilSource = readFileSync(new URL('../src/util.js', import.meta.url), 'utf8');
 const groveFamilyBlock = floraSource.slice(

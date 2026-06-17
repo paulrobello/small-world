@@ -1,7 +1,13 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 
-const floraSource = readFileSync(new URL('../src/flora.js', import.meta.url), 'utf8');
+// src/flora.js is now a registry. The leafballtree builder lives in trees.js
+// and the shared palette/shadow-proxy helpers live in _shared.js. Concatenate
+// both so all flora assertions resolve.
+const floraSource = [
+  readFileSync(new URL('../src/flora/_shared.js', import.meta.url), 'utf8'),
+  readFileSync(new URL('../src/flora/trees.js', import.meta.url), 'utf8'),
+].join('\n');
 const biomesSource = readFileSync(new URL('../src/biomes.js', import.meta.url), 'utf8');
 const worldSource = readFileSync(new URL('../src/world.js', import.meta.url), 'utf8');
 

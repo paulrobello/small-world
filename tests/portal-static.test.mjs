@@ -9,6 +9,10 @@ const stateSource = readFileSync(new URL('../src/state.js', import.meta.url), 'u
 const worldSource = readFileSync(new URL('../src/world.js', import.meta.url), 'utf8');
 const mainSource = readFileSync(new URL('../main.js', import.meta.url), 'utf8');
 const uiSource = readFileSync(new URL('../src/ui.js', import.meta.url), 'utf8');
+// PERSISTED_KEYS (the list of persisted setting names) moved to src/ui/storage.js
+// as part of ARC-003 / QA-004 (ui.js split). Portal-persistence assertions now
+// read the storage module.
+const storageSource = readFileSync(new URL('../src/ui/storage.js', import.meta.url), 'utf8');
 const grassSource = readFileSync(new URL('../src/grass.js', import.meta.url), 'utf8');
 
 assert(
@@ -24,13 +28,13 @@ assert(
     && stateSource.includes('portalPreviewCreatures: false')
     && stateSource.includes('portalPreviewFx: true')
     && stateSource.includes('portalPanelOpen: false')
-    && uiSource.includes('"portalEnabled"')
-    && uiSource.includes('"portalDoublePlacement"')
-    && uiSource.includes('"portalPreviewGrass"')
-    && uiSource.includes('"portalPreviewFlora"')
-    && uiSource.includes('"portalPreviewCreatures"')
-    && uiSource.includes('"portalPreviewFx"')
-    && uiSource.includes('"portalPanelOpen"'),
+    && storageSource.includes('"portalEnabled"')
+    && storageSource.includes('"portalDoublePlacement"')
+    && storageSource.includes('"portalPreviewGrass"')
+    && storageSource.includes('"portalPreviewFlora"')
+    && storageSource.includes('"portalPreviewCreatures"')
+    && storageSource.includes('"portalPreviewFx"')
+    && storageSource.includes('"portalPanelOpen"'),
   'Portal settings should persist default-off portals, default-off double placement, and preview detail defaults.'
 );
 

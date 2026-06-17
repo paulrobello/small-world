@@ -3,7 +3,10 @@ import { readFileSync } from 'node:fs';
 import { BIOMES } from '../src/biomes.js';
 
 const obsidian = BIOMES.find((biome) => biome.id === 'obsidian');
-const floraSource = readFileSync(new URL('../src/flora.js', import.meta.url), 'utf8');
+// src/flora.js is now a registry. The lavafissure and obsidianglass builders
+// both live in volcanic.js; the slice (lavafissure -> obsidianglass) resolves
+// within that one file.
+const floraSource = readFileSync(new URL('../src/flora/volcanic.js', import.meta.url), 'utf8');
 const inspectSource = readFileSync(new URL('../src/inspect.js', import.meta.url), 'utf8');
 const uiSource = readFileSync(new URL('../src/ui.js', import.meta.url), 'utf8');
 const worldSource = readFileSync(new URL('../src/world.js', import.meta.url), 'utf8');

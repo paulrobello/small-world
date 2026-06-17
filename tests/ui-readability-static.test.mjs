@@ -4,6 +4,9 @@ import { readFileSync } from 'node:fs';
 const indexSource = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
 const cssSource = readFileSync(new URL('../style.css', import.meta.url), 'utf8');
 const uiSource = readFileSync(new URL('../src/ui.js', import.meta.url), 'utf8');
+// Persistence helpers (HELP_SEEN_KEY, shouldShowFirstVisitHelp, etc.) moved to
+// src/ui/storage.js as part of ARC-003 / QA-004 (ui.js split).
+const storageSource = readFileSync(new URL('../src/ui/storage.js', import.meta.url), 'utf8');
 
 function ruleFor(selector) {
   const escaped = selector.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -120,11 +123,15 @@ assert(
 );
 
 assert(
-  uiSource.includes('const HELP_SEEN_KEY = "smallworld:help-seen:v1";')
-    && uiSource.includes('function shouldShowFirstVisitHelp()')
-    && uiSource.includes('function shouldUseMobileHud()')
-    && uiSource.includes('localStorage.getItem(HELP_SEEN_KEY)')
-    && uiSource.includes('localStorage.setItem(HELP_SEEN_KEY, "1")')
+  // HELP_SEEN_KEY, shouldShowFirstVisitHelp(), shouldUseMobileHud() and the
+  // localStorage seen-state writes moved to src/ui/storage.js (ARC-003/QA-004
+  // ui.js split). The first-visit trigger itself stays in ui.js. Assert across
+  // both files to preserve the original intent.
+  storageSource.includes('const HELP_SEEN_KEY = "smallworld:help-seen:v1";')
+    && storageSource.includes('function shouldShowFirstVisitHelp()')
+    && storageSource.includes('function shouldUseMobileHud()')
+    && storageSource.includes('localStorage.getItem(HELP_SEEN_KEY)')
+    && storageSource.includes('localStorage.setItem(HELP_SEEN_KEY, "1")')
     && uiSource.includes('if (!INSPECT && !shouldUseMobileHud() && shouldShowFirstVisitHelp()) {')
     && uiSource.includes('setHelpOpen(true);'),
   'Help should automatically open once on desktop and persist that it was seen without trapping first-time mobile visitors.'

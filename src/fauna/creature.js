@@ -1077,37 +1077,319 @@ function pickPerchForFlier(c) {
   if (nearest) claimPerchForFlier(c, nearest);
 }
 
+// Sleepiness target — driven by the global night factor and the personality
+// threshold. Sleepy creatures yawn earlier; bold ones tough it out until
+// it's properly dark. Walkers apply a smoothstep on/off so the body curl
+// animates rather than snapping; fliers skip the smoothstep (they only get
+// drowsy + descend toward rest). The alert window after being woken forces
+// the target to 0 so a freshly-woken creature doesn't immediately re-curl.
+// (QA-010: dedupes the previously copy-pasted walker/flier sleepiness curves.)
+function sleepinessTarget(c, nf, smoothstep) {
+  const a = c.nightThresh - 0.08;
+  const b = c.nightThresh + 0.08;
+  let target = (nf - a) / Math.max(0.001, b - a);
+  if (target < 0) target = 0;
+  else if (target > 1) target = 1;
+  else if (smoothstep) target = target * target * (3 - 2 * target);
+  // Alert window after being woken — keep them out of sleep even at night.
+  if (c.alertUntil && c.age < c.alertUntil) target = 0;
+  return target;
+}
+
+// Rotate a walker/sleeper group to lie flat on the terrain underfoot. Samples
+// the slope along the creature's heading + perpendicular and writes pitch/roll
+// into rotation.x/.z (YXZ order — these resolve in the body frame after yaw).
+// (QA-010: dedupes the sleeper + night-sleep slope-pose blocks.)
+function plantOnSlope(c, heightFn) {
+  const p = c.group.position;
+  const ds = 0.25 * c.scale;
+  const slopes = sampleSlopes(p.x, p.z, c.heading, ds, heightFn);
+  c.group.rotation.y = -c.heading + Math.PI / 2;
+  c.group.rotation.x = slopes.pitchTarget;
+  c.group.rotation.z = slopes.rollTarget;
+}
+
+// ── sleeper mode ──────────────────────────────────────────────────────────
+// A creature spawned asleep (isSleeper). Curled, eyes closed, no motion — owns
+// its full frame (slow breath + slope pose) and always early-exits the
+// dispatcher. Extracted from stepCreature (QA-001).
+function stepSleeper(c, dt, t, heightFn) {
+  // slow "breathing" — body bob on y axis, very small amplitude
+  const breath = Math.sin(t * 1.1 + c.flapPhase) * 0.03;
+  c.body.scale.y = c.bodyBaseY * 0.55 + breath;
+  c.body.scale.x = c.bodyBaseX * (1.18 - breath * 0.3);
+  // legs/feet tucked under the body (set in makeCreature) — keep them
+  // there in case anything else perturbed them
+  for (let i = 0; i < c.legs.length; i++) {
+    c.legs[i].scale.y = 0.02;
+    c.feet[i].position.y = -0.15;
+  }
+  // belly hidden — sphere would poke out below the squashed body
+  if (c.belly) c.belly.scale.set(0, 0, 0);
+  // antennae retracted so they don't float disconnected above the body
+  if (c.antennae) for (const a of c.antennae) a.scale.setScalar(0);
+  // Fur shells are children of the body and inherit its squash — they stay
+  // visible while sleeping (a curled fuzzy creature should still read as
+  // fuzzy, just compressed).
+  // keep planted at ground height
+  const ground = heightFn(c.group.position.x, c.group.position.z);
+  c.group.position.y = ground + 0.28 * c.scale;
+  // Rotate to match terrain slope so sleepers lie flat on hillsides.
+  plantOnSlope(c, heightFn);
+}
+
+// ── night-sleep mode (walkers only) ───────────────────────────────────────
+// High sleepiness curls a walker down on the spot. Returns true once fully
+// curled (s > 0.6) — that state owns the slope pose and the dispatcher must
+// skip the trailing motion/animation. Extracted from stepCreature (QA-001).
+function stepNightSleep(c, dt, t, heightFn) {
+  const s = c.sleepiness;
+  // Curl reaches full posture at s=0.6 (the same threshold the zZz sprite
+  // fades in on) so motion stops the moment the creature reads as sleeping.
+  const curl = Math.min(1, s / 0.6);
+  const eyeOpen = Math.max(0, 1 - curl * 1.2);
+  for (const e of c.eyeParts) e.scale.setScalar(eyeOpen);
+  c.body.scale.y = c.bodyBaseY * (1 + (0.55 - 1) * curl);
+  c.body.scale.x = c.bodyBaseX * (1 + (1.18 - 1) * curl);
+  // Legs and feet retract as the creature curls
+  for (let i = 0; i < c.legs.length; i++) {
+    c.legs[i].scale.y = 0.22 + (0.02 - 0.22) * curl;
+    c.feet[i].position.y = -0.32 + (-0.15 - -0.32) * curl;
+  }
+  // Belly shrinks toward zero as the body squashes flat over it
+  if (c.belly) {
+    const bs = c.belly.userData.baseScale;
+    const open = 1 - curl;
+    c.belly.scale.set(bs.x * open, bs.y * open, bs.z * open);
+  }
+  // Antennae fold down toward the body
+  if (c.antennae) for (const a of c.antennae) a.scale.setScalar(1 - curl);
+  if (s > 0.6) {
+    // fully curled — slow breath, no motion, planted on the ground
+    const breath = Math.sin(t * 1.1 + c.flapPhase) * 0.03;
+    c.body.scale.y = c.bodyBaseY * 0.55 + breath;
+    c.body.scale.x = c.bodyBaseX * (1.18 - breath * 0.3);
+    const ground = heightFn(c.group.position.x, c.group.position.z);
+    c.group.position.y = ground + 0.28 * c.scale + c.hopOffset;
+    // Rotate to match terrain slope so night-sleepers lie flat on hillsides.
+    plantOnSlope(c, heightFn);
+    return true;
+  }
+  return false;
+}
+
+// ── burrower mode ─────────────────────────────────────────────────────────
+// Alternating above-ground / burrowed life. Runs the 8-state FSM + mound
+// animations. Returns true while fully underground (burrowed/sinking/
+// moundRising) — those states skip all motion/animation, so the dispatcher
+// early-exits. Extracted from stepCreature (QA-001).
+function stepBurrower(c, dt, heightFn) {
+  c.burrowTimer -= dt;
+  if (c.burrowState === "surface" && c.burrowTimer <= 0) {
+    c.burrowState = "descending";
+    c.burrowTimer = 0.6;
+    // Dirt spray + mound appear together when the creature starts digging
+    const pos = c.group.position;
+    const gy = heightFn(pos.x, pos.z);
+    const puff = makeDirtPuff(pos.x, gy, pos.z, c.dirtColor);
+    state.world.add(puff);
+    state.dirtPuffs.push(puff);
+    showMound(c, heightFn);
+  } else if (c.burrowState === "descending") {
+    c.burrowDepth = Math.min(1, c.burrowDepth + dt * 1.6);
+    if (c.burrowDepth >= 1) {
+      c.burrowState = "burrowed";
+      c.group.visible = false;
+      c.burrowTimer = 3 + Math.random() * 4;
+    }
+  } else if (c.burrowState === "burrowed" && c.burrowTimer <= 0) {
+    // Start sinking the mound before emerging
+    c.burrowState = "sinking";
+    hideMound(c);
+    // If no mound exists (e.g. first cycle or inspect), skip straight to emerging
+    if (c.moundSinkT < 0) {
+      c.burrowState = "moundGone";
+    }
+  } else if (c.burrowState === "sinking") {
+    // Wait for mound sink animation to finish (driven by moundSinkT below)
+    if (c.moundSinkT < 0) {
+      c.burrowState = "moundGone";
+    }
+  } else if (c.burrowState === "moundGone") {
+    // Pick a fresh nearby ground point for re-emergence
+    const ep = findEmergePoint(c, heightFn);
+    if (ep) {
+      c.burrowState = "moundRising";
+      showMoundRising(c, ep.x, ep.z, heightFn);
+    }
+    // If no valid point found, stay in moundGone and retry next frame
+  } else if (c.burrowState === "moundRising") {
+    // Wait for mound rise animation (driven by moundRiseT below)
+    if (c.moundRiseT < 0) {
+      // Rise complete — move creature to mound position, show it
+      const mp = c.moundMesh.position;
+      c.group.position.set(mp.x, mp.y, mp.z);
+      c.group.visible = true;
+      c.burrowState = "emerging";
+      c.moundHideTimer = 1;
+      const pos = c.group.position;
+      const puff = makeDirtPuff(pos.x, heightFn(pos.x, pos.z), pos.z, c.dirtColor);
+      state.world.add(puff);
+      state.dirtPuffs.push(puff);
+    }
+  } else if (c.burrowState === "emerging") {
+    c.burrowDepth = Math.max(0, c.burrowDepth - dt * 1.8);
+    if (c.burrowDepth <= 0) {
+      c.burrowState = "surface";
+      c.burrowTimer = 5 + Math.random() * 6;
+    }
+  }
+  // mound hide timer — counts down during emerging/surface, triggers sink
+  if (c.moundHideTimer > 0 && (c.burrowState === "emerging" || c.burrowState === "surface")) {
+    c.moundHideTimer -= dt;
+    if (c.moundHideTimer <= 0) {
+      c.moundHideTimer = -1;
+      hideMound(c);
+    }
+  }
+  // ── mound animations (must run before early-return) ──
+  stepMoundRise(c, dt);
+  stepMoundSink(c, dt);
+
+  // while burrowed, sinking, or mound rising, skip all motion/animation
+  return c.burrowState === "burrowed" || c.burrowState === "sinking" || c.burrowState === "moundRising";
+}
+
+// ── flier landing FSM ─────────────────────────────────────────────────────
+// The 4-state landing state machine (flying ↔ descending ↔ landed ↔ ascending)
+// plus water/drowsy/perch gating. Runs every frame for non-fish fliers; the
+// actual movement + animation is handled by the shared walker/flier path in
+// stepCreature after this returns. Extracted from stepCreature (QA-001).
+function stepFlier(c, dt, heightFn) {
+  c.landTimer -= dt;
+  const restH = 0.35 * c.scale;
+
+  // No landing on water — if the ground beneath us is below the waterline
+  // (or we'd already committed to landing there), bail to "flying" so the
+  // perch lookup retries somewhere on dry land next cycle. Also snap
+  // currentHover up to the cruise ceiling so we don't visibly hover at
+  // restH-altitude over the lake while the per-frame lerp slowly climbs.
+  const overWater =
+    state.waterMesh && heightFn(c.group.position.x, c.group.position.z) < WATER_AVOID_Y;
+  if (overWater && c.landState !== "flying") {
+    c.landState = "flying";
+    c.landTimer = 4 + Math.random() * 8;
+    releasePerchForFlier(c);
+    c.perchTarget = null;
+    c.perchOffsetX = 0;
+    c.perchOffsetZ = 0;
+    const ceil = c.hoverHeight * (1 - 0.7 * c.sleepiness);
+    if (c.currentHover < ceil) c.currentHover = ceil;
+  }
+
+  // Drowsy fliers want down — force a descent if they're still flying,
+  // and refuse to lift off until they've slept it off. Skip the forced
+  // descent while over water so a sleepy flier doesn't try to ditch
+  // mid-lake; it'll keep cruising until it finds land.
+  if (!overWater && c.sleepiness > 0.6 && c.landState === "flying") {
+    c.landState = "descending";
+    c.landTimer = 8 + Math.random() * 6;
+    pickPerchForFlier(c);
+  }
+  if (!overWater && c.sleepiness > 0.6 && c.landState === "ascending") {
+    c.landState = "descending";
+  }
+
+  if (!overWater && c.landState === "flying" && c.landTimer <= 0) {
+    c.landState = "descending";
+    pickPerchForFlier(c);
+  } else if (c.landState === "landed" && c.landTimer <= 0 && c.sleepiness < 0.5) {
+    c.landState = "ascending";
+  }
+
+  // pull the hover ceiling down with sleepiness so a flier slowly sinks
+  // toward the ground at night even before reaching the landed state.
+  const hoverCeil = c.hoverHeight * (1 - 0.7 * c.sleepiness);
+  let targetH =
+    c.landState === "flying" || c.landState === "ascending"
+      ? hoverCeil
+      : restH;
+  // While descending toward a distant perch, hold an approach altitude
+  // so the flier has time to fly over to the mushroom before it bottoms
+  // out. Once roughly over the cap, the normal restH target kicks in
+  // and the actual touchdown onto the cap happens.
+  if (c.perchTarget && c.landState === "descending") {
+    const perchPoint = currentPerchPoint(c.perchTarget);
+    const dxp = perchPoint.x - c.group.position.x;
+    const dzp = perchPoint.z - c.group.position.z;
+    if (dxp * dxp + dzp * dzp > 1.0) {
+      targetH = Math.max(restH, Math.min(hoverCeil, 0.6 * c.hoverHeight));
+    }
+  }
+  // smooth lerp for the descent/ascent
+  c.currentHover += (targetH - c.currentHover) * Math.min(1, dt * 1.4);
+
+  if (c.landState === "descending" && c.currentHover - restH < 0.08) {
+    // Only commit to "landed" once we're at the perch (or there's no
+    // perch). Otherwise the flier would freeze in mid-air partway across.
+    let canLand = true;
+    if (c.perchTarget) {
+      const perchPoint = currentPerchPoint(c.perchTarget);
+      const dxp = perchPoint.x - c.group.position.x;
+      const dzp = perchPoint.z - c.group.position.z;
+      const perchRadius = c.perchTarget.perchRadius ?? 0.4;
+      canLand = dxp * dxp + dzp * dzp < perchRadius * perchRadius;
+      if (canLand) {
+        c.perchOffsetX = c.group.position.x - perchPoint.x;
+        c.perchOffsetZ = c.group.position.z - perchPoint.z;
+      }
+    }
+    if (canLand) {
+      c.landState = "landed";
+      c.landTimer = 4 + Math.random() * 10;
+      emitFlierLandingMarks(c, heightFn);
+    }
+  } else if (
+    c.landState === "ascending" &&
+    c.hoverHeight - c.currentHover < 0.15
+  ) {
+    c.landState = "flying";
+    c.landTimer = 8 + Math.random() * 16;
+    // Keep perchTarget after takeoff — the floor blend uses it to ease
+    // back toward ground as the flier drifts away in XZ. Cleared lazily
+    // below once the blend has fully unwound, so the pos.y handoff from
+    // perch-relative to ground-relative is seamless.
+  }
+
+  // Lazy cleanup — once the floor blend has decayed essentially to zero
+  // (the flier is well clear of the perch), drop the reference so the
+  // next descent is free to pick a fresh perch.
+  if (
+    c.perchTarget &&
+    c.landState === "flying" &&
+    c.perchFloorWeight < 0.02
+  ) {
+    releasePerchForFlier(c);
+    c.perchTarget = null;
+    c.perchFloorWeight = 0;
+    c.perchOffsetX = 0;
+    c.perchOffsetZ = 0;
+  }
+}
+
 export function stepCreature(c, dt, t, heightFn) {
   c.age += dt;
   c.nextThink -= dt;
   if (c.lookTimer > 0) c.lookTimer -= dt;
   if (c.hopCooldown > 0) c.hopCooldown -= dt;
 
-  // Sleepiness target — driven by the global night factor and the personality
-  // threshold. Sleepy creatures yawn earlier; bold ones tough it out until
-  // it's properly dark. Smoothstep gives a soft on/off so the body curl
-  // animates rather than snapping.
+  // Sleepiness target — ease toward the night-driven target at ~0.6/s so
+  // dawn/dusk transitions are smooth. Walkers smoothstep; fliers don't.
   if (!c.isSleeper && !c.flies) {
-    const nf = state.nightFactor ?? 0;
-    const a = c.nightThresh - 0.08;
-    const b = c.nightThresh + 0.08;
-    let target = (nf - a) / Math.max(0.001, b - a);
-    if (target < 0) target = 0;
-    else if (target > 1) target = 1;
-    else target = target * target * (3 - 2 * target);
-    // Alert window after being woken — keep them out of sleep even at night.
-    if (c.alertUntil && c.age < c.alertUntil) target = 0;
-    // ease toward target at ~0.6/s so dawn/dusk transitions are smooth
+    const target = sleepinessTarget(c, state.nightFactor ?? 0, true);
     c.sleepiness += (target - c.sleepiness) * Math.min(1, dt * 0.6);
   } else if (c.flies && !c.isFish) {
-    // fliers don't fully sleep, but they get drowsy + descend toward rest
-    const nf = state.nightFactor ?? 0;
-    const a = c.nightThresh - 0.08;
-    const b = c.nightThresh + 0.08;
-    let target = (nf - a) / Math.max(0.001, b - a);
-    if (target < 0) target = 0;
-    else if (target > 1) target = 1;
-    if (c.alertUntil && c.age < c.alertUntil) target = 0;
+    const target = sleepinessTarget(c, state.nightFactor ?? 0, false);
     c.sleepiness += (target - c.sleepiness) * Math.min(1, dt * 0.6);
   }
 
@@ -1156,36 +1438,10 @@ export function stepCreature(c, dt, t, heightFn) {
   }
 
   // ── sleeping (curled, eyes closed, no motion) ─────────────────────────
+  // stepSleeper owns the entire sleeper frame and early-exits the dispatcher
+  // (it plants itself on the slope and does no further motion/animation).
   if (c.isSleeper) {
-    // slow "breathing" — body bob on y axis, very small amplitude
-    const breath = Math.sin(t * 1.1 + c.flapPhase) * 0.03;
-    c.body.scale.y = c.bodyBaseY * 0.55 + breath;
-    c.body.scale.x = c.bodyBaseX * (1.18 - breath * 0.3);
-    // legs/feet tucked under the body (set in makeCreature) — keep them
-    // there in case anything else perturbed them
-    for (let i = 0; i < c.legs.length; i++) {
-      c.legs[i].scale.y = 0.02;
-      c.feet[i].position.y = -0.15;
-    }
-    // belly hidden — sphere would poke out below the squashed body
-    if (c.belly) c.belly.scale.set(0, 0, 0);
-    // antennae retracted so they don't float disconnected above the body
-    if (c.antennae) for (const a of c.antennae) a.scale.setScalar(0);
-    // Fur shells are children of the body and inherit its squash — they stay
-    // visible while sleeping (a curled fuzzy creature should still read as
-    // fuzzy, just compressed).
-    // keep planted at ground height
-    const ground = heightFn(c.group.position.x, c.group.position.z);
-    c.group.position.y = ground + 0.28 * c.scale;
-    // Rotate to match terrain slope so sleepers lie flat on hillsides.
-    {
-      const p = c.group.position;
-      const ds = 0.25 * c.scale;
-      const slopes = sampleSlopes(p.x, p.z, c.heading, ds, heightFn);
-      c.group.rotation.y = -c.heading + Math.PI / 2;
-      c.group.rotation.x = slopes.pitchTarget;
-      c.group.rotation.z = slopes.rollTarget;
-    }
+    stepSleeper(c, dt, t, heightFn);
     return;
   }
 
@@ -1214,240 +1470,25 @@ export function stepCreature(c, dt, t, heightFn) {
   }
 
   // ── night sleep (walkers only) ────────────────────────────────────────
-  // High sleepiness curls a walker down on the spot. Smooth transitions in
-  // and out — eyes scale, body squashes, head-bob falls to a slow breath.
+  // High sleepiness curls a walker down on the spot. stepNightSleep returns
+  // true once the creature is fully curled (s > 0.6) — in that state it owns
+  // the slope pose and the dispatcher must skip the trailing motion/animation.
   if (!c.flies && c.sleepiness > 0.05 && !c._waking) {
-    const s = c.sleepiness;
-    // Curl reaches full posture at s=0.6 (the same threshold the zZz sprite
-    // fades in on) so motion stops the moment the creature reads as sleeping.
-    const curl = Math.min(1, s / 0.6);
-    const eyeOpen = Math.max(0, 1 - curl * 1.2);
-    for (const e of c.eyeParts) e.scale.setScalar(eyeOpen);
-    c.body.scale.y = c.bodyBaseY * (1 + (0.55 - 1) * curl);
-    c.body.scale.x = c.bodyBaseX * (1 + (1.18 - 1) * curl);
-    // Legs and feet retract as the creature curls
-    for (let i = 0; i < c.legs.length; i++) {
-      c.legs[i].scale.y = 0.22 + (0.02 - 0.22) * curl;
-      c.feet[i].position.y = -0.32 + (-0.15 - -0.32) * curl;
-    }
-    // Belly shrinks toward zero as the body squashes flat over it
-    if (c.belly) {
-      const bs = c.belly.userData.baseScale;
-      const open = 1 - curl;
-      c.belly.scale.set(bs.x * open, bs.y * open, bs.z * open);
-    }
-    // Antennae fold down toward the body
-    if (c.antennae) for (const a of c.antennae) a.scale.setScalar(1 - curl);
-    if (s > 0.6) {
-      // fully curled — slow breath, no motion, planted on the ground
-      const breath = Math.sin(t * 1.1 + c.flapPhase) * 0.03;
-      c.body.scale.y = c.bodyBaseY * 0.55 + breath;
-      c.body.scale.x = c.bodyBaseX * (1.18 - breath * 0.3);
-      const ground = heightFn(c.group.position.x, c.group.position.z);
-      c.group.position.y = ground + 0.28 * c.scale + c.hopOffset;
-      // Rotate to match terrain slope so night-sleepers lie flat on hillsides.
-      {
-        const p = c.group.position;
-        const ds = 0.25 * c.scale;
-        const slopes = sampleSlopes(p.x, p.z, c.heading, ds, heightFn);
-        c.group.rotation.y = -c.heading + Math.PI / 2;
-        c.group.rotation.x = slopes.pitchTarget;
-        c.group.rotation.z = slopes.rollTarget;
-      }
-      return;
-    }
+    if (stepNightSleep(c, dt, t, heightFn)) return;
   }
 
   // ── burrower state machine ────────────────────────────────────────────
+  // stepBurrower runs the FSM + mound animations. It returns true while the
+  // creature is fully underground (burrowed/sinking/moundRising) — those
+  // states skip all motion/animation, so the dispatcher early-exits.
   if (c.isBurrower) {
-    c.burrowTimer -= dt;
-    if (c.burrowState === "surface" && c.burrowTimer <= 0) {
-      c.burrowState = "descending";
-      c.burrowTimer = 0.6;
-      // Dirt spray + mound appear together when the creature starts digging
-      const pos = c.group.position;
-      const gy = heightFn(pos.x, pos.z);
-      const puff = makeDirtPuff(pos.x, gy, pos.z, c.dirtColor);
-      state.world.add(puff);
-      state.dirtPuffs.push(puff);
-      showMound(c, heightFn);
-    } else if (c.burrowState === "descending") {
-      c.burrowDepth = Math.min(1, c.burrowDepth + dt * 1.6);
-      if (c.burrowDepth >= 1) {
-        c.burrowState = "burrowed";
-        c.group.visible = false;
-        c.burrowTimer = 3 + Math.random() * 4;
-      }
-    } else if (c.burrowState === "burrowed" && c.burrowTimer <= 0) {
-      // Start sinking the mound before emerging
-      c.burrowState = "sinking";
-      hideMound(c);
-      // If no mound exists (e.g. first cycle or inspect), skip straight to emerging
-      if (c.moundSinkT < 0) {
-        c.burrowState = "moundGone";
-      }
-    } else if (c.burrowState === "sinking") {
-      // Wait for mound sink animation to finish (driven by moundSinkT below)
-      if (c.moundSinkT < 0) {
-        c.burrowState = "moundGone";
-      }
-    } else if (c.burrowState === "moundGone") {
-      // Pick a fresh nearby ground point for re-emergence
-      const ep = findEmergePoint(c, heightFn);
-      if (ep) {
-        c.burrowState = "moundRising";
-        showMoundRising(c, ep.x, ep.z, heightFn);
-      }
-      // If no valid point found, stay in moundGone and retry next frame
-    } else if (c.burrowState === "moundRising") {
-      // Wait for mound rise animation (driven by moundRiseT below)
-      if (c.moundRiseT < 0) {
-        // Rise complete — move creature to mound position, show it
-        const mp = c.moundMesh.position;
-        c.group.position.set(mp.x, mp.y, mp.z);
-        c.group.visible = true;
-        c.burrowState = "emerging";
-        c.moundHideTimer = 1;
-        const pos = c.group.position;
-        const puff = makeDirtPuff(pos.x, heightFn(pos.x, pos.z), pos.z, c.dirtColor);
-        state.world.add(puff);
-        state.dirtPuffs.push(puff);
-      }
-    } else if (c.burrowState === "emerging") {
-      c.burrowDepth = Math.max(0, c.burrowDepth - dt * 1.8);
-      if (c.burrowDepth <= 0) {
-        c.burrowState = "surface";
-        c.burrowTimer = 5 + Math.random() * 6;
-      }
-    }
-    // mound hide timer — counts down during emerging/surface, triggers sink
-    if (c.moundHideTimer > 0 && (c.burrowState === "emerging" || c.burrowState === "surface")) {
-      c.moundHideTimer -= dt;
-      if (c.moundHideTimer <= 0) {
-        c.moundHideTimer = -1;
-        hideMound(c);
-      }
-    }
-    // ── mound animations (must run before early-return) ──
-    stepMoundRise(c, dt);
-    stepMoundSink(c, dt);
-
-    // while burrowed, sinking, or mound rising, skip all motion/animation
-    if (c.burrowState === "burrowed" || c.burrowState === "sinking" || c.burrowState === "moundRising") return;
+    if (stepBurrower(c, dt, heightFn)) return;
   }
 
   // ── flier landing state machine ────────────────────────────────────────
   // Fish never land — they always float.
   if (c.flies && !c.isFish) {
-    c.landTimer -= dt;
-    const restH = 0.35 * c.scale;
-
-    // No landing on water — if the ground beneath us is below the waterline
-    // (or we'd already committed to landing there), bail to "flying" so the
-    // perch lookup retries somewhere on dry land next cycle. Also snap
-    // currentHover up to the cruise ceiling so we don't visibly hover at
-    // restH-altitude over the lake while the per-frame lerp slowly climbs.
-    const overWater =
-      state.waterMesh && heightFn(c.group.position.x, c.group.position.z) < WATER_AVOID_Y;
-    if (overWater && c.landState !== "flying") {
-      c.landState = "flying";
-      c.landTimer = 4 + Math.random() * 8;
-      releasePerchForFlier(c);
-      c.perchTarget = null;
-      c.perchOffsetX = 0;
-      c.perchOffsetZ = 0;
-      const ceil = c.hoverHeight * (1 - 0.7 * c.sleepiness);
-      if (c.currentHover < ceil) c.currentHover = ceil;
-    }
-
-    // Drowsy fliers want down — force a descent if they're still flying,
-    // and refuse to lift off until they've slept it off. Skip the forced
-    // descent while over water so a sleepy flier doesn't try to ditch
-    // mid-lake; it'll keep cruising until it finds land.
-    if (!overWater && c.sleepiness > 0.6 && c.landState === "flying") {
-      c.landState = "descending";
-      c.landTimer = 8 + Math.random() * 6;
-      pickPerchForFlier(c);
-    }
-    if (!overWater && c.sleepiness > 0.6 && c.landState === "ascending") {
-      c.landState = "descending";
-    }
-
-    if (!overWater && c.landState === "flying" && c.landTimer <= 0) {
-      c.landState = "descending";
-      pickPerchForFlier(c);
-    } else if (c.landState === "landed" && c.landTimer <= 0 && c.sleepiness < 0.5) {
-      c.landState = "ascending";
-    }
-
-    // pull the hover ceiling down with sleepiness so a flier slowly sinks
-    // toward the ground at night even before reaching the landed state.
-    const hoverCeil = c.hoverHeight * (1 - 0.7 * c.sleepiness);
-    let targetH =
-      c.landState === "flying" || c.landState === "ascending"
-        ? hoverCeil
-        : restH;
-    // While descending toward a distant perch, hold an approach altitude
-    // so the flier has time to fly over to the mushroom before it bottoms
-    // out. Once roughly over the cap, the normal restH target kicks in
-    // and the actual touchdown onto the cap happens.
-    if (c.perchTarget && c.landState === "descending") {
-      const perchPoint = currentPerchPoint(c.perchTarget);
-      const dxp = perchPoint.x - c.group.position.x;
-      const dzp = perchPoint.z - c.group.position.z;
-      if (dxp * dxp + dzp * dzp > 1.0) {
-        targetH = Math.max(restH, Math.min(hoverCeil, 0.6 * c.hoverHeight));
-      }
-    }
-    // smooth lerp for the descent/ascent
-    c.currentHover += (targetH - c.currentHover) * Math.min(1, dt * 1.4);
-
-    if (c.landState === "descending" && c.currentHover - restH < 0.08) {
-      // Only commit to "landed" once we're at the perch (or there's no
-      // perch). Otherwise the flier would freeze in mid-air partway across.
-      let canLand = true;
-      if (c.perchTarget) {
-        const perchPoint = currentPerchPoint(c.perchTarget);
-        const dxp = perchPoint.x - c.group.position.x;
-        const dzp = perchPoint.z - c.group.position.z;
-        const perchRadius = c.perchTarget.perchRadius ?? 0.4;
-        canLand = dxp * dxp + dzp * dzp < perchRadius * perchRadius;
-        if (canLand) {
-          c.perchOffsetX = c.group.position.x - perchPoint.x;
-          c.perchOffsetZ = c.group.position.z - perchPoint.z;
-        }
-      }
-      if (canLand) {
-        c.landState = "landed";
-        c.landTimer = 4 + Math.random() * 10;
-        emitFlierLandingMarks(c, heightFn);
-      }
-    } else if (
-      c.landState === "ascending" &&
-      c.hoverHeight - c.currentHover < 0.15
-    ) {
-      c.landState = "flying";
-      c.landTimer = 8 + Math.random() * 16;
-      // Keep perchTarget after takeoff — the floor blend uses it to ease
-      // back toward ground as the flier drifts away in XZ. Cleared lazily
-      // below once the blend has fully unwound, so the pos.y handoff from
-      // perch-relative to ground-relative is seamless.
-    }
-
-    // Lazy cleanup — once the floor blend has decayed essentially to zero
-    // (the flier is well clear of the perch), drop the reference so the
-    // next descent is free to pick a fresh perch.
-    if (
-      c.perchTarget &&
-      c.landState === "flying" &&
-      c.perchFloorWeight < 0.02
-    ) {
-      releasePerchForFlier(c);
-      c.perchTarget = null;
-      c.perchFloorWeight = 0;
-      c.perchOffsetX = 0;
-      c.perchOffsetZ = 0;
-    }
+    stepFlier(c, dt, heightFn);
   }
 
   const grounded = c.flies && c.landState === "landed";

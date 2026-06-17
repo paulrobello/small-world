@@ -7,6 +7,29 @@ import unittest
 ROOT = Path(__file__).resolve().parents[1]
 
 
+def _read_flora_source() -> str:
+    """Read the flora subsystem source.
+
+    src/flora.js is now a thin registry; the builders were split out into
+    per-kind modules under src/flora/ with shared helpers in src/flora/_shared.js.
+    Join all seven files so every flora assertion (builders + helpers, including
+    relative-order checks that rely on two markers living in the same blob)
+    resolves against the same concatenation.
+    """
+    parts = []
+    for name in (
+        "_shared.js",
+        "trees.js",
+        "garden.js",
+        "rocks.js",
+        "structures.js",
+        "aquatic.js",
+        "volcanic.js",
+    ):
+        parts.append((ROOT / "src" / "flora" / name).read_text())
+    return "\n".join(parts)
+
+
 class VerdantGroveCustomDomainTest(unittest.TestCase):
     def test_github_pages_custom_domain_is_configured(self) -> None:
         self.assertEqual((ROOT / "CNAME").read_text().strip(), "small-world.pardev.net")
@@ -34,7 +57,7 @@ class VerdantGroveCustomDomainTest(unittest.TestCase):
     def test_world_places_verdant_detail_layers(self) -> None:
         world = (ROOT / "src" / "world.js").read_text()
         env = (ROOT / "src" / "environment.js").read_text()
-        flora = (ROOT / "src" / "flora.js").read_text()
+        flora = _read_flora_source()
         inspect = (ROOT / "src" / "inspect.js").read_text()
 
         self.assertIn("makeVerdantGroveDetails", env)
@@ -52,7 +75,7 @@ class VerdantGroveCustomDomainTest(unittest.TestCase):
         self.assertIn("blocksFloraPlacement(p.x, p.z, fp * CANOPY_SPACING_PAD, CANOPY_SPACING_KINDS)", world)
 
     def test_grove_spores_are_smaller_and_animated(self) -> None:
-        flora = (ROOT / "src" / "flora.js").read_text()
+        flora = _read_flora_source()
         self.assertIn("applySporeDrift", flora)
         self.assertIn("uSporeDrift", flora)
         self.assertIn("new THREE.SphereGeometry(0.0195", flora)
@@ -86,7 +109,7 @@ class VerdantGroveCustomDomainTest(unittest.TestCase):
         self.assertIn("window.location.reload()", ui)
 
     def test_mushroom_perches_follow_wind_sway(self) -> None:
-        flora = (ROOT / "src" / "flora.js").read_text()
+        flora = _read_flora_source()
         world = (ROOT / "src" / "world.js").read_text()
         creature = (ROOT / "src" / "fauna" / "creature.js").read_text()
 
@@ -100,7 +123,7 @@ class VerdantGroveCustomDomainTest(unittest.TestCase):
         self.assertIn("currentPerchPoint(c.perchTarget)", creature)
 
     def test_mushrooms_caterpillars_and_snails_use_smooth_shading(self) -> None:
-        flora = (ROOT / "src" / "flora.js").read_text()
+        flora = _read_flora_source()
         caterpillar = (ROOT / "src" / "fauna" / "caterpillar.js").read_text()
 
         for marker in [
@@ -122,7 +145,7 @@ class VerdantGroveCustomDomainTest(unittest.TestCase):
         self.assertNotIn("snail.shell.mat.flat", caterpillar)
 
     def test_leafballtree_trunk_height_varies_up_to_twenty_five_percent(self) -> None:
-        flora = (ROOT / "src" / "flora.js").read_text()
+        flora = _read_flora_source()
         world = (ROOT / "src" / "world.js").read_text()
 
         self.assertIn("leafballtreeTrunkHeightMul = 1 + Math.random() * 0.25", flora)
@@ -192,7 +215,7 @@ class VerdantGroveCustomDomainTest(unittest.TestCase):
 
     def test_verdant_uses_leafballtree_with_custom_leaf_wind(self) -> None:
         biomes = (ROOT / "src" / "biomes.js").read_text()
-        flora = (ROOT / "src" / "flora.js").read_text()
+        flora = _read_flora_source()
         world = (ROOT / "src" / "world.js").read_text()
         inspect = (ROOT / "src" / "inspect.js").read_text()
         verdant_block = biomes[biomes.index('id: "verdant"') : biomes.index('id: "desert"')]
@@ -219,7 +242,7 @@ class VerdantGroveCustomDomainTest(unittest.TestCase):
         self.assertIn("leafballtree.branch.geo", flora)
 
     def test_leafballtree_leaves_have_subtle_instanced_outlines(self) -> None:
-        flora = (ROOT / "src" / "flora.js").read_text()
+        flora = _read_flora_source()
 
         self.assertIn("leafballtree.leaf.outline.geo", flora)
         self.assertIn("leafballtree.leaf.outline.mat", flora)
@@ -235,7 +258,7 @@ class VerdantGroveCustomDomainTest(unittest.TestCase):
         self.assertLess(flora.index("const outline = makeInstancedLeafBatch"), flora.index("const leaves = makeInstancedLeafBatch"))
 
     def test_leafballtree_uses_instanced_leaf_batches(self) -> None:
-        flora = (ROOT / "src" / "flora.js").read_text()
+        flora = _read_flora_source()
 
         self.assertIn("makeInstancedLeafBatch", flora)
         self.assertIn("new THREE.InstancedMesh(geometry, material, matrices.length)", flora)

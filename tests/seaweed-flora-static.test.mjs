@@ -2,7 +2,9 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { BIOMES } from '../src/biomes.js';
 
-const floraSource = readFileSync(new URL('../src/flora.js', import.meta.url), 'utf8');
+// src/flora.js is now a registry. The seaweed and grass builders both live in
+// garden.js; the slice (seaweed -> grass) resolves within that one file.
+const floraSource = readFileSync(new URL('../src/flora/garden.js', import.meta.url), 'utf8');
 const worldSource = readFileSync(new URL('../src/world.js', import.meta.url), 'utf8');
 const inspectSource = readFileSync(new URL('../src/inspect.js', import.meta.url), 'utf8');
 

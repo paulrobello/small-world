@@ -4,7 +4,13 @@ import { BIOMES, FLOWER_DENSITY, WILDFLOWER_PALETTES } from '../src/biomes.js';
 
 const TREE_KINDS = new Set(['tree', 'leafballtree', 'pine', 'snowpine', 'balloontree']);
 const ashen = BIOMES.find((biome) => biome.id === 'ashen');
-const floraSource = readFileSync(new URL('../src/flora.js', import.meta.url), 'utf8');
+// src/flora.js is now a registry. The deadtree builder lives in structures.js
+// (the next builder in that file is `crystal`, so the deadtree block slice now
+// terminates there instead of at `skull`, which moved to rocks.js). deadtree
+// and skull still keep their relative order in the FLORA_BUILDERS registry
+// (src/flora.js), which we read separately for the ordering assertion.
+const floraSource = readFileSync(new URL('../src/flora/structures.js', import.meta.url), 'utf8');
+const floraRegistry = readFileSync(new URL('../src/flora.js', import.meta.url), 'utf8');
 const pbrSource = readFileSync(new URL('../src/pbr.js', import.meta.url), 'utf8');
 
 assert(ashen, 'ashen wastes biome should exist.');
@@ -48,10 +54,17 @@ assert.deepEqual(
 );
 
 const deadTreeStart = floraSource.indexOf('deadtree(biome)');
-const deadTreeEnd = floraSource.indexOf('skull()', deadTreeStart);
+const deadTreeEnd = floraSource.indexOf('crystal(biome)', deadTreeStart);
 const deadTreeBlock = floraSource.slice(deadTreeStart, deadTreeEnd);
 
-assert(deadTreeStart >= 0 && deadTreeEnd > deadTreeStart, 'Dead tree builder should live before skull flora.');
+assert(deadTreeStart >= 0 && deadTreeEnd > deadTreeStart, 'Dead tree builder block should be present in structures.js.');
+// deadtree and skull used to be adjacent in one flora file; after the split
+// (deadtree -> structures.js, skull -> rocks.js) their relative order is now
+// expressed in the FLORA_BUILDERS registry in src/flora.js.
+assert(
+  floraRegistry.indexOf('deadtree:') < floraRegistry.indexOf('skull:'),
+  'Dead tree builder should still be registered before skull flora in the FLORA_BUILDERS registry.'
+);
 assert(
   deadTreeBlock.includes('deadtree.mat.smooth')
     && deadTreeBlock.includes('flatShading: false')

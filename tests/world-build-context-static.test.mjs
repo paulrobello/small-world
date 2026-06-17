@@ -81,7 +81,13 @@ assert(
   generateBody.includes('const seedBiome = BIOMES[Math.floor(Math.random() * BIOMES.length)];')
     && generateBody.includes('const forcedBiome = options.biomeId ? BIOMES.find((candidate) => candidate.id === options.biomeId) : null;')
     && generateBody.includes('const biome = forcedBiome ?? seedBiome;')
-    && generateBody.includes('context.writeSeed(seed, { biomeId: forcedBiome ? biome.id : null });'),
+    // The actual writeSeed call moved into finalizeWorldHud (src/world-hud.js)
+    // as part of QA-005. generateWorld still threads `forcedBiome` into that
+    // helper, which is what preserves forced-biome catalog navigation. Assert
+    // both the inline forcedBiome computation and the delegated write.
+    && generateBody.includes('forcedBiome,')
+    && readFileSync(new URL('../src/world-hud.js', import.meta.url), 'utf8')
+      .includes('context.writeSeed(seed, { biomeId: forcedBiome ? biome.id : null });'),
   'generateWorld should support forced-biome catalog navigation while preserving the seed RNG stream and URL state.'
 );
 

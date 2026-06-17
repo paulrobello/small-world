@@ -4,6 +4,9 @@ import { BIOMES } from "../src/biomes.js";
 
 const music = readFileSync("src/music.js", "utf8");
 const ui = readFileSync("src/ui.js", "utf8");
+// The PERSISTED_KEYS list (which contains "musicTrackOverrides") moved to
+// src/ui/storage.js as part of ARC-003 / QA-004 (ui.js split).
+const storage = readFileSync("src/ui/storage.js", "utf8");
 const html = readFileSync("index.html", "utf8");
 const gitignore = readFileSync(".gitignore", "utf8");
 
@@ -32,7 +35,7 @@ assert.match(music, /export function defaultTrackForBiome\(biome\)/);
 assert.match(music, /export function selectedTrackForBiome\(biome\)/);
 assert.match(music, /export function setMusicTrackOverride\(biomeId, track\)/);
 assert.match(music, /state\.userSettings\.musicTrackOverrides/);
-assert.match(ui, /"musicTrackOverrides"/);
+assert.match(storage, /"musicTrackOverrides"/);
 assert.match(ui, /getElementById\("setting-music-track"\)/);
 assert.match(ui, /refreshMusicTrackSelect/);
 assert.match(ui, /setMusicTrackOverride\(state\.currentBiome\?\.id, musicTrackEl\.value\)/);

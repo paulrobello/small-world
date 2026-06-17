@@ -2,7 +2,11 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 
 const indexSource = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
-const worldSource = readFileSync(new URL('../src/world.js', import.meta.url), 'utf8');
+// The split-stat HUD writes were extracted into src/world-hud.js as part of
+// QA-005 (generateWorld phase extraction). The literal invariants now live
+// in the helper, so the assertion reads that file directly. A thin
+// finalizeWorldHud(...) call in world.js delegates to it.
+const worldHudSource = readFileSync(new URL('../src/world-hud.js', import.meta.url), 'utf8');
 const uiSource = readFileSync(new URL('../src/ui.js', import.meta.url), 'utf8');
 const cssSource = readFileSync(new URL('../style.css', import.meta.url), 'utf8');
 
@@ -28,18 +32,18 @@ assert(
 );
 
 assert(
-  worldSource.includes('const groundCreatureCount = worldState.creatures.filter((c) => !c.flies && !c.isFish).length + worldState.caterpillars.length')
-    && worldSource.includes('const flyCreatureCount = worldState.creatures.filter((c) => c.flies && !c.isFish).length')
-    && worldSource.includes('const swimCreatureCount = worldState.creatures.filter((c) => c.isFish).length')
-    && worldSource.includes('document.getElementById("ground-creature-count").textContent = padStat(groundCreatureCount)')
-    && worldSource.includes('document.getElementById("fly-creature-count").textContent = padStat(flyCreatureCount)')
-    && worldSource.includes('document.getElementById("swim-creature-count").textContent = padStat(swimCreatureCount)')
-    && worldSource.includes('if (hGround) hGround.textContent = padStat(groundCreatureCount)')
-    && worldSource.includes('if (hFly) hFly.textContent = padStat(flyCreatureCount)')
-    && worldSource.includes('if (hSwim) hSwim.textContent = padStat(swimCreatureCount)')
-    && !worldSource.includes('getElementById("elevation")')
-    && !worldSource.includes('getElementById("help-elevation")')
-    && !worldSource.includes('measure max elevation for HUD'),
+  worldHudSource.includes('const groundCreatureCount = worldState.creatures.filter((c) => !c.flies && !c.isFish).length + worldState.caterpillars.length')
+    && worldHudSource.includes('const flyCreatureCount = worldState.creatures.filter((c) => c.flies && !c.isFish).length')
+    && worldHudSource.includes('const swimCreatureCount = worldState.creatures.filter((c) => c.isFish).length')
+    && worldHudSource.includes('document.getElementById("ground-creature-count").textContent = padStat(groundCreatureCount)')
+    && worldHudSource.includes('document.getElementById("fly-creature-count").textContent = padStat(flyCreatureCount)')
+    && worldHudSource.includes('document.getElementById("swim-creature-count").textContent = padStat(swimCreatureCount)')
+    && worldHudSource.includes('if (hGround) hGround.textContent = padStat(groundCreatureCount)')
+    && worldHudSource.includes('if (hFly) hFly.textContent = padStat(flyCreatureCount)')
+    && worldHudSource.includes('if (hSwim) hSwim.textContent = padStat(swimCreatureCount)')
+    && !worldHudSource.includes('getElementById("elevation")')
+    && !worldHudSource.includes('getElementById("help-elevation")')
+    && !worldHudSource.includes('measure max elevation for HUD'),
   'world generation should compute and write split ground/fly/swim creature stats without elevation writes.'
 );
 

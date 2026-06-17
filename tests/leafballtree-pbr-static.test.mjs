@@ -1,7 +1,14 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 
-const floraSource = readFileSync(new URL('../src/flora.js', import.meta.url), 'utf8');
+// src/flora.js is now a registry. The leafballtree builder (sliced up to pine,
+// both in trees.js) and the getLeafballTreePalette helper (sliced up to
+// addGroveMushroomFamily, both in _shared.js) live in separate modules now;
+// concatenate both so the slices resolve.
+const floraSource = [
+  readFileSync(new URL('../src/flora/_shared.js', import.meta.url), 'utf8'),
+  readFileSync(new URL('../src/flora/trees.js', import.meta.url), 'utf8'),
+].join('\n');
 const pbrSource = readFileSync(new URL('../src/pbr.js', import.meta.url), 'utf8');
 const leafballBlock = floraSource.slice(
   floraSource.indexOf('leafballtree(biome)'),

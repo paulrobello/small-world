@@ -1,7 +1,9 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 
-const floraSource = readFileSync(new URL('../src/flora.js', import.meta.url), 'utf8');
+// src/flora.js is now a registry. addGroveMushroomFamily and addPillarSurfaceMarks
+// both live in _shared.js — read that directly.
+const floraSource = readFileSync(new URL('../src/flora/_shared.js', import.meta.url), 'utf8');
 const worldSource = readFileSync(new URL('../src/world.js', import.meta.url), 'utf8');
 
 const familyStart = floraSource.indexOf('function addGroveMushroomFamily');
