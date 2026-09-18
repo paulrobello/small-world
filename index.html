@@ -17,8 +17,14 @@
     `fetch(dataUrl)` on a canvas.toDataURL() data URI before turning it into
     a Blob (src/ui.js:1904); actual downloads go through <a download>, which
     CSP does not restrict.
+    The googletagmanager / google-analytics / cloudflareinsights entries allow
+    GA4 (config lives in public/gtag-init.js, not inline, so script-src needs
+    no 'unsafe-inline') and the Cloudflare Web Analytics beacon.
   -->
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; media-src https://static.pardev.net; img-src 'self' data: blob:; script-src 'self'; connect-src 'self' data:" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; media-src https://static.pardev.net; img-src 'self' data: blob: https://*.google-analytics.com https://*.googletagmanager.com; script-src 'self' https://*.googletagmanager.com https://static.cloudflareinsights.com; connect-src 'self' data: https://*.google-analytics.com https://*.analytics.google.com https://*.googletagmanager.com https://cloudflareinsights.com" />
+  <!-- Google tag (gtag.js) -->
+  <script async src="https://www.googletagmanager.com/gtag/js?id=G-VY4VK9N81G"></script>
+  <script src="/gtag-init.js"></script>
   <title>a small world — terrarium</title>
   <link rel="manifest" href="/site.webmanifest" />
   <link rel="icon" href="/favicon.ico" sizes="any" />
