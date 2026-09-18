@@ -5,6 +5,24 @@
 > folded into the adjacent 1.3.3 and 1.3.6 entries — which is why the history
 > below jumps from 1.3.3 to 1.3.6.
 
+## 1.6.1 - 2026-09-18
+
+### Added
+
+- Google Analytics 4 (measurement ID `G-VY4VK9N81G`). The gtag loader is in
+  `index.html`; its config lives in `public/gtag-init.js` so the CSP needs no
+  `'unsafe-inline'`.
+
+### Changed
+
+- CSP now allows Google Analytics and the Cloudflare Web Analytics beacon in
+  `script-src`, `connect-src`, and `img-src`.
+
+### Verified
+
+- `make checkall` green; local `vite preview` loads gtag, sends a collect hit,
+  renders the world, and logs no CSP errors.
+
 ## 1.6.0 - 2026-07-04
 
 The deferred structural backlog from the 1.5.9 audit (AUDIT.md Phase 4), executed in
