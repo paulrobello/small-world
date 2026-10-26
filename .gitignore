@@ -85,7 +85,6 @@ docs/superpowers
 # build output — CI deploys this
 dist/
 .vite/
-graphify-out/
 
 # large static media served from static.pardev.net
 public/music/
