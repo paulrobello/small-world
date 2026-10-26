@@ -5,6 +5,27 @@
 > folded into the adjacent 1.3.3 and 1.3.6 entries — which is why the history
 > below jumps from 1.3.3 to 1.3.6.
 
+## 1.6.2 - 2026-10-26
+
+### Changed
+
+- Dependencies bumped to latest stable: three 0.185.1 → 0.186.1, vite 8.1.3 →
+  8.3.5, eslint 10.6.0 → 10.13.0, globals 17.7.0 → 17.13.0, esbuild
+  0.28.1 → 0.28.2. No API used by this repo changed in the three.js r186
+  migration (verified against the migration guide and by grep).
+- CI (deploy.yml) now runs `make checkall-ci` — tests + lint + build — before
+  deploying, instead of a bare `npm run build`. Added the `checkall-ci`
+  Makefile target as the CI-parity gate.
+- GitHub Actions bumped: checkout v6 → v7.0.1, setup-node v6 → v7.1.0
+  (SHA-pinned, refs verified via ls-remote). upload-pages-artifact and
+  deploy-pages were already on their latest majors (v5).
+
+### Verified
+
+- `make checkall-ci` green (exit 0) on the new versions; production build
+  served locally and rendered in Chromium with zero console errors
+  (Twilight Meadow seed 0x336d: 26 ground / 3 fly / 164 flora / 5 birds).
+
 ## 1.6.1 - 2026-09-18
 
 ### Added
