@@ -2,7 +2,7 @@ PORT := 2001
 DEV_PID_FILE := .vite-dev.pid
 DEV_LOG_FILE := .vite-dev.log
 
-.PHONY: dev dev-start dev-stop dev-restart build preview lint test checkall clean
+.PHONY: dev dev-start dev-stop dev-restart build preview lint test checkall checkall-ci clean
 
 # Vite dev server with hot reload (foreground, port 2001)
 dev:
@@ -85,6 +85,10 @@ test:
 checkall: test
 	$(MAKE) lint
 	$(MAKE) build
+
+# CI-parity gate: CI (deploy.yml) runs exactly this target before deploying,
+# so a green local checkall-ci is full-parity evidence by construction.
+checkall-ci: checkall
 
 # Remove build output
 clean:
